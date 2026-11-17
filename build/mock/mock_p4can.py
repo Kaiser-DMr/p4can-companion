@@ -419,6 +419,26 @@ STATS = {
     "/api/nag/stats": {
         "torque": 1.35, "apActive": True, "handsOnState": 2, "injections": 1203,
     },
+    # Mode H 调参（对应 web /api/nag/h-profile/stats）
+    "/api/nag/h-profile/stats": {
+        "phase": "IDLE", "eventType": "NONE", "activeEventPeakNm": 0.0,
+        "outputNm": 0.0, "carrierSampleNm": 0.0, "carrierApplied": False,
+        "stopCarrierActive": False,
+        "peakMinNm": 1.50, "peakMaxNm": 1.80,
+        "waitMinMs": 800, "waitMaxMs": 2000,
+        "refractoryMinMs": 500, "refractoryMaxMs": 1500,
+        "carrierMinNm": 0.10, "carrierMaxNm": 0.60,
+        "hoPolicy": 2, "ho1ThresholdNm": 1.20, "ho2ThresholdNm": 2.00,
+        "visualRescueEnabled": False, "visualRescueDelayMs": 0,
+    },
+    # DMS 捕获（对应 web /api/drivermonitor/stats）
+    "/api/drivermonitor/stats": {
+        "state": "READY", "segments": 0, "maxSegments": 12,
+        "samples": 0, "capacity": 1024, "remainingPostMs": 0,
+        "preBuffer": "WARMUP", "lastInteraction": "—",
+        "requests": 0, "ignored": 0, "dropped": 0,
+        "driverInteraction": "FRONT · NORMAL",
+    },
 }
 
 # 灯光爆闪（模拟）：契约见 build/灯光补丁说明
@@ -646,9 +666,75 @@ def apply_post(path, qs):
             if has(k):
                 NAG_CONFIG[k] = _bool(val(k))
         for k in ("method", "tsl9Sequence", "tsl9InputMode", "tsl9LegacyRoute",
-                  "torqueRightScrollIntervalSeconds", "tsl9RightPeriodicIntervalSeconds"):
+                  "torqueRightScrollIntervalSeconds", "tsl9RightPeriodicIntervalSeconds",
+                  "modeHStopBehavior"):
             if has(k):
                 NAG_CONFIG[k] = int(val(k))
+        if has("modeHStopBehavior"):
+            NAG_CONFIG["modeHStopBehaviorName"] = (
+                "STOCK CARRIER" if int(val("modeHStopBehavior")) == 1 else "HARD PAUSE")
+        return None
+
+    if path == "/api/nag/h-profile/update":
+        hp = STATS["/api/nag/h-profile/stats"]
+        for k in ("peakMinNm", "peakMaxNm", "carrierMinNm", "carrierMaxNm",
+                  "ho1ThresholdNm", "ho2ThresholdNm"):
+            if has(k):
+                hp[k] = float(val(k))
+        for k in ("waitMinMs", "waitMaxMs", "refractoryMinMs", "refractoryMaxMs",
+                  "visualRescueDelayMs", "hoPolicy"):
+            if has(k):
+                hp[k] = int(val(k))
+        if has("visualRescueEnabled"):
+            hp["visualRescueEnabled"] = _bool(val("visualRescueEnabled"))
+        NAG_CONFIG["humanPeakMinNm"] = hp["peakMinNm"]
+        NAG_CONFIG["humanPeakMaxNm"] = hp["peakMaxNm"]
+        NAG_CONFIG["hoPolicy"] = hp["hoPolicy"]
+        return None
+
+    if path == "/api/nag/h-profile/reset":
+        hp = STATS["/api/nag/h-profile/stats"]
+        hp.update({
+            "peakMinNm": 1.50, "peakMaxNm": 1.80,
+            "waitMinMs": 800, "waitMaxMs": 2000,
+            "refractoryMinMs": 500, "refractoryMaxMs": 1500,
+            "carrierMinNm": 0.10, "carrierMaxNm": 0.60,
+            "hoPolicy": 2, "ho1ThresholdNm": 1.20, "ho2ThresholdNm": 2.00,
+            "visualRescueEnabled": False, "visualRescueDelayMs": 0,
+        })
+        return None
+
+    if path == "/api/profile/select":
+        names = {1: "Model Y L", 2: "Model Y Juniper", 3: "Model Y Legacy",
+                 4: "Model 3 Highland", 5: "Model 3 Legacy"}
+        pid = int(val("profile")) if has("profile") else 0
+        if pid not in names:
+            return "invalid profile"
+        topo = int(val("topology")) if has("topology") else (1 if pid == 1 else 2)
+        turn = int(val("turn")) if has("turn") else 1
+        PROFILE["profile"] = pid
+        PROFILE["profileName"] = names[pid]
+        PROFILE["topology"] = topo
+        PROFILE["topologyName"] = "Party + VH" if topo == 1 else "BODY + CHASSIS + PARTY"
+        PROFILE["canA"] = "PARTY" if topo == 1 else "BODY"
+        PROFILE["canB"] = "VH" if topo == 1 else "CHASSIS"
+        PROFILE["turn"] = turn
+        PROFILE["turnName"] = "STALKLESS" if turn == 2 else "STALK"
+        return None
+
+    if path == "/api/drivermonitor/start":
+        dm = STATS["/api/drivermonitor/stats"]
+        slot = val("slot") if has("slot") else "A"
+        dm["state"] = "CAPTURING"
+        dm["segments"] = min(dm["maxSegments"], dm["segments"] + 1)
+        dm["requests"] = dm["requests"] + 1
+        dm["driverInteraction"] = f"SLOT {slot} · CAPTURING"
+        return None
+
+    if path == "/api/drivermonitor/reset":
+        dm = STATS["/api/drivermonitor/stats"]
+        dm.update({"state": "READY", "segments": 0, "samples": 0,
+                   "requests": 0, "driverInteraction": "FRONT · NORMAL"})
         return None
 
     return None
