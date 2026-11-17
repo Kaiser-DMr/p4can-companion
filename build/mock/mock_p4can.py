@@ -7,6 +7,7 @@
   POST /api/nag/update?enabled=1 等（返回 ok，并维护少量开关状态）
 """
 import json
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -417,7 +418,9 @@ STATS = {
         "dasStateName": "AP_ACTIVE",
     },
     "/api/nag/stats": {
-        "torque": 1.35, "apActive": True, "handsOnState": 2, "injections": 1203,
+        "torque": 1.35,
+        "apActive": os.environ.get("P4CAN_MOCK_AP_ACTIVE", "1") == "1",
+        "handsOnState": 2, "injections": 1203,
     },
     # Mode H 调参（对应 web /api/nag/h-profile/stats）
     "/api/nag/h-profile/stats": {
@@ -673,6 +676,12 @@ def apply_post(path, qs):
         if has("modeHStopBehavior"):
             NAG_CONFIG["modeHStopBehaviorName"] = (
                 "STOCK CARRIER" if int(val("modeHStopBehavior")) == 1 else "HARD PAUSE")
+        for k in ("hoRatePct", "burstMs", "pauseMs"):
+            if has(k):
+                NAG_CONFIG[k] = int(val(k))
+        for k in ("targetId", "apStateId", "steeringId"):
+            if has(k):
+                NAG_CONFIG[k] = int(val(k), 0)
         return None
 
     if path == "/api/nag/h-profile/update":

@@ -21,6 +21,7 @@ struct FeatureDetailView: View {
     /// 正在拖动的滑杆（拖动期间不回写设备值，避免手指被覆盖）。
     @State private var sliderEditing: Set<String> = []
     @State private var showsRawData = false
+    @State private var showsAdvanced = false
 
     private let pollInterval: Duration = .milliseconds(1200)
 
@@ -78,13 +79,50 @@ struct FeatureDetailView: View {
                 }
             }
 
+            if module.id == "nag", capabilitySupported, !environment.isSetupMode {
+                Section {
+                    NavigationLink {
+                        NagAdvancedView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "slider.horizontal.3")
+                                .foregroundStyle(.tint)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("高级参数（报文级）", "Advanced parameters"))
+                                    .font(.body)
+                                Text(L10n.t("目标 ID / 报文节奏 / 扭矩表（只读）",
+                                            "Frame IDs / timing / torque table (read-only)"))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } footer: {
+                    Text(L10n.t("修改 0x370 / 0x399 的报文级参数前，请确认你清楚每一字段的含义；AP 激活时禁止写入。",
+                                "Make sure you understand each frame-level field before changing 0x370 / 0x399 parameters. Writes are blocked while AP is active."))
+                }
+            }
+
             statsSection
         }
         .navigationTitle(module.localizedTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showsAdvanced) { NagAdvancedView() }
         .overlay(alignment: .bottom) { ToastOverlay() }
         .refreshable { await load() }
         .task { await poll() }
+        .task {
+            #if DEBUG
+            // 本地联调：SIMCTL_CHILD_P4CAN_NAG_ADVANCED=1 直接进入高级参数
+            if module.id == "nag",
+               ProcessInfo.processInfo.environment["P4CAN_NAG_ADVANCED"] == "1" {
+                try? await Task.sleep(for: .milliseconds(500))
+                showsAdvanced = true
+            }
+            #endif
+        }
         .confirmationDialog(
             "确认执行「\(pendingTrigger?.title ?? "")」？",
             isPresented: Binding(
