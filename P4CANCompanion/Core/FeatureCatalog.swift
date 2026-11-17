@@ -340,9 +340,9 @@ enum FeatureCatalog {
                     )
                 ),
                 FeatureControl(
-                    id: "blink.delay", title: "打灯延迟", footnote: "0–2000 ms",
+                    id: "blink.delay", title: "打灯延迟", footnote: "0–30000 ms（0–30 秒）",
                     kind: .number(
-                        key: "ms", range: 0...2000, step: 50, unit: "ms",
+                        key: "ms", range: 0...30_000, step: 50, unit: "ms",
                         path: P4Route.blinkADelay, extra: []
                     ),
                     readKey: "delayMs"
@@ -434,7 +434,7 @@ enum FeatureCatalog {
                 FeatureControl(
                     id: "r79.mode1Delay", title: "Mode 1 延迟", footnote: "0–340 ms",
                     kind: .number(
-                        key: "mode1DelayMs", range: 0...340, step: 10, unit: "ms",
+                        key: "mode1DelayMs", range: 0...340, step: 1, unit: "ms",
                         path: P4Route.r79Update, extra: []
                     )
                 ),
@@ -446,7 +446,7 @@ enum FeatureCatalog {
                 FeatureControl(
                     id: "r79.mode2Delay", title: "Mode 2 延迟", footnote: "0–2000 ms",
                     kind: .number(
-                        key: "mode2DelayMs", range: 0...2000, step: 50, unit: "ms",
+                        key: "mode2DelayMs", range: 0...2000, step: 1, unit: "ms",
                         path: P4Route.r79Update, extra: []
                     )
                 ),

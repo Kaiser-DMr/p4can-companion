@@ -394,20 +394,39 @@ struct FeatureDetailView: View {
                  spec.key == "preMs" ? "前置窗口" : "后置窗口")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Slider(
-                value: Binding(
-                    get: { min(max(numberValues[spec.key] ?? spec.range.lowerBound, spec.range.lowerBound), spec.range.upperBound) },
-                    set: { numberValues[spec.key] = $0 }
-                ),
-                in: spec.range,
-                step: spec.range.upperBound > 100 ? 1000 : 1
-            )
-            .accessibilityLabel("\(spec.key)，单位\(spec.unit)")
-            Text("\(Int(numberValues[spec.key] ?? spec.range.lowerBound)) \(spec.unit)")
-                .font(.caption)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 54, alignment: .trailing)
+            if spec.key == "preMs" || spec.key == "postMs" {
+                // 固件只接受固定档位，不能给任意毫秒值。
+                let presets = spec.key == "preMs" ? [2000, 5000, 10000, 15000] : [2000, 5000, 10000]
+                Picker(spec.key, selection: Binding(
+                    get: {
+                        let current = Int(numberValues[spec.key] ?? Double(presets[0]))
+                        return presets.min(by: { abs($0 - current) < abs($1 - current) }) ?? presets[0]
+                    },
+                    set: { numberValues[spec.key] = Double($0) }
+                )) {
+                    ForEach(presets, id: \.self) { value in
+                        Text("\(value / 1000) s").tag(value)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .accessibilityLabel("\(spec.key)，单位秒")
+            } else {
+                Slider(
+                    value: Binding(
+                        get: { min(max(numberValues[spec.key] ?? spec.range.lowerBound, spec.range.lowerBound), spec.range.upperBound) },
+                        set: { numberValues[spec.key] = $0 }
+                    ),
+                    in: spec.range,
+                    step: 1
+                )
+                .accessibilityLabel("\(spec.key)，单位\(spec.unit)")
+                Text("\(Int(numberValues[spec.key] ?? spec.range.lowerBound)) \(spec.unit)")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 54, alignment: .trailing)
+            }
         }
     }
 
