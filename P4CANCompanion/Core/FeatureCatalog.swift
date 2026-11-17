@@ -57,6 +57,8 @@ struct FeatureControl: Identifiable, Sendable {
     /// 读取状态用的端点（nil 表示模块的 statsPath）。
     /// 少数开关的状态挂在别的端点上（如 LAB 的 AP 踏板档位在 /api/pedalmap/stats）。
     var readPath: String? = nil
+    /// 读取状态需要等于某个整数才算「开」（如 ULC alcMode==2 表示关闭 ALC）。
+    var readEquals: Int? = nil
 }
 
 /// 一个功能模块：标题、说明、状态端点与控件集合。
@@ -212,6 +214,24 @@ enum FeatureCatalog {
                         key: "torqueRightScrollIntervalSeconds", range: 1...600, step: 1, unit: "秒",
                         path: P4Route.nagUpdate, extra: []
                     )
+                ),
+                FeatureControl(
+                    id: "nag.rightScrollPattern", title: "滚轮波形", footnote: nil,
+                    kind: .selectRead(
+                        key: "torqueRightScrollPattern",
+                        readKey: "torqueRightScrollPattern",
+                        options: [
+                            .init(label: "+1 → 0 → −1 → 0", rawValue: "0"),
+                            .init(label: "+1 → −1", rawValue: "1"),
+                        ],
+                        path: P4Route.nagUpdate,
+                        extra: []
+                    )
+                ),
+                FeatureControl(
+                    id: "nag.tsl9Window", title: "整个 AP 会话", footnote: "保持 Hands-On 降级",
+                    kind: .toggle(key: "tsl9Window", path: P4Route.nagUpdate, extra: []),
+                    readKey: "tsl9Window"
                 ),
                 FeatureControl(
                     id: "nag.tsl9Periodic", title: "TSL9 周期注入", footnote: nil,
@@ -549,7 +569,8 @@ enum FeatureCatalog {
                 FeatureControl(
                     id: "ulc.alcOff", title: "高速禁用 ALC", footnote: nil,
                     kind: .toggle(key: "alcOff", path: P4Route.ulcUpdate, extra: []),
-                    readKey: "alcMode"
+                    readKey: "alcMode",
+                    readEquals: 2
                 ),
                 FeatureControl(
                     id: "ulc.blind", title: "盲区策略", footnote: nil,
@@ -581,9 +602,11 @@ enum FeatureCatalog {
                     )
                 ),
                 FeatureControl(
-                    id: "ulc.timing", title: "变道时序优化", footnote: nil,
+                    id: "ulc.timing", title: "AP 开始前即生效",
+                    footnote: "关闭 = 仅 AP 激活后生效（原厂行为）",
                     kind: .toggle(key: "timing", path: P4Route.ulcUpdate, extra: []),
-                    readKey: "stalkConfirmTimingMode"
+                    readKey: "stalkConfirmTimingMode",
+                    readEquals: 1
                 ),
             ]
         ),

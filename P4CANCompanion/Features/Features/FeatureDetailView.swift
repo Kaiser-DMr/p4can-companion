@@ -22,6 +22,7 @@ struct FeatureDetailView: View {
     @State private var sliderEditing: Set<String> = []
     @State private var showsRawData = false
     @State private var showsAdvanced = false
+    @State private var showsResearchLabels = false
 
     private let pollInterval: Duration = .milliseconds(1200)
 
@@ -79,6 +80,29 @@ struct FeatureDetailView: View {
                 }
             }
 
+            if module.id == "research" {
+                Section {
+                    NavigationLink {
+                        ResearchLabelsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "tag")
+                                .foregroundStyle(.tint)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("捕获标签（A–D）", "Capture labels (A–D)"))
+                                    .font(.body)
+                                Text(L10n.t("给导出的 CSV segment 加注释",
+                                            "Annotate segments in the exported CSV"))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+
             if module.id == "nag", capabilitySupported, !environment.isSetupMode {
                 Section {
                     NavigationLink {
@@ -110,6 +134,7 @@ struct FeatureDetailView: View {
         .navigationTitle(module.localizedTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showsAdvanced) { NagAdvancedView() }
+        .navigationDestination(isPresented: $showsResearchLabels) { ResearchLabelsView() }
         .overlay(alignment: .bottom) { ToastOverlay() }
         .refreshable { await load() }
         .task { await poll() }
@@ -120,6 +145,11 @@ struct FeatureDetailView: View {
                ProcessInfo.processInfo.environment["P4CAN_NAG_ADVANCED"] == "1" {
                 try? await Task.sleep(for: .milliseconds(500))
                 showsAdvanced = true
+            }
+            if module.id == "research",
+               ProcessInfo.processInfo.environment["P4CAN_RESEARCH_LABELS"] == "1" {
+                try? await Task.sleep(for: .milliseconds(500))
+                showsResearchLabels = true
             }
             #endif
         }
@@ -396,6 +426,10 @@ struct FeatureDetailView: View {
         guard let object = statsObject(for: control) else { return nil }
         let key = readKey(for: control, writeKey: writeKey)
         guard let value = object[key] else { return nil }
+        if let target = control.readEquals {
+            guard let number = value.intValue else { return nil }
+            return number == target
+        }
         if let flag = value.boolValue { return flag }
         if let number = value.intValue { return number != 0 }
         return nil
@@ -417,6 +451,7 @@ struct FeatureDetailView: View {
         }
         guard let value = statsObject(for: control)?[key] else { return nil }
         if let text = value.stringValue { return text }
+        if let flag = value.boolValue { return flag ? "1" : "0" }
         if let number = value.intValue { return number == 255 ? "stock" : String(number) }
         return nil
     }

@@ -394,7 +394,8 @@ STATS = {
         "state": "IDLE", "captureMode": "SNAPSHOT", "capturing": False, "exporting": False,
         "preMs": 5000, "postMs": 5000, "preWindowMs": 5000, "postWindowMs": 5000,
         "samples": 0, "capacity": 20000, "requests": 0, "dropped": 0,
-        "currentSlot": 0, "completedSegments": 0, "labels": ["A", "B", "C", "D"],
+        "currentSlot": 0, "completedSegments": 0,
+        "labels": {"A": "baseline", "B": "glance", "C": "side", "D": "down"},
     },
     "/api/country/stats": {
         "countrySupported": True, "countryMode": 0, "countryModeName": "STOCK",
@@ -711,6 +712,16 @@ def apply_post(path, qs):
             "hoPolicy": 2, "ho1ThresholdNm": 1.20, "ho2ThresholdNm": 2.00,
             "visualRescueEnabled": False, "visualRescueDelayMs": 0,
         })
+        return None
+
+    if path == "/api/researchcapture/labels":
+        if not has("slot") or not has("label"):
+            return "slot and label are required"
+        slot = val("slot").upper()
+        label = val("label")
+        if slot not in ("A", "B", "C", "D") or not (1 <= len(label.encode("utf-8")) <= 63):
+            return "label must be 1-63 UTF-8 bytes"
+        RESEARCH["labels"][slot] = label
         return None
 
     if path == "/api/profile/select":

@@ -22,4 +22,4 @@ build/*.ipa
 build/*.zip
 
 # 本地调试截图（不随源码提交）
-build/screenshots/v3*/
+build/screenshots/v3*.png
