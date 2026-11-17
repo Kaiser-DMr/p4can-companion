@@ -378,5 +378,7 @@ struct ModeHView: View {
                                   query: [P4Param("modeHStopBehavior", String(stopBehavior))])
         busy = false
         await load()
+        // 刚写入的就是设备当前值：用回读结果刷新基线，避免误报「被网页修改」。
+        loadForm(force: true)
     }
 }
