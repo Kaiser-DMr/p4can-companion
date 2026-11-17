@@ -59,6 +59,11 @@ struct DiagnosticsView: View {
                 } label: {
                     Label(L10n.t("导出启动抓包 CSV", "Boot Capture CSV"), systemImage: "square.and.arrow.up")
                 }
+                Button {
+                    exportSystemStats()
+                } label: {
+                    Label(L10n.t("导出系统统计 JSON", "System Stats JSON"), systemImage: "curlybraces")
+                }
                 if let exportError {
                     Label(exportError, systemImage: "exclamationmark.triangle")
                         .font(.footnote)
@@ -174,6 +179,20 @@ struct DiagnosticsView: View {
                 let data = try await environment.api.downloadData(P4Route.bootCaptureCSV)
                 let url = FileManager.default.temporaryDirectory
                     .appendingPathComponent("p4can-boot-capture.csv")
+                try data.write(to: url, options: .atomic)
+                exportURL = url
+            } catch {
+                exportError = AppEnvironment.friendly(error)
+            }
+        }
+    }
+
+    private func exportSystemStats() {
+        Task {
+            do {
+                let data = try await environment.api.downloadData(P4Route.systemStats)
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("p4can-system-stats.json")
                 try data.write(to: url, options: .atomic)
                 exportURL = url
             } catch {

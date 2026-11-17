@@ -17,6 +17,7 @@ struct WirelessView: View {
     @State private var password = ""
     @State private var busy = false
     @State private var confirmsReset = false
+    @State private var revealsPassword = false
 
     var body: some View {
         List {
@@ -129,8 +130,24 @@ struct WirelessView: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .accessibilityLabel(L10n.t("热点名称", "SSID"))
-            SecureField(L10n.t("新密码（留空保持不变）", "New password (leave blank to keep)"), text: $password)
-                .accessibilityLabel(L10n.t("热点密码", "Wi-Fi password"))
+            HStack(spacing: 8) {
+                if revealsPassword {
+                    TextField(L10n.t("新密码（留空保持不变）", "New password (leave blank to keep)"), text: $password)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } else {
+                    SecureField(L10n.t("新密码（留空保持不变）", "New password (leave blank to keep)"), text: $password)
+                }
+                Button {
+                    revealsPassword.toggle()
+                } label: {
+                    Image(systemName: revealsPassword ? "eye.slash" : "eye")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t("显示或隐藏密码", "Show or hide password"))
+            }
+            .accessibilityElement(children: .contain)
 
             Button {
                 applyWiFi()
