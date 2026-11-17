@@ -24,6 +24,8 @@ struct ModeHView: View {
     @State private var stopBehavior = 1
 
     @State private var formLoaded = false
+    @State private var stale = false
+    @State private var baseline: String?
     @State private var busy = false
     @State private var confirmsReset = false
 
@@ -39,6 +41,20 @@ struct ModeHView: View {
                     Label(loadError, systemImage: "exclamationmark.triangle")
                         .font(.footnote)
                         .foregroundStyle(.p4Err)
+                }
+            }
+
+            if stale {
+                Section {
+                    Label(L10n.t("设备端 Mode H 参数已被网页修改。请先重新读取，否则应用会覆盖这些改动。",
+                                 "Mode H parameters changed on the device. Reload before applying."),
+                          systemImage: "arrow.triangle.2.circlepath")
+                        .font(.footnote)
+                        .foregroundStyle(.p4Warn)
+                    Button(L10n.t("重新从设备读取", "Reload from device")) {
+                        loadForm(force: true)
+                    }
+                    .font(.footnote)
                 }
             }
 
@@ -128,7 +144,7 @@ struct ModeHView: View {
 
             Section {
                 Button {
-                    apply()
+                    Task { await apply() }
                 } label: {
                     Label(L10n.t("应用 Mode H 调参", "Apply Mode H Tuning"), systemImage: "checkmark.circle")
                 }
@@ -251,6 +267,11 @@ struct ModeHView: View {
                     stopBehavior = Int(stop)
                 }
                 formLoaded = true
+            } else if let object = value.objectValue,
+                      let signature = signature(object),
+                      let baseline,
+                      signature != baseline {
+                stale = true
             }
         } catch {
             loadError = AppEnvironment.friendly(error)
@@ -274,10 +295,34 @@ struct ModeHView: View {
         if let value = object["hoPolicy"]?.intValue { hoPolicy = Int(value) }
         if let value = object["visualRescueEnabled"]?.boolValue { rescueEnabled = value }
         if let value = object["visualRescueDelayMs"]?.doubleValue { rescueDelay = value / 1000 }
+        baseline = signature(object)
+        stale = false
         formLoaded = true
     }
 
-    private func apply() {
+    /// 13 个 Mode H 字段的稳定签名，用于判断设备端是否被网页改过。
+    private func signature(_ object: [String: P4JSON]) -> String? {
+        let keys = [
+            "peakMinNm", "peakMaxNm", "waitMinMs", "waitMaxMs",
+            "refractoryMinMs", "refractoryMaxMs", "carrierMinNm", "carrierMaxNm",
+            "hoPolicy", "ho1ThresholdNm", "ho2ThresholdNm",
+            "visualRescueEnabled", "visualRescueDelayMs",
+        ]
+        var parts: [String] = []
+        for key in keys {
+            guard let value = object[key] else { return nil }
+            if case .bool(let flag) = value {
+                parts.append(flag ? "1" : "0")
+            } else if let number = value.doubleValue {
+                parts.append(String(format: "%.3f", number))
+            } else {
+                return nil
+            }
+        }
+        return parts.joined(separator: "/")
+    }
+
+    private func apply() async {
         guard peakMin <= peakMax else {
             environment.toast = P4Toast(message: L10n.t("主峰值下限不能大于上限", "Peak min cannot exceed max"), style: .failure)
             return
@@ -292,6 +337,20 @@ struct ModeHView: View {
         }
         guard carrierMin <= carrierMax else {
             environment.toast = P4Toast(message: L10n.t("载波下限不能大于上限", "Carrier min cannot exceed max"), style: .failure)
+            return
+        }
+
+        // 拒绝覆盖网页在此期间做过的修改。
+        if let current = try? await environment.api.get(P4Route.nagHProfileStats),
+           let object = current.objectValue,
+           let signature = signature(object),
+           let baseline,
+           signature != baseline {
+            stale = true
+            environment.toast = P4Toast(
+                message: L10n.t("设备端 Mode H 参数已变化，请先重新读取", "Mode H parameters changed on the device; reload first"),
+                style: .failure
+            )
             return
         }
 
@@ -312,14 +371,12 @@ struct ModeHView: View {
         ]
 
         busy = true
-        Task {
-            await environment.command(L10n.t("Mode H 调参", "Mode H tuning"),
-                                      path: P4Route.nagHProfileUpdate, query: query)
-            await environment.command(L10n.t("Mode H 停车行为", "Mode H stop behavior"),
-                                      path: P4Route.nagUpdate,
-                                      query: [P4Param("modeHStopBehavior", String(stopBehavior))])
-            busy = false
-            await load()
-        }
+        await environment.command(L10n.t("Mode H 调参", "Mode H tuning"),
+                                  path: P4Route.nagHProfileUpdate, query: query)
+        await environment.command(L10n.t("Mode H 停车行为", "Mode H stop behavior"),
+                                  path: P4Route.nagUpdate,
+                                  query: [P4Param("modeHStopBehavior", String(stopBehavior))])
+        busy = false
+        await load()
     }
 }

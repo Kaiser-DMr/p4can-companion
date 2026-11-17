@@ -37,6 +37,7 @@ struct NagAdvancedView: View {
     @State private var loaded: Snapshot?
     @State private var torque: [TorqueRow] = []
     @State private var apActive = false
+    @State private var stale = false
     @State private var loadError: String?
     @State private var busy = false
     @State private var confirms = false
@@ -127,6 +128,20 @@ struct NagAdvancedView: View {
             } else if apActive {
                 statusRow(L10n.t("AP 激活中，暂不可修改高级参数；请先退出 AP。",
                                  "AP is active. Exit Autopilot before changing advanced parameters."))
+            }
+
+            if stale {
+                Section {
+                    Label(L10n.t("设备端参数已被网页或其他人修改。请先「重新从设备读取」，否则应用会覆盖这些改动。",
+                                 "These parameters changed on the device. Reload before applying, or your write will overwrite them."),
+                          systemImage: "arrow.triangle.2.circlepath")
+                        .font(.footnote)
+                        .foregroundStyle(.p4Warn)
+                    Button(L10n.t("重新从设备读取", "Reload from device")) {
+                        Task { await load(force: true) }
+                    }
+                    .font(.footnote)
+                }
             }
 
             Section {
@@ -322,10 +337,22 @@ struct NagAdvancedView: View {
 
     private func poll() async {
         while !Task.isCancelled {
-            if loaded == nil { await load(force: false) }
+            if loaded == nil {
+                await load(force: false)
+            } else {
+                await checkFreshness()
+            }
             await loadAPState()
             try? await Task.sleep(for: .milliseconds(1500))
         }
+    }
+
+    /// 只比较设备基线，不覆盖正在编辑的输入框。
+    private func checkFreshness() async {
+        guard let loaded,
+              let config = try? await environment.api.get(P4Route.nagConfig),
+              let device = snapshot(from: config) else { return }
+        if signature(device) != signature(loaded) { stale = true }
     }
 
     private func load(force: Bool) async {
@@ -333,6 +360,7 @@ struct NagAdvancedView: View {
             let config = try await environment.api.get(P4Route.nagConfig)
             apply(config: config)
             if force { attempt = nil }
+            stale = false
             loadError = nil
         } catch {
             loadError = AppEnvironment.friendly(error)
@@ -345,13 +373,23 @@ struct NagAdvancedView: View {
         apActive = active
     }
 
-    private func apply(config: P4JSON) {
-        guard let object = config.objectValue else { return }
+    private func snapshot(from config: P4JSON) -> Snapshot? {
+        guard let object = config.objectValue else { return nil }
         func int(_ key: String) -> Int? { object[key]?.intValue.map(Int.init) }
         guard let target = int("targetId"), let ap = int("apStateId"), let steering = int("steeringId"),
-              let ho = int("hoRatePct"), let burst = int("burstMs"), let pause = int("pauseMs") else { return }
-        loaded = Snapshot(targetId: target, apStateId: ap, steeringId: steering,
-                          hoRatePct: ho, burstMs: burst, pauseMs: pause)
+              let ho = int("hoRatePct"), let burst = int("burstMs"), let pause = int("pauseMs") else { return nil }
+        return Snapshot(targetId: target, apStateId: ap, steeringId: steering,
+                        hoRatePct: ho, burstMs: burst, pauseMs: pause)
+    }
+
+    private func signature(_ value: Snapshot) -> String {
+        "\(value.targetId)/\(value.apStateId)/\(value.steeringId)/\(value.hoRatePct)/\(value.burstMs)/\(value.pauseMs)"
+    }
+
+    private func apply(config: P4JSON) {
+        guard let object = config.objectValue, let snapshot = snapshot(from: config) else { return }
+        loaded = snapshot
+        stale = false
         torque = (object["torque"]?.arrayValue ?? []).enumerated().compactMap { index, value in
             guard let row = value.objectValue,
                   let b2 = row["b2"]?.intValue, let b3 = row["b3"]?.intValue,
@@ -372,10 +410,20 @@ struct NagAdvancedView: View {
     }
 
     private func apply() async {
-        guard let edited else { return }
+        guard let edited, let loaded else { return }
         guard !apActive, !setupMode else { return }
         busy = true
         attempt = nil
+        // 若设备基线在打开页面后被改过，拒绝写入，避免把别人的改动覆盖掉。
+        if let config = try? await environment.api.get(P4Route.nagConfig),
+           let device = snapshot(from: config), signature(device) != signature(loaded) {
+            stale = true
+            loadError = L10n.t("设备端参数已变化，请先「重新从设备读取」再应用。",
+                               "Device parameters changed. Reload before applying.")
+            busy = false
+            Haptics.error()
+            return
+        }
         let query = [
             P4Param("targetId", String(format: "0x%03X", edited.targetId)),
             P4Param("apStateId", String(format: "0x%03X", edited.apStateId)),
