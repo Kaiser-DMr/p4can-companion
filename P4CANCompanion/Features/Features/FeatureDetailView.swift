@@ -451,7 +451,7 @@ struct FeatureDetailView: View {
         }
         guard let value = statsObject(for: control)?[key] else { return nil }
         if let text = value.stringValue { return text }
-        if let flag = value.boolValue { return flag ? "1" : "0" }
+        if case .bool(let flag) = value { return flag ? "1" : "0" }
         if let number = value.intValue { return number == 255 ? "stock" : String(number) }
         return nil
     }
