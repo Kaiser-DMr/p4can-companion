@@ -105,7 +105,8 @@ struct DashboardView: View {
 
             HStack(spacing: Theme.spacing(1)) {
                 StatusChip(text: "CAN \(onlineBusCount)/\(max(environment.canBuses.count, 1))", systemImage: "cable.connector", tone: busTone)
-                StatusChip(text: "蓝牙 \(bluetoothText)", systemImage: "dot.radiowaves.left.and.right", tone: bluetoothTone)
+                StatusChip(text: "\(L10n.t("蓝牙", "BT")) \(bluetoothText)",
+                           systemImage: "dot.radiowaves.left.and.right", tone: bluetoothTone)
                 StatusChip(text: "LAB \(labText)", systemImage: "flask", tone: labTone)
                 Spacer(minLength: 0)
             }
@@ -116,7 +117,10 @@ struct DashboardView: View {
                 Image(systemName: "clock.arrow.circlepath").font(.caption2)
                 Text(updatedText).font(.caption2)
                 Spacer(minLength: Theme.spacing(1))
-                Text(environment.isOnline ? "每 1.5 秒自动同步" : "等待设备")
+                Text(environment.isOnline
+                     ? L10n.t("每 \(environment.pollIntervalMs) ms 自动同步",
+                              "Auto-sync every \(environment.pollIntervalMs) ms")
+                     : L10n.t("等待设备", "Waiting for device"))
                     .font(.caption2)
             }
             .foregroundStyle(.secondary)
@@ -515,7 +519,7 @@ struct DashboardView: View {
 
     private var bluetoothText: String {
         guard let on = environment.s3xyStats?["bluetoothEnabled"]?.boolValue else { return "—" }
-        return on ? "开" : "关"
+        return on ? L10n.t("开", "ON") : L10n.t("关", "OFF")
     }
 
     private var bluetoothTone: P4Tone {
@@ -525,7 +529,7 @@ struct DashboardView: View {
 
     private var labText: String {
         guard let on = environment.featuresStatus?["lab"]?.boolValue else { return "—" }
-        return on ? "开" : "关"
+        return on ? L10n.t("开", "ON") : L10n.t("关", "OFF")
     }
 
     private var labTone: P4Tone {

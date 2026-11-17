@@ -111,7 +111,6 @@ enum P4Route {
     static let s3xyDeviceRename = "/api/s3xy/device/rename"
 
     // 研究捕获
-    static let lightStrobe = "/api/lights/strobe"
     static let researchCaptureStats = "/api/researchcapture/stats"
     static let researchCaptureStart = "/api/researchcapture/start"
     static let researchCaptureMode = "/api/researchcapture/mode"
@@ -148,6 +147,17 @@ final class P4APIClient: Sendable {
     let baseURL: URL
     private let session: URLSession
 
+    /// 单次 JSON 响应上限（防止异常/恶意端点把内存打满）。
+    private static let maxJSONBytes = 4 * 1024 * 1024
+    /// CSV / 日志下载上限。
+    private static let maxDownloadBytes = 32 * 1024 * 1024
+    /// OTA 应用镜像上限（ESP32 应用分区远小于此）。
+    static let maxFirmwareBytes = 8 * 1024 * 1024
+    /// 日志里需要打码的 query 参数。
+    private static let sensitiveQueryKeys: Set<String> = [
+        "password", "passwd", "pass", "psk", "token", "secret", "api_key", "apikey",
+    ]
+
     init(host: String) {
         let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
         var components = URLComponents()
@@ -175,7 +185,38 @@ final class P4APIClient: Sendable {
         // 状态接口必须实时：禁用 URL 缓存，避免读到旧快照（与网页不同步）。
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
-        self.session = URLSession(configuration: configuration)
+        // 设备只应是被配置的那台 P4-CAN：拒绝任何 3xx 跳转，避免被热点/ARP 欺骗带到外网。
+        self.session = URLSession(
+            configuration: configuration,
+            delegate: P4RedirectBlocker(),
+            delegateQueue: nil
+        )
+    }
+
+    /// 校验用户输入：只允许 http(s)://host[:port] 或 host[:port]，
+    /// 不允许账号、路径、查询串、片段与空白字符。
+    static func validatedHost(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= 255,
+              !trimmed.contains(where: \.isWhitespace) else { return nil }
+        if trimmed.contains("://") {
+            guard let components = URLComponents(string: trimmed),
+                  let scheme = components.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https",
+                  let host = components.host, !host.isEmpty,
+                  components.user == nil, components.password == nil,
+                  components.path.isEmpty || components.path == "/",
+                  components.query == nil, components.fragment == nil else { return nil }
+            return trimmed
+        }
+        guard !trimmed.contains("/"), !trimmed.contains("?"),
+              !trimmed.contains("#"), !trimmed.contains("@") else { return nil }
+        let parts = trimmed.split(separator: ":", maxSplits: 1)
+        guard let host = parts.first, !host.isEmpty else { return nil }
+        if parts.count == 2 {
+            guard let port = Int(parts[1]), (1...65535).contains(port) else { return nil }
+        }
+        return trimmed
     }
 
     // MARK: - URL
@@ -200,6 +241,7 @@ final class P4APIClient: Sendable {
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue("no-cache", forHTTPHeaderField: "Pragma")
         let (data, response) = try await execute(request, path: path, query: query)
+        try Self.checkSize(data, limit: Self.maxJSONBytes, label: "响应")
         return try Self.interpret(data: data, response: response, path: path)
     }
 
@@ -210,6 +252,7 @@ final class P4APIClient: Sendable {
         request.httpMethod = "POST"
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let (data, response) = try await execute(request, path: path, query: query)
+        try Self.checkSize(data, limit: Self.maxJSONBytes, label: "响应")
         return try Self.interpret(data: data, response: response, path: path)
     }
 
@@ -221,6 +264,7 @@ final class P4APIClient: Sendable {
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw P4APIError(message: "下载失败（HTTP \(http.statusCode)）")
         }
+        try Self.checkSize(data, limit: Self.maxDownloadBytes, label: "下载")
         return data
     }
 
@@ -229,6 +273,18 @@ final class P4APIClient: Sendable {
     /// 固件只接受“应用升级版” `.ino.bin`；`.ino.merged.bin` 为串口全量镜像，不可 OTA。
     @discardableResult
     func uploadFirmware(fileName: String, data: Data) async throws -> P4JSON {
+        guard !data.isEmpty, data.count <= Self.maxFirmwareBytes else {
+            throw P4APIError(message: "固件大小无效：需小于 8 MB")
+        }
+        // 文件名来自文件 App，可能包含引号/换行，直接拼接会破坏 multipart 头。
+        let safeName = String(
+            fileName
+                .replacingOccurrences(of: "\\", with: "_")
+                .replacingOccurrences(of: "\"", with: "_")
+                .replacingOccurrences(of: "\r", with: "_")
+                .replacingOccurrences(of: "\n", with: "_")
+                .prefix(120)
+        )
         let boundary = "P4CAN-" + UUID().uuidString
         var request = URLRequest(url: url(for: P4Route.otaUpload))
         request.httpMethod = "POST"
@@ -238,7 +294,7 @@ final class P4APIClient: Sendable {
         var body = Data()
         body.append(Data("--\(boundary)\r\n".utf8))
         body.append(Data(
-            "Content-Disposition: form-data; name=\"firmware\"; filename=\"\(fileName)\"\r\n".utf8
+            "Content-Disposition: form-data; name=\"firmware\"; filename=\"\(safeName)\"\r\n".utf8
         ))
         body.append(Data("Content-Type: application/octet-stream\r\n\r\n".utf8))
         body.append(data)
@@ -259,7 +315,7 @@ final class P4APIClient: Sendable {
     ) async throws -> (Data, URLResponse) {
         let started = Date()
         let method = request.httpMethod ?? "GET"
-        let queryText = query.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
+        let queryText = Self.redactedQuery(query)
         do {
             let (data, response) = try await session.data(for: request)
             let ms = Int(Date().timeIntervalSince(started) * 1000)
@@ -309,6 +365,9 @@ final class P4APIClient: Sendable {
            body.ok == false || body.ok == nil {
             throw P4APIError(message: message)
         }
+        if let http = response as? HTTPURLResponse, (300...399).contains(http.statusCode) {
+            throw P4APIError(message: "已阻止设备返回的重定向（HTTP \(http.statusCode)），请确认连接的仍是 P4-CAN")
+        }
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw P4APIError(message: "请求失败：\(path)（HTTP \(http.statusCode)）")
         }
@@ -323,5 +382,36 @@ final class P4APIClient: Sendable {
     private static func tryDecode<T: Decodable>(_ type: T.Type, from data: Data) -> T? {
         guard !data.isEmpty else { return nil }
         return try? JSONDecoder().decode(type, from: data)
+    }
+
+    /// 日志脱敏：Wi-Fi 密码等只保留键名。
+    private static func redactedQuery(_ query: [P4Param]) -> String {
+        query.map { param in
+            let key = param.key.lowercased()
+            if sensitiveQueryKeys.contains(key) || key.contains("password") || key.contains("secret") {
+                return "\(param.key)=***"
+            }
+            return "\(param.key)=\(param.value)"
+        }
+        .joined(separator: "&")
+    }
+
+    private static func checkSize(_ data: Data, limit: Int, label: String) throws {
+        guard data.count <= limit else {
+            throw P4APIError(message: "\(label)过大（\(data.count) 字节），已拒绝解析")
+        }
+    }
+}
+
+/// 拒绝所有 HTTP 重定向：控制请求不允许离开用户配置的设备地址。
+private final class P4RedirectBlocker: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
     }
 }

@@ -217,6 +217,7 @@ enum P4KeyLocalization {
         "psramTotalBytes": "PSRAM 总量",
         "rtcBootCount": "累计启动次数",
         "uptimeMs": "运行时长",
+        "uptimeS": "运行时长（秒）",
         "runtimeStatsResetCount": "统计重置次数",
         "hostedC6Version": "C6 从机固件版本",
         "hostedHostVersion": "Hosted 主机版本",

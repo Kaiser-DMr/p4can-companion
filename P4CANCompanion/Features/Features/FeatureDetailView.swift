@@ -71,7 +71,7 @@ struct FeatureDetailView: View {
             }
 
             if !module.controls.isEmpty {
-                Section("控制") {
+                Section(L10n.t("控制", "Controls")) {
                     ForEach(module.controls) { control in
                         controlRow(control)
                     }
@@ -80,7 +80,7 @@ struct FeatureDetailView: View {
 
             statsSection
         }
-        .navigationTitle(module.title)
+        .navigationTitle(module.localizedTitle)
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
         .refreshable { await load() }
@@ -217,7 +217,9 @@ struct FeatureDetailView: View {
                     get: { current },
                     set: { newValue in
                         selectedOptions[key] = newValue
-                        Task { await submitSelect(control, key: key, rawValue: newValue) }
+                        // 读取值（如 STANDARD）与提交值（如 20）可能不同名，按 Option.submitValue 提交。
+                        let submit = options.first { $0.rawValue == newValue }?.submitValue ?? newValue
+                        Task { await submitSelect(control, key: key, rawValue: submit) }
                     }
                 )) {
                     ForEach(options) { option in
@@ -367,8 +369,15 @@ struct FeatureDetailView: View {
     }
 
     /// 设备返回的选择值（255 视为「原厂」）。
+    ///
+    /// `.selectRead` 把读取键写在枚举里（写入 m、读取 mode），优先级：
+    /// 控件级 readKey → 枚举内 readKey → 写入键。
     private func selectText(_ control: FeatureControl, writeKey: String) -> String? {
-        guard let value = statsObject(for: control)?[readKey(for: control, writeKey: writeKey)] else { return nil }
+        var key = readKey(for: control, writeKey: writeKey)
+        if case .selectRead(_, let caseReadKey, _, _, _) = control.kind, control.readKey == nil {
+            key = caseReadKey
+        }
+        guard let value = statsObject(for: control)?[key] else { return nil }
         if let text = value.stringValue { return text }
         if let number = value.intValue { return number == 255 ? "stock" : String(number) }
         return nil
@@ -517,7 +526,7 @@ struct FeatureDetailView: View {
 
     @ViewBuilder
     private var statsSection: some View {
-        Section("实时状态") {
+        Section(L10n.t("实时状态", "Live status")) {
             if let failed = loadFailed {
                 Label(failed, systemImage: "exclamationmark.triangle")
                     .font(.footnote)

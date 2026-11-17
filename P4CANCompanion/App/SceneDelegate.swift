@@ -16,8 +16,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let window = UIWindow(windowScene: windowScene)
         window.rootViewController = RootTabBarController(environment: environment)
+        window.overrideUserInterfaceStyle = environment.appearance.userInterfaceStyle
         window.makeKeyAndVisible()
         self.window = window
+
+        // 设置 → 外观：SwiftUI 与 UIKit 页面都跟随窗口样式，避免只改一半。
+        environment.onAppearanceChange = { [weak self] in
+            self?.window?.overrideUserInterfaceStyle = self?.environment.appearance.userInterfaceStyle ?? .unspecified
+        }
 
         #if targetEnvironment(macCatalyst)
         // Mac 窗口尺寸约束：单列信息流最舒服的宽度区间，避免被拉成超宽横条。

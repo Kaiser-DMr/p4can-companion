@@ -14,8 +14,12 @@ final class RootTabBarController: UITabBarController {
 
     private var overviewController: UIViewController!
     private var featuresController: UIViewController!
+    private var labController: UIViewController!
     private var s3xyController: UIViewController!
     private var systemController: UIViewController!
+    #if DEBUG
+    private var debugTabApplied = false
+    #endif
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -30,40 +34,54 @@ final class RootTabBarController: UITabBarController {
 
         overviewController = makeHosting(
             DashboardView(),
-            title: "状态",
+            title: L10n.t("状态", "Status"),
             // 注意：SF Symbols 里没有 gauge.with.dots.needle.bottom.50.percent，
             // 用错名字会得到空白占位图标（之前状态页图标消失的原因）。
             image: "gauge.with.dots.needle.50percent",
-            accessibilityLabel: "设备状态总览",
+            accessibilityLabel: L10n.t("设备状态总览", "Device status"),
             tag: 0
         )
         featuresController = makeHosting(
             FeaturesView(),
-            title: "功能",
+            title: L10n.t("功能", "Features"),
             image: "switch.programmable",
-            accessibilityLabel: "功能开关列表",
+            accessibilityLabel: L10n.t("功能开关列表", "Feature list"),
             tag: 1
+        )
+        labController = makeHosting(
+            LabView(),
+            title: L10n.t("实验室", "Lab"),
+            image: "flask",
+            accessibilityLabel: L10n.t("实验室功能", "Lab features"),
+            tag: 4
         )
         systemController = makeHosting(
             SystemView(),
-            title: "系统",
+            title: L10n.t("系统", "Settings"),
             image: "gearshape",
-            accessibilityLabel: "系统设置与维护",
+            accessibilityLabel: L10n.t("系统设置与维护", "Settings and maintenance"),
             tag: 3
         )
 
         let s3xy = S3XYDevicesViewController(environment: environment)
         let s3xyItem = UITabBarItem(
-            title: "蓝牙",
+            title: L10n.t("蓝牙", "Bluetooth"),
             image: UIImage(systemName: "dot.radiowaves.left.and.right"),
             tag: 2
         )
-        s3xyItem.accessibilityLabel = "S3XY 蓝牙设备管理"
+        s3xyItem.accessibilityLabel = L10n.t("S3XY 蓝牙设备管理", "S3XY Bluetooth devices")
         s3xy.tabBarItem = s3xyItem
         s3xyController = s3xy
 
         // 蓝牙页默认隐藏，由「系统 → 界面」控制
         environment.onBluetoothTabVisibilityChange = { [weak self] in
+            self?.applyTabSet()
+        }
+        environment.onLabVisibilityChange = { [weak self] in
+            self?.applyTabSet()
+        }
+        environment.onLanguageChange = { [weak self] in
+            self?.refreshTitles()
             self?.applyTabSet()
         }
         applyTabSet()
@@ -75,37 +93,54 @@ final class RootTabBarController: UITabBarController {
         }
         #endif
 
-        // 本地联调：环境变量 P4CAN_TAB 或偏好 p4can.debugTab 指定初始标签页
-        #if DEBUG
-        let requestedTab = ProcessInfo.processInfo.environment["P4CAN_TAB"]
-            ?? UserDefaults.standard.string(forKey: "p4can.debugTab")
-        if let raw = requestedTab,
-           let index = Int(raw),
-           (0..<(viewControllers?.count ?? 0)).contains(index) {
-            selectedIndex = index
-        }
-        #endif
     }
 
     // MARK: - 标签集合
 
-    /// 依据「是否显示蓝牙」重建标签栏，并尽量保持当前选中页不变。
+    /// 依据「蓝牙开关」与「LAB 是否启用」重建标签栏，并尽量保持当前选中页不变。
     private func applyTabSet() {
-        let target: [UIViewController] = environment.bluetoothTabEnabled
-            ? [overviewController, featuresController, s3xyController, systemController]
-            : [overviewController, featuresController, systemController]
-
-        guard viewControllers?.count != target.count else { return }
+        var target: [UIViewController] = [overviewController, featuresController]
+        if environment.isLabEnabled { target.append(labController) }
+        if environment.isS3XYEnabled { target.append(s3xyController) }
+        target.append(systemController)
 
         let current = selectedViewController
-        viewControllers = target
+        let changed = viewControllers?.count != target.count
+            || zip(viewControllers ?? [], target).contains { $0 !== $1 }
+        if changed { viewControllers = target }
+
+        #if DEBUG
+        // 本地联调：标签页要等 LAB 闸门读取后才齐，这里在首次达到目标数量时应用初始标签。
+        if !debugTabApplied, environment.featuresStatus != nil {
+            let requested = ProcessInfo.processInfo.environment["P4CAN_TAB"]
+                ?? UserDefaults.standard.string(forKey: "p4can.debugTab")
+            if let raw = requested, let index = Int(raw), target.indices.contains(index) {
+                debugTabApplied = true
+                selectedIndex = index
+                return
+            }
+        }
+        #endif
 
         if let current, target.contains(where: { $0 === current }) {
             selectedViewController = current
         } else {
-            // 当前页被移除（正在看蓝牙时关掉开关）→ 回到状态页
             selectedIndex = 0
         }
+    }
+
+    /// 语言切换后刷新 UIKit 侧文案（标签标题与可访问性标签）。
+    private func refreshTitles() {
+        overviewController?.tabBarItem.title = L10n.t("状态", "Status")
+        overviewController?.tabBarItem.accessibilityLabel = L10n.t("设备状态总览", "Device status")
+        featuresController?.tabBarItem.title = L10n.t("功能", "Features")
+        featuresController?.tabBarItem.accessibilityLabel = L10n.t("功能开关列表", "Feature list")
+        labController?.tabBarItem.title = L10n.t("实验室", "Lab")
+        labController?.tabBarItem.accessibilityLabel = L10n.t("实验室功能", "Lab features")
+        s3xyController?.tabBarItem.title = L10n.t("蓝牙", "Bluetooth")
+        s3xyController?.tabBarItem.accessibilityLabel = L10n.t("S3XY 蓝牙设备管理", "S3XY Bluetooth devices")
+        systemController?.tabBarItem.title = L10n.t("系统", "Settings")
+        systemController?.tabBarItem.accessibilityLabel = L10n.t("系统设置与维护", "Settings and maintenance")
     }
 
     private func makeHosting<Content: View>(

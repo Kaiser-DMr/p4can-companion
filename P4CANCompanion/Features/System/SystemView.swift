@@ -1,295 +1,639 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 「系统」页：连接设置、设备入网、固件 OTA、维护重置、日志导出。
+/// 「设置」页：严格对照固件网页 Settings 的分组与顺序。
+///
+/// 网页结构（v3.29.3）：
+/// 车型卡片 → Features（NAG / ISA / DMS / 视觉限速 / 自动转向灯 / 召唤状态 / R79 /
+/// 地区 / TLSSC / 变道 / 踏板 / 常驻 AP / AP 加速回收 / S3XY / LAB Menu）→
+/// System（固件 / 无线 / 外观 / 刷新间隔 / 诊断 / 升级 / 重启 / 两级重置 / 恢复出厂）→
+/// Banned Car（封禁车辆 / TLSSC 恢复）。
+///
+/// 「LAB Menu」在这里，打开后底部才会出现实验室标签。
 struct SystemView: View {
     @EnvironmentObject private var environment: AppEnvironment
 
+    @State private var destructiveAction: ResetAction?
+    @State private var dangerToggle: DangerToggle?
+    @State private var path: [String] = []
+
     var body: some View {
-        NavigationStack {
-            List {
-                ConnectionSection()
-                InterfaceSection()
-                WiFiSection()
-                OTASection()
-                MaintenanceSection()
-                DataBrowseSection()
-                LogsSection()
-                AboutSection()
+        NavigationStack(path: $path) {
+            ScrollViewReader { proxy in
+                List {
+                    ProfileSection()
+                    SystemSection(destructiveAction: $destructiveAction)
+                        .id("system")
+                    BannedSection(pending: $dangerToggle)
+                        .id("banned")
+                    AppSection()
+                    DataBrowseSection()
+                    LogsSection()
+                    AboutSection()
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle(L10n.t("设置", "Settings"))
+                .overlay(alignment: .bottom) { ToastOverlay() }
+                .onAppear { AppEnvironmentActions.shared.environment = environment }
+                .task {
+                    #if DEBUG
+                    // 本地联调：SIMCTL_CHILD_P4CAN_SETTINGS_ANCHOR=lab|system|banned 启动即滚到对应分组
+                    if let anchor = ProcessInfo.processInfo.environment["P4CAN_SETTINGS_ANCHOR"] {
+                        try? await Task.sleep(for: .milliseconds(700))
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(anchor, anchor: .top)
+                        }
+                    }
+                    // 本地联调：SIMCTL_CHILD_P4CAN_SETTINGS_PAGE=wireless|diagnostics|ota 直接进入子页
+                    if let page = ProcessInfo.processInfo.environment["P4CAN_SETTINGS_PAGE"] {
+                        try? await Task.sleep(for: .milliseconds(400))
+                        path = [page]
+                    }
+                    #endif
+                }
+                .navigationDestination(for: String.self) { page in
+                    switch page {
+                    case "wireless": WirelessView()
+                    case "diagnostics": DiagnosticsView()
+                    case "ota": FirmwareUpdateView()
+                    default: EmptyView()
+                    }
+                }
+            .confirmationDialog(
+                destructiveAction?.title ?? "",
+                isPresented: Binding(
+                    get: { destructiveAction != nil },
+                    set: { if !$0 { destructiveAction = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(L10n.t("确认执行", "Confirm"), role: .destructive) {
+                    if let action = destructiveAction {
+                        Task { await environment.command(action.title, path: action.path) }
+                    }
+                    destructiveAction = nil
+                }
+                Button(L10n.t("取消", "Cancel"), role: .cancel) { destructiveAction = nil }
+            } message: {
+                Text(destructiveAction?.message ?? "")
             }
-            .navigationTitle("系统")
-            .overlay(alignment: .bottom) { ToastOverlay() }
+            .confirmationDialog(
+                dangerToggle?.title ?? "",
+                isPresented: Binding(
+                    get: { dangerToggle != nil },
+                    set: { if !$0 { dangerToggle = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(L10n.t("我已知晓，仍然开启", "I understand — enable"), role: .destructive) {
+                    if let toggle = dangerToggle { Task { await toggle.enable() } }
+                    dangerToggle = nil
+                }
+                Button(L10n.t("取消", "Cancel"), role: .cancel) { dangerToggle = nil }
+            } message: {
+                Text(dangerToggle?.message ?? "")
+            }
+            }
+        }
+    }
+
+    // MARK: - 重置动作（文案对齐网页确认弹窗）
+
+    enum ResetAction: String, Identifiable {
+        case reboot
+        case resetSettings
+        case resetNVSKeepBLE
+        case factoryReset
+
+        var id: String { rawValue }
+
+        @MainActor var title: String {
+            switch self {
+            case .reboot: return L10n.t("重启 P4-CAN", "Reboot P4-CAN")
+            case .resetSettings: return L10n.t("重置功能设置", "Reset Feature Settings")
+            case .resetNVSKeepBLE: return L10n.t("重置设置 · 保留 S3XY", "Reset Setup · Keep S3XY")
+            case .factoryReset: return L10n.t("恢复出厂设置", "Factory Reset")
+            }
+        }
+
+        @MainActor var message: String {
+            switch self {
+            case .reboot:
+                return L10n.t("设备将重启，连接会短暂中断；Wi-Fi 未开启自动加入时需手动重连。",
+                              "P4-CAN will reboot. Reconnect to Wi-Fi manually if Auto-Join is off.")
+            case .resetSettings:
+                return L10n.t("功能设置恢复默认；车型、Wi-Fi、S3XY 配对与 BUS OFF 证据保留。LAB Menu 与封禁开关会回到关闭。",
+                              "Feature settings return to defaults. Vehicle, Wi-Fi, S3XY pairings and BUS OFF evidence are preserved. LAB Menu and banned switches return to OFF.")
+            case .resetNVSKeepBLE:
+                return L10n.t("回到车型选择；车型、Wi-Fi、功能、LAB 与诊断标记清除，S3XY 注册表、按键映射、蓝牙开关与配对保留。",
+                              "Returns to profile setup. Vehicle, Wi-Fi, features, LAB and diagnostics are cleared; S3XY registry, mappings, Bluetooth settings and bonds are kept.")
+            case .factoryReset:
+                return L10n.t("清除全部设置、Wi-Fi 与 S3XY 配对，设备回到首次开箱的车型选择。此操作不可撤销。",
+                              "Erase all settings, Wi-Fi and paired buttons. P4-CAN returns to first-boot profile setup. This cannot be undone.")
+            }
+        }
+
+        var path: String {
+            switch self {
+            case .reboot: return P4Route.systemReboot
+            case .resetSettings: return P4Route.systemResetSettings
+            case .resetNVSKeepBLE: return P4Route.systemResetNVSKeepBLE
+            case .factoryReset: return P4Route.systemFactoryReset
+            }
+        }
+    }
+
+    enum DangerToggle: String, Identifiable {
+        case banned
+        case tlsscRestore
+
+        var id: String { rawValue }
+
+        @MainActor var title: String {
+            switch self {
+            case .banned: return L10n.t("开启「封禁车辆」？", "Enable Banned Car?")
+            case .tlsscRestore: return L10n.t("开启 TLSSC 恢复？", "Enable TLSSC Restore?")
+            }
+        }
+
+        @MainActor var message: String {
+            switch self {
+            case .banned:
+                return L10n.t("仅当车辆已被 Tesla 封禁或限制时开启。开启本身不会发送 TLSSC 恢复报文。",
+                              "Enable only if this vehicle is already banned or restricted by Tesla. Enabling alone does not transmit TLSSC restore frames.")
+            case .tlsscRestore:
+                return L10n.t("⚠️ 开启后可能导致车辆被封禁。除非车辆已经被封禁，否则不要开启。",
+                              "⚠️ Enabling may result in the vehicle being banned. Do NOT enable unless this vehicle is already banned.")
+            }
+        }
+
+        @MainActor func enable() async {
+            let path = self == .banned ? P4Route.featuresBanned : P4Route.featuresTLSSCRestore
+            let label = self == .banned
+                ? L10n.t("开启封禁车辆", "Enable Banned Car")
+                : L10n.t("开启 TLSSC 恢复", "Enable TLSSC Restore")
+            await AppEnvironmentActions.shared.enableDanger(path: path, label: label)
         }
     }
 }
 
-// MARK: - 连接设置
+/// 让确认弹窗里的动作能拿到 environment（SwiftUI 的 enum 无法持有 EnvironmentObject）。
+@MainActor
+final class AppEnvironmentActions {
+    static let shared = AppEnvironmentActions()
+    weak var environment: AppEnvironment?
 
-private struct ConnectionSection: View {
+    func enableDanger(path: String, label: String) async {
+        guard let environment else { return }
+        await environment.command(label, path: path, query: [P4Param("enabled", "1")])
+        await environment.refreshFeatures()
+    }
+}
+
+// MARK: - 车型卡片
+
+private struct ProfileSection: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var showsChange = false
+
+    private var profile: [String: P4JSON] { environment.profileStatus?.objectValue ?? [:] }
+    private var model: String { profile["profileName"]?.stringValue ?? L10n.t("未选择车型", "No profile") }
+    private var firmware: String {
+        environment.systemStats?["fwVersion"]?.stringValue
+            ?? profile["fwVersion"]?.stringValue
+            ?? "—"
+    }
+    private var badge: String {
+        if let raw = profile["badge"]?.stringValue, !raw.isEmpty { return raw }
+        let initials = model.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return initials.isEmpty ? "P4" : initials.uppercased()
+    }
+    private var topologyText: String? {
+        guard let topology = environment.topologyName, !topology.isEmpty else { return nil }
+        return topology
+    }
+
+    private var turnText: String? {
+        guard let turn = profile["turnName"]?.stringValue, !turn.isEmpty else { return nil }
+        return "\(turn) · 0x249"
+    }
+
+    private var capsText: String {
+        [
+            environment.profileStatus?["nagSupported"]?.boolValue == true ? "✓ NAG" : "— NAG",
+            environment.profileStatus?["advancedEapSupported"]?.boolValue == true ? "✓ ADV EAP" : "— ADV EAP",
+            environment.profileStatus?["euUnlockSupported"]?.boolValue == true ? "✓ EU UNLOCK" : "— EU UNLOCK",
+        ].joined(separator: " · ")
+    }
+
+    var body: some View {
+        Section {
+            if let module = FeatureCatalog.modules.first(where: { $0.id == "profile" }) {
+                NavigationLink {
+                    FeatureDetailView(module: module)
+                } label: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            Text(badge)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(Color.p4OK)
+                                .frame(width: 44, height: 44)
+                                .background(Color.p4OK.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(L10n.t("车型配置 · 开机锁定", "Vehicle profile · locked at boot"))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text(model)
+                                    .font(.headline)
+                                Text("P4-CAN · \(firmware)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                if let topologyText {
+                                    chipView(topologyText, scaling: 0.85)
+                                }
+                                if let turnText {
+                                    chipView(turnText)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            chipView(capsText, scaling: 0.8)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(L10n.t("车型 \(model)，点击查看配置详情",
+                                               "Vehicle \(model), open profile details"))
+                }
+            } else {
+                progressRow
+            }
+
+            Button {
+                showsChange = true
+            } label: {
+                HStack {
+                    Label(L10n.t("更改车型", "Change vehicle profile"),
+                          systemImage: "arrow.triangle.2.circlepath")
+                    Spacer()
+                    Text(environment.profileName ?? "—")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .disabled(environment.isOnline == false)
+            .sheet(isPresented: $showsChange) {
+                NavigationStack {
+                    VehicleProfileChangeView()
+                        .environmentObject(environment)
+                }
+            }
+            .task {
+                #if DEBUG
+                // 本地联调：SIMCTL_CHILD_P4CAN_PROFILE_CHANGE=1 启动即打开更改车型
+                if ProcessInfo.processInfo.environment["P4CAN_PROFILE_CHANGE"] == "1" {
+                    try? await Task.sleep(for: .milliseconds(600))
+                    showsChange = true
+                }
+                #endif
+            }
+        }
+    }
+
+    private func chipView(_ text: String, scaling: CGFloat = 1) -> some View {
+        Text(text)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(scaling)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.p4Tile, in: Capsule())
+    }
+
+    private var progressRow: some View {
+        HStack {
+            ProgressView()
+            Text(L10n.t("正在读取车型配置…", "Loading vehicle profile…"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - 系统
+
+private struct SystemSection: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @Binding var destructiveAction: SystemView.ResetAction?
+
+    private var firmware: String {
+        environment.systemStats?["fwVersion"]?.stringValue
+            ?? environment.profileStatus?["fwVersion"]?.stringValue
+            ?? "—"
+    }
+
+    var body: some View {
+        Section {
+            LabeledContent {
+                Text(firmware)
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            } label: {
+                Text(L10n.t("固件", "Firmware"))
+            }
+
+            NavigationLink {
+                WirelessView()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("无线", "Wireless"))
+                    Text(wirelessSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            appearanceRow
+            refreshRow
+
+            NavigationLink {
+                DiagnosticsView()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("诊断 / 恢复", "Diagnostics / Recovery"))
+                    Text(L10n.t("计数器、启动抓包与系统日志", "Counters, boot capture and system logs"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            NavigationLink {
+                FirmwareUpdateView()
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("固件升级", "Firmware Update"))
+                    Text(L10n.t("上传应用 .bin 文件", "Install an application .bin file"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Button {
+                destructiveAction = .reboot
+            } label: {
+                Label(L10n.t("重启 P4-CAN", "Reboot P4-CAN"), systemImage: "arrow.clockwise")
+            }
+
+            Button {
+                destructiveAction = .resetSettings
+            } label: {
+                Label(L10n.t("重置功能设置", "Reset Feature Settings"), systemImage: "arrow.counterclockwise")
+            }
+
+            Button {
+                destructiveAction = .resetNVSKeepBLE
+            } label: {
+                Label(L10n.t("重置设置 · 保留 S3XY", "Reset Setup · Keep S3XY"), systemImage: "externaldrive.badge.minus")
+            }
+
+            Button(role: .destructive) {
+                destructiveAction = .factoryReset
+            } label: {
+                Label(L10n.t("恢复出厂设置", "Factory Reset"), systemImage: "trash")
+            }
+        } header: {
+            HStack {
+                Text(L10n.t("系统", "System"))
+                Spacer()
+                Text("P4-CAN")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        } footer: {
+            Text(L10n.t("重置与恢复出厂会断开连接，请确认已知晓影响后再执行。",
+                        "Resets disconnect the device. Make sure you understand the impact before continuing."))
+        }
+    }
+
+    private var wirelessSummary: String {
+        let bt = environment.isBluetoothEnabled ? "ON" : "OFF"
+        let auto = environment.s3xyStats?["autoEnabled"]?.boolValue
+        let autoText = auto == nil ? "—" : (auto == true ? "ON" : "OFF")
+        let wifi = environment.wifiStatus?["ssid"]?.stringValue ?? "—"
+        return L10n.t("蓝牙 \(bt) · 自动连接 \(autoText) · \(wifi)",
+                      "Bluetooth \(bt) · Auto Connect \(autoText) · \(wifi)")
+    }
+
+    private var appearanceRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L10n.t("外观", "Appearance"))
+                Spacer()
+                Text(environment.appearance == .system
+                     ? L10n.t("跟随手机设置", "Follows phone setting")
+                     : environment.appearance.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Picker(L10n.t("外观", "Appearance"), selection: Binding(
+                get: { environment.appearance },
+                set: { environment.setAppearance($0) }
+            )) {
+                ForEach(AppAppearance.allCases) { appearance in
+                    Text(appearance.shortName).tag(appearance)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel(L10n.t("界面外观", "Appearance"))
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var refreshRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L10n.t("数据刷新间隔", "Data Refresh Interval"))
+                Spacer()
+                Text(L10n.t("主页更新 · 默认 500 ms", "Home updates · default 500 ms"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Picker(L10n.t("刷新间隔", "Refresh interval"), selection: Binding(
+                get: { environment.pollIntervalMs },
+                set: { environment.setPollInterval($0) }
+            )) {
+                ForEach(AppEnvironment.pollIntervalOptions, id: \.self) { value in
+                    Text("\(value) ms").tag(value)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel(L10n.t("数据刷新间隔", "Data refresh interval"))
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - 封禁车辆（危险）
+
+private struct BannedSection: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @Binding var pending: SystemView.DangerToggle?
+
+    private var banned: Bool { environment.featuresStatus?["banned"]?.boolValue ?? false }
+    private var restore: Bool { environment.featuresStatus?["tlsscRestore"]?.boolValue ?? false }
+    private var bannedSupported: Bool { environment.featuresStatus?["bannedSupported"]?.boolValue ?? true }
+    private var restoreSupported: Bool { environment.featuresStatus?["tlsscRestoreSupported"]?.boolValue ?? true }
+
+    var body: some View {
+        Section {
+            dangerRow(
+                title: L10n.t("封禁车辆", "Banned Car"),
+                subtitle: L10n.t("为已被封禁的车辆显示恢复控制。",
+                                 "Show restore controls for already-banned vehicles."),
+                isOn: banned,
+                supported: bannedSupported,
+                id: .banned
+            )
+            dangerRow(
+                title: L10n.t("TLSSC 恢复", "TLSSC Restore"),
+                subtitle: L10n.t("对被封禁车辆尝试 TLSSC 恢复覆盖。",
+                                 "Try the TLSSC restore override on a banned vehicle."),
+                isOn: restore,
+                supported: restoreSupported,
+                id: .tlsscRestore
+            )
+        } header: {
+            HStack {
+                Text(L10n.t("封禁车辆", "Banned Car"))
+                Text("DANGER")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.p4Err)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.p4Err.opacity(0.12), in: Capsule())
+                Spacer()
+                Text(L10n.t("仅限已被封禁的车辆", "Already-banned vehicles only"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        } footer: {
+            Text(L10n.t("仅当车辆已被 Tesla 封禁或限制时开启；错误使用可能导致车辆被封禁。",
+                        "Enable only when the vehicle is already banned or restricted. Misuse may cause a ban."))
+        }
+    }
+
+    private func dangerRow(
+        title: String,
+        subtitle: String,
+        isOn: Bool,
+        supported: Bool,
+        id: SystemView.DangerToggle
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                    .foregroundStyle(.p4Err)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { newValue in
+                    Haptics.warning()
+                    if newValue {
+                        pending = id
+                    } else {
+                        let path = id == .banned ? P4Route.featuresBanned : P4Route.featuresTLSSCRestore
+                        Task {
+                            await environment.command(id.title, path: path, query: [P4Param("enabled", "0")])
+                            await environment.refreshFeatures()
+                        }
+                    }
+                }
+            ))
+            .labelsHidden()
+            .disabled(!supported || environment.isBusy)
+            .accessibilityLabel(title)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - App 自身设置
+
+private struct AppSection: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var hostField = ""
     @State private var showsGuide = false
 
     var body: some View {
         Section {
-            HStack {
-                Text("设备地址")
-                Spacer()
-                Text(environment.phase == .online ? "在线" : "离线")
-                    .foregroundStyle(environment.phase == .online ? Color.p4OK : Color.p4Err)
-                    .accessibilityLabel("设备\(environment.phase == .online ? "在线" : "离线")")
+            Picker(selection: Binding(
+                get: { environment.language },
+                set: { environment.setLanguage($0) }
+            )) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(language.displayName).tag(language)
+                }
+            } label: {
+                Label(L10n.t("语言", "Language"), systemImage: "globe")
             }
-            .font(.subheadline)
+            .accessibilityLabel(L10n.t("界面语言", "Interface language"))
 
-            TextField("例如 192.168.4.1", text: $hostField)
-                .keyboardType(.decimalPad)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .onAppear { hostField = environment.host }
-                .accessibilityLabel("设备 IP 地址输入框")
-
-            Button("应用地址并连接") {
-                environment.updateHost(hostField)
-            }
-            .disabled(hostField.trimmingCharacters(in: .whitespaces) == environment.host)
-
-            Button("查看连接引导") { showsGuide = true }
-        } header: {
-            Label("连接", systemImage: "network")
-        } footer: {
-            Text("设备热点模式默认网关 192.168.4.1；设备加入家庭网络后请改为其新 IP。")
-        }
-        .sheet(isPresented: $showsGuide) { ConnectionGuideView() }
-    }
-}
-
-// MARK: - Wi-Fi 配置（设备入网）
-
-private struct InterfaceSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
-
-    var body: some View {
-        Section {
             Toggle(isOn: Binding(
-                get: { environment.bluetoothTabEnabled },
-                set: { environment.setBluetoothTabEnabled($0) }
+                get: { environment.liveActivityEnabled },
+                set: { environment.setLiveActivity($0) }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("在标签栏显示「蓝牙」")
-                    Text("S3XY 设备配对与动作绑定")
+                    Text(L10n.t("锁屏 / 灵动岛实时状态", "Live Activity"))
+                    Text(L10n.t("锁屏与灵动岛显示三路总线状态",
+                                "Show CAN bus status on the Lock Screen and Dynamic Island"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
-            .accessibilityLabel("在标签栏显示蓝牙页")
-            .accessibilityHint("关闭后底部只保留状态、功能、系统三页")
-        } header: {
-            Label("界面", systemImage: "slider.horizontal.3")
-        } footer: {
-            Text("蓝牙页平时用不到，默认隐藏；需要配对 S3XY 设备时在这里打开，就会出现在底部标签栏。")
-        }
-    }
-}
 
-private struct WiFiSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
-    @State private var ssid = ""
-    @State private var password = ""
-
-    var body: some View {
-        Section {
-            if let wifi = environment.wifiStatus?.objectValue {
-                MetricRow(key: "ssid", value: wifi["ssid"] ?? .null)
-                MetricRow(key: "networkState", value: wifi["networkState"] ?? .null)
-                if let ip = wifi["ip"]?.stringValue, !ip.isEmpty {
-                    MetricRow(key: "ip", value: .string(ip))
-                }
-                if let hosted = wifi["hostedWifiStarted"]?.boolValue {
-                    MetricRow(key: "hostedWifiStarted", value: .bool(hosted))
-                }
-                if wifi["passwordIsDefault"]?.boolValue == true {
-                    Label("设备 AP 密码仍为默认值，建议尽快修改", systemImage: "exclamationmark.shield")
-                        .font(.footnote)
-                        .foregroundStyle(.p4Warn)
-                }
-            } else {
-                Text("暂无 Wi-Fi 状态")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            HStack {
+                Text(L10n.t("设备地址", "Device address"))
+                Spacer()
+                Text(environment.phase == .online ? L10n.t("在线", "Online") : L10n.t("离线", "Offline"))
+                    .foregroundStyle(environment.phase == .online ? Color.p4OK : Color.p4Err)
             }
+            .font(.subheadline)
 
-            TextField("热点名称（SSID）", text: $ssid)
+            TextField(L10n.t("例如 192.168.4.1", "e.g. 192.168.4.1"), text: $hostField)
+                .keyboardType(.decimalPad)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .accessibilityLabel("热点名称输入框")
-            SecureField("热点密码（8–63 位）", text: $password)
-                .accessibilityLabel("热点密码输入框")
+                .onAppear { hostField = environment.host }
+                .accessibilityLabel(L10n.t("设备 IP 地址", "Device IP address"))
 
-            Button("应用热点配置（/api/wifi/apply）") {
-                Task { await environment.applyWiFi(ssid: ssid, password: password) }
+            Button(L10n.t("应用地址并连接", "Apply and connect")) {
+                environment.updateHost(hostField)
             }
-            .disabled(ssid.isEmpty || environment.isBusy)
+            .disabled(hostField.trimmingCharacters(in: .whitespaces) == environment.host)
+
+            Button(L10n.t("查看连接引导", "Connection guide")) { showsGuide = true }
         } header: {
-            Label("设备热点（SoftAP）", systemImage: "wifi.router")
+            Label(L10n.t("App", "App"), systemImage: "app.badge")
         } footer: {
-            Text("固件只重建 SoftAP：SSID/密码生效后 IP 仍为 192.168.4.1。留空密码表示保持现有密码。")
+            Text(L10n.t("语言切换立即生效，英文采用固件网页的原始措辞。蓝牙标签由「功能 → S3XY」开关控制：打开即显示，关闭即隐藏。",
+                        "Language changes apply immediately. The Bluetooth tab follows the S3XY switch in Features: on shows it, off hides it."))
         }
-    }
-}
-
-// MARK: - 固件升级（OTA）
-
-private struct OTASection: View {
-    @EnvironmentObject private var environment: AppEnvironment
-    @State private var pickedURL: URL?
-    @State private var showsImporter = false
-
-    private var otaObject: [String: P4JSON]? { environment.otaStatus?.objectValue }
-
-    var body: some View {
-        Section {
-            if let ota = otaObject {
-                MetricRow(key: "stage", value: ota["stage"] ?? .null)
-                MetricRow(key: "inProgress", value: ota["inProgress"] ?? .null)
-                MetricRow(key: "receivedBytes", value: ota["receivedBytes"] ?? .null)
-                MetricRow(key: "totalBytes", value: ota["totalBytes"] ?? .null)
-                MetricRow(key: "attempt", value: ota["attempt"] ?? .null)
-                if let error = ota["updateError"]?.stringValue, !error.isEmpty {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(.p4Err)
-                }
-            }
-
-            if let url = pickedURL {
-                Label(url.lastPathComponent, systemImage: "doc.badge.arrow.up")
-                    .font(.footnote)
-                    .lineLimit(1)
-                    .accessibilityLabel("已选择固件文件 \(url.lastPathComponent)")
-            }
-
-            Button {
-                showsImporter = true
-            } label: {
-                Label("选择固件文件（.ino.bin）", systemImage: "folder.badge.plus")
-            }
-            .accessibilityHint("从文件 App 选择增量升级镜像")
-
-            Button {
-                upload()
-            } label: {
-                if environment.otaUploading {
-                    Label("上传中…", systemImage: "arrow.up.circle.dotted")
-                } else {
-                    Label("开始上传", systemImage: "arrow.up.circle.fill")
-                }
-            }
-            .disabled(pickedURL == nil || environment.otaUploading)
-            .accessibilityHint("上传固件到设备网页升级入口，期间请保持连接且勿断电")
-
-        } header: {
-            Label("固件升级（OTA）", systemImage: "arrow.down.circle")
-        } footer: {
-            Text("只上传“应用升级版” .ino.bin（如 P4-CAN-Universal-v3.29.3-C6.ino.bin）。.ino.merged.bin 为 32MB 串口全量镜像，不可用于网页/App OTA。")
-        }
-        .fileImporter(
-            isPresented: $showsImporter,
-            allowedContentTypes: [.data],
-            onCompletion: { result in
-                if case .success(let url) = result {
-                    pickedURL = url
-                } else if case .failure(let error) = result {
-                    environment.toast = P4Toast(message: "选择文件失败：\(error.localizedDescription)", style: .failure)
-                }
-            }
-        )
-    }
-
-    private func upload() {
-        guard let url = pickedURL else { return }
-        Task {
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let data = try Data(contentsOf: url)
-                await environment.uploadFirmware(named: url.lastPathComponent, data: data)
-                if environment.toast?.style == .success { pickedURL = nil }
-            } catch {
-                environment.toast = P4Toast(message: "读取文件失败：\(error.localizedDescription)", style: .failure)
-            }
-        }
-    }
-}
-
-// MARK: - 维护与重置
-
-private struct MaintenanceSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
-    @State private var destructiveAction: DestructiveAction?
-
-    private enum DestructiveAction: String, Identifiable {
-        case reboot = "重启设备"
-        case reinitCAN = "重新初始化 CAN"
-        case resetStats = "重置运行统计"
-        case resetSettings = "重置设置（保留配对）"
-        case factoryReset = "恢复出厂设置"
-        case resetNVSKeepBLE = "重置 NVS（保留蓝牙）"
-        var id: String { rawValue }
-
-        var path: String {
-            switch self {
-            case .reboot: return P4Route.systemReboot
-            case .reinitCAN: return P4Route.systemReinitCAN
-            case .resetStats: return P4Route.systemResetStats
-            case .resetSettings: return P4Route.systemResetSettings
-            case .factoryReset: return P4Route.systemFactoryReset
-            case .resetNVSKeepBLE: return P4Route.systemResetNVSKeepBLE
-            }
-        }
-
-        var warning: String {
-            switch self {
-            case .reboot: return "设备将重启，连接会短暂中断。"
-            case .reinitCAN: return "CAN 总线将重新初始化，期间功能短暂不可用。"
-            case .resetStats: return "运行统计与计数器将清零，不可恢复。"
-            case .resetSettings: return "功能设置将恢复默认，蓝牙配对保留。"
-            case .factoryReset: return "⚠️ 全部设置、配对与统计数据将被清除，恢复出厂状态！"
-            case .resetNVSKeepBLE: return "NVS 将重建，仅保留蓝牙配对数据，其余全部丢失！"
-            }
-        }
-    }
-
-    var body: some View {
-        Section {
-            Button("重启设备") { destructiveAction = .reboot }
-            Button("重新初始化 CAN") { destructiveAction = .reinitCAN }
-            Button("重置运行统计") { destructiveAction = .resetStats }
-            Button("重置设置（保留配对）") { destructiveAction = .resetSettings }
-            Button("恢复出厂设置") { destructiveAction = .factoryReset }
-                .foregroundStyle(.p4Err)
-            Button("重置 NVS（保留蓝牙）") { destructiveAction = .resetNVSKeepBLE }
-                .foregroundStyle(.p4Err)
-        } header: {
-            Label("维护与重置", systemImage: "wrench.and.screwdriver")
-        }
-        .confirmationDialog(
-            destructiveAction?.rawValue ?? "",
-            isPresented: Binding(
-                get: { destructiveAction != nil },
-                set: { if !$0 { destructiveAction = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("确认执行", role: .destructive) {
-                if let action = destructiveAction {
-                    Task { await environment.command(action.rawValue, path: action.path) }
-                }
-                destructiveAction = nil
-            }
-            Button("取消", role: .cancel) { destructiveAction = nil }
-        } message: {
-            Text(destructiveAction?.warning ?? "")
-        }
+        .sheet(isPresented: $showsGuide) { ConnectionGuideView() }
     }
 }
 
@@ -304,9 +648,10 @@ private struct DataBrowseSection: View {
                 LiveDataView()
             } label: {
                 HStack {
-                    Label("全部数据（原始字段）", systemImage: "list.bullet.rectangle")
+                    Label(L10n.t("全部数据（原始字段）", "All data (raw fields)"), systemImage: "list.bullet.rectangle")
                     Spacer()
-                    Text("\(AppEnvironment.browseEndpoints.count) 个端点")
+                    Text(L10n.t("\(AppEnvironment.browseEndpoints.count) 个端点",
+                                "\(AppEnvironment.browseEndpoints.count) endpoints"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -314,12 +659,13 @@ private struct DataBrowseSection: View {
             NavigationLink {
                 NetworkLogView()
             } label: {
-                Label("网络日志（抓包调试）", systemImage: "waveform.path.ecg.rectangle")
+                Label(L10n.t("网络日志（抓包调试）", "Network log (debug)"), systemImage: "waveform.path.ecg.rectangle")
             }
         } header: {
-            Label("数据浏览", systemImage: "magnifyingglass")
+            Label(L10n.t("数据浏览", "Data browser"), systemImage: "magnifyingglass")
         } footer: {
-            Text("按端点查看固件 /api/* 的全部字段，支持搜索（can1 / can2 / can3 / gear / das 等）。")
+            Text(L10n.t("按端点查看固件 /api/* 的全部字段，支持搜索（can1 / can2 / can3 / gear / das 等）。",
+                        "Browse every field of the firmware /api/* endpoints; search for can1 / can2 / can3 / gear / das."))
         }
     }
 }
@@ -344,11 +690,11 @@ private struct LogsSection: View {
                         Spacer()
                         if exportingLog?.id == log.id {
                             ProgressView()
-                                .accessibilityLabel("正在导出\(log.title)")
+                                .accessibilityLabel(L10n.t("正在导出\(log.title)", "Exporting \(log.title)"))
                         } else {
                             Image(systemName: "square.and.arrow.up")
                                 .foregroundStyle(.tint)
-                                .accessibilityLabel("导出并分享")
+                                .accessibilityLabel(L10n.t("导出并分享", "Export and share"))
                         }
                     }
                 }
@@ -360,9 +706,10 @@ private struct LogsSection: View {
                     .foregroundStyle(.p4Err)
             }
         } header: {
-            Label("日志与跟踪导出", systemImage: "list.bullet.rectangle")
+            Label(L10n.t("日志与跟踪导出", "Logs & traces"), systemImage: "list.bullet.rectangle")
         } footer: {
-            Text("下载设备端 CSV（启动诊断、CAN A/B 发送跟踪、S3XY、DMS、研究捕获），完成后可分享或存储到文件 App。")
+            Text(L10n.t("下载设备端 CSV（启动诊断、CAN 发送跟踪、S3XY、DMS、研究捕获），完成后可分享或存储到文件 App。",
+                        "Download on-device CSV files (boot diagnostics, CAN TX traces, S3XY, DMS, research captures)."))
         }
         .sheet(item: Binding(
             get: { exportedURL.map { ShareURLWrapper(url: $0) } },
@@ -407,14 +754,16 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
 private struct AboutSection: View {
     var body: some View {
         Section {
-            LabeledContent("App 版本", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2")
-            LabeledContent("适配固件", value: "P4-CAN Universal Unlock v3.29.3")
-            LabeledContent("接口契约", value: "web_api.h（query 参数）")
-            LabeledContent("连接方式", value: "本地 HTTP（192.168.4.1）")
+            LabeledContent(L10n.t("App 版本", "App version"),
+                           value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "3.2")
+            LabeledContent(L10n.t("适配固件", "Firmware"), value: "P4-CAN Universal Unlock v3.29.3")
+            LabeledContent(L10n.t("接口契约", "API contract"), value: "web_api.h（query 参数）")
+            LabeledContent(L10n.t("连接方式", "Transport"), value: L10n.t("本地 HTTP（192.168.4.1）", "Local HTTP (192.168.4.1)"))
         } header: {
-            Label("关于", systemImage: "info.circle")
+            Label(L10n.t("关于", "About"), systemImage: "info.circle")
         } footer: {
-            Text("功能列表依据固件 v3.29.3 内嵌 API 路由与状态字段还原；个别参数含义以固件实际行为为准。")
+            Text(L10n.t("功能列表依据固件 v3.29.3 内嵌 API 路由与状态字段还原；个别参数含义以固件实际行为为准。",
+                        "Feature list is derived from the API routes and status fields embedded in firmware v3.29.3."))
         }
     }
 }

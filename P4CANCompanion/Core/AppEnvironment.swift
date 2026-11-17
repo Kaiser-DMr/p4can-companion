@@ -55,10 +55,35 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var trendSamples: [TrendSample] = []
     /// 是否开启锁屏 / 灵动岛实时活动（持久化）。
     @Published private(set) var liveActivityEnabled = false
-    /// 是否在标签栏显示「蓝牙」页（持久化；默认关闭——多数时间用不到，按需在系统页开启）。
-    @Published private(set) var bluetoothTabEnabled = false
+    /// 蓝牙标签是否显示：与网页一致，由固件 S3XY 功能闸门决定（功能页的 S3XY 开关）。
+    var isS3XYEnabled: Bool {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["P4CAN_BT_TAB"] {
+            return raw == "1"
+        }
+        #endif
+        return featuresStatus?["s3xy"]?.boolValue ?? false
+    }
     /// 根控制器注入：标签显隐变化时重建标签栏（避免 Combine 跨隔离域捕获）。
     var onBluetoothTabVisibilityChange: (@MainActor () -> Void)?
+    /// 实验室（LAB）开关变化时重建标签栏：LAB 开启才显示「实验室」页。
+    var onLabVisibilityChange: (@MainActor () -> Void)?
+    /// 语言变化时刷新标签栏标题等 VC 级文案。
+    var onLanguageChange: (@MainActor () -> Void)?
+    /// 语言（持久化；system = 跟随系统）
+    @Published private(set) var language: AppLanguage = .system
+    /// 界面外观（持久化；与网页 Settings → Appearance 一致）
+    @Published private(set) var appearance: AppAppearance = .system
+    /// 主页刷新间隔（毫秒，250 / 500 / 1000；与网页 Settings → Data Refresh Interval 一致）
+    @Published private(set) var pollIntervalMs: Int = 500
+    /// 根窗口注入：外观变化时同步 overrideUserInterfaceStyle（含 UIKit 侧页面）。
+    var onAppearanceChange: (@MainActor () -> Void)?
+    private var lastLabVisible = false
+    private var lastS3XYVisible = false
+    private static let languageDefaultsKey = "p4can.language"
+    private static let appearanceDefaultsKey = "p4can.appearance"
+    private static let pollIntervalDefaultsKey = "p4can.poll.ms"
+    static let pollIntervalOptions = [250, 500, 1000]
 
     struct TrendSample: Identifiable, Sendable {
         let id = UUID()
@@ -105,12 +130,12 @@ final class AppEnvironment: ObservableObject {
         P4Route.otaStatus,
     ]
 
-    private var onlineInterval: Duration = .milliseconds(1500)
+    /// 离线时放慢重试；在线间隔由用户设置（默认 500 ms，与网页一致）。
+    private var onlineInterval: Duration { .milliseconds(pollIntervalMs) }
     private var offlineInterval: Duration = .seconds(5)
 
     private static let hostDefaultsKey = "p4can.device.host"
     private static let liveActivityDefaultsKey = "p4can.liveactivity.enabled"
-    private static let bluetoothTabDefaultsKey = "p4can.tab.bluetooth"
     private var pollTask: Task<Void, Never>?
     private var client: P4APIClient
     private var tick = 0
@@ -132,13 +157,13 @@ final class AppEnvironment: ObservableObject {
         self.host = resolved
         self.client = P4APIClient(host: resolved)
         self.liveActivityEnabled = UserDefaults.standard.bool(forKey: Self.liveActivityDefaultsKey)
-        self.bluetoothTabEnabled = UserDefaults.standard.bool(forKey: Self.bluetoothTabDefaultsKey)
-        #if DEBUG
-        // 本地联调：SIMCTL_CHILD_P4CAN_BT_TAB=1 强制显示蓝牙标签
-        if let raw = ProcessInfo.processInfo.environment["P4CAN_BT_TAB"] {
-            self.bluetoothTabEnabled = (raw == "1")
-        }
-        #endif
+        let savedLanguage = UserDefaults.standard.string(forKey: Self.languageDefaultsKey) ?? "system"
+        self.language = AppLanguage(rawValue: savedLanguage) ?? .system
+        L10n.selection = self.language
+        let savedAppearance = UserDefaults.standard.string(forKey: Self.appearanceDefaultsKey) ?? "system"
+        self.appearance = AppAppearance(rawValue: savedAppearance) ?? .system
+        let savedPoll = UserDefaults.standard.integer(forKey: Self.pollIntervalDefaultsKey)
+        self.pollIntervalMs = Self.pollIntervalOptions.contains(savedPoll) ? savedPoll : 500
     }
 
     var api: P4APIClient { client }
@@ -162,9 +187,16 @@ final class AppEnvironment: ObservableObject {
     func updateHost(_ newHost: String) {
         let trimmed = newHost.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != host else { return }
-        host = trimmed
-        UserDefaults.standard.set(trimmed, forKey: Self.hostDefaultsKey)
-        client = P4APIClient(host: trimmed)
+        guard let normalized = P4APIClient.validatedHost(trimmed) else {
+            toast = P4Toast(
+                message: "地址格式无效：只支持 http(s)://主机[:端口] 或 主机[:端口]，不要带账号、路径或查询参数",
+                style: .failure
+            )
+            return
+        }
+        host = normalized
+        UserDefaults.standard.set(normalized, forKey: Self.hostDefaultsKey)
+        client = P4APIClient(host: normalized)
         phase = .idle
         start()
     }
@@ -230,6 +262,17 @@ final class AppEnvironment: ObservableObject {
 
         rebuildDerived()
 
+        let labVisible = isLabEnabled
+        if labVisible != lastLabVisible {
+            lastLabVisible = labVisible
+            onLabVisibilityChange?()
+        }
+        let s3xyVisible = isS3XYEnabled
+        if s3xyVisible != lastS3XYVisible {
+            lastS3XYVisible = s3xyVisible
+            onBluetoothTabVisibilityChange?()
+        }
+
         if snapshot != nil {
             phase = .online
             lastUpdated = Date()
@@ -281,17 +324,56 @@ final class AppEnvironment: ObservableObject {
 
     // MARK: - 界面
 
-    /// 蓝牙页是否出现在底部标签栏（持久化，默认关闭）。
-    func setBluetoothTabEnabled(_ enabled: Bool) {
-        guard enabled != bluetoothTabEnabled else { return }
-        bluetoothTabEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: Self.bluetoothTabDefaultsKey)
-        onBluetoothTabVisibilityChange?()
+    /// 切换外观：持久化并通知根窗口同步（SwiftUI 与 UIKit 页面一起变化）。
+    func setAppearance(_ appearance: AppAppearance) {
+        guard appearance != self.appearance else { return }
+        self.appearance = appearance
+        UserDefaults.standard.set(appearance.rawValue, forKey: Self.appearanceDefaultsKey)
+        onAppearanceChange?()
         Haptics.impact()
-        toast = P4Toast(
-            message: enabled ? "「蓝牙」已显示在标签栏" : "「蓝牙」已从标签栏隐藏",
-            style: .info
-        )
+    }
+
+    /// 切换主页刷新间隔（250 / 500 / 1000 ms）；下一拍轮询即生效。
+    func setPollInterval(_ milliseconds: Int) {
+        let value = Self.pollIntervalOptions.contains(milliseconds) ? milliseconds : 500
+        guard value != pollIntervalMs else { return }
+        pollIntervalMs = value
+        UserDefaults.standard.set(value, forKey: Self.pollIntervalDefaultsKey)
+        Haptics.impact()
+    }
+
+    /// 单独拉取车型状态（更改车型、从后台返回时使用）。
+    func refreshProfile() async {
+        guard let profile = try? await client.get(P4Route.profileStatus) else { return }
+        profileStatus = profile
+        rebuildDerived()
+    }
+
+    /// 单独拉取功能闸门（LAB Menu / S3XY / 封禁方案），用于开关后立即刷新标签栏。
+    func refreshFeatures() async {
+        guard let features = try? await client.get(P4Route.featuresStatus) else { return }
+        featuresStatus = features
+        rebuildDerived()
+        let visible = isLabEnabled
+        if visible != lastLabVisible {
+            lastLabVisible = visible
+            onLabVisibilityChange?()
+        }
+        let s3xyVisible = isS3XYEnabled
+        if s3xyVisible != lastS3XYVisible {
+            lastS3XYVisible = s3xyVisible
+            onBluetoothTabVisibilityChange?()
+        }
+    }
+
+    /// 切换语言：持久化并刷新标签栏文案。
+    func setLanguage(_ language: AppLanguage) {
+        guard language != self.language else { return }
+        self.language = language
+        UserDefaults.standard.set(language.rawValue, forKey: Self.languageDefaultsKey)
+        L10n.selection = language
+        onLanguageChange?()
+        Haptics.impact()
     }
 
     // MARK: - 锁屏 / 灵动岛
@@ -522,7 +604,13 @@ final class AppEnvironment: ObservableObject {
     var s3xyScanResults: [S3XYScanResult] { S3XYScanResult.results(from: s3xyStats) }
 
     var isBluetoothEnabled: Bool { s3xyStats?["bluetoothEnabled"]?.boolValue ?? false }
-    var isLabEnabled: Bool { featuresStatus?["lab"]?.boolValue ?? false }
+    var isLabEnabled: Bool {
+        #if DEBUG
+        // 本地联调：SIMCTL_CHILD_P4CAN_LAB=1 强制显示实验室标签
+        if ProcessInfo.processInfo.environment["P4CAN_LAB"] == "1" { return true }
+        #endif
+        return featuresStatus?["lab"]?.boolValue ?? false
+    }
     var isSetupMode: Bool { profileStatus?["setupMode"]?.boolValue ?? false }
     var profileName: String? { profileStatus?["profileName"]?.stringValue }
     var topologyName: String? { profileStatus?["topologyName"]?.stringValue }
