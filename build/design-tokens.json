@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schemas.figma.com/plugin-typings/variables",
+  "name": "P4-CAN Design Tokens",
+  "version": "2.0.0",
+  "description": "状态页 v2.0 设计 token，可用于 Figma Variables（颜色/字号/间距/圆角）。颜色以系统语义色为源，浅深色由 iOS 自动映射。",
+  "colors": {
+    "bg/canvas": { "light": "#F2F2F7", "dark": "#000000", "system": "systemGroupedBackground" },
+    "bg/card": { "light": "#FFFFFF", "dark": "#1C1C1E", "system": "secondarySystemGroupedBackground" },
+    "bg/tile": { "light": "#F2F2F7", "dark": "#2C2C2E", "system": "tertiarySystemGroupedBackground" },
+    "text/primary": { "light": "#000000", "dark": "#FFFFFF", "system": "label" },
+    "text/secondary": { "light": "#8E8E93", "dark": "#98989F", "system": "secondaryLabel" },
+    "state/ok": { "light": "#34C759", "dark": "#30D158", "system": "systemGreen" },
+    "state/warn": { "light": "#FF9500", "dark": "#FF9F0A", "system": "systemOrange" },
+    "state/err": { "light": "#FF3B30", "dark": "#FF453A", "system": "systemRed" },
+    "state/info": { "light": "#007AFF", "dark": "#0A84FF", "system": "systemBlue" },
+    "chart/c1": { "light": "#007AFF", "dark": "#0A84FF" },
+    "chart/c2": { "light": "#30B0C7", "dark": "#40C8E0" },
+    "chart/c3": { "light": "#5856D6", "dark": "#7D7AFF" }
+  },
+  "typography": {
+    "display/metric": { "font": "SF Pro Rounded", "size": 26, "weight": 600, "features": ["tnum"] },
+    "title/hero": { "font": "SF Pro", "style": "title2", "weight": 700 },
+    "section": { "font": "SF Pro", "style": "subheadline", "weight": 600 },
+    "body": { "font": "SF Pro", "style": "subheadline", "weight": 400 },
+    "value/mono": { "font": "SF Mono", "style": "caption", "weight": 500 },
+    "caption": { "font": "SF Pro", "style": "caption2", "weight": 400 }
+  },
+  "spacing": { "1": 8, "1.5": 12, "2": 16, "4": 32 },
+  "radius": { "card": 16, "tile": 12, "chip": 999 },
+  "layout": {
+    "pageHorizontalPadding": 16,
+    "cardPadding": 16,
+    "cardGap": 16,
+    "grid": 8,
+    "minTouchTarget": 44
+  }
+}

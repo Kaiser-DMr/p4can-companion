@@ -1,0 +1,51 @@
+# SwiftLint 配置（可选启用）
+# 启用方式：
+#   1) brew install swiftlint
+#   2) Xcode → Target → Build Phases → + Run Script：
+#      if which swiftlint >/dev/null; then swiftlint --quiet; fi
+# 说明：命令行构建环境未安装 swiftlint，故未挂构建阶段，避免影响 CI。
+
+included:
+  - P4CANCompanion
+  - P4CANWidget
+
+excluded:
+  - P4CANCompanion/Vendor
+  - build
+  - "**/.build"
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - modifier_order
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+
+disabled_rules:
+  - trailing_whitespace
+  - todo
+
+line_length:
+  warning: 160
+  error: 240
+  ignores_comments: true
+
+type_body_length:
+  warning: 400
+  error: 600
+
+file_length:
+  warning: 700
+  error: 1000
+
+identifier_name:
+  min_length:
+    warning: 2
+  excluded:
+    - id
+    - x
+    - y
+
+reporter: "xcode"

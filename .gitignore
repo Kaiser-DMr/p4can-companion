@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# 构建产物（源码与文档要保留，只忽略二进制）
+build/Payload/
+build/mac/
+build/*.ipa
+build/*.zip
