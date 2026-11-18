@@ -23,6 +23,8 @@ struct CanActivityAttributes {
         var blinkEnabled: Bool
         var tlsscEnabled: Bool
         var gear: String
+        /// 当前选择的车型（profileName）；老版本活动解码时为 nil。
+        var vehicleModel: String?
         var updatedAt: Date
     }
 

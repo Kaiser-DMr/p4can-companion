@@ -20,15 +20,31 @@ struct CanActivityWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label(context.state.gear, systemImage: "car.side")
-                        .font(.caption.weight(.semibold))
-                        .padding(.leading, 4)
+                    Label(
+                        vehicleTitle(
+                            model: context.state.vehicleModel,
+                            gear: context.state.gear,
+                            fallback: context.attributes.deviceName
+                        ),
+                        systemImage: "car.side"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.updatedAt.formatted(date: .omitted, time: .shortened))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.trailing, 4)
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(context.state.updatedAt.formatted(date: .omitted, time: .shortened))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        if let gear = validGear(context.state.gear) {
+                            Text(gear)
+                                .font(.caption2.weight(.semibold))
+                                .monospacedDigit()
+                        }
+                    }
+                    .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
@@ -84,6 +100,20 @@ struct CanActivityWidget: Widget {
     }
 }
 
+/// 固件在无挡位信号时上报 UNKNOWN；此时优先展示车型。
+private func validGear(_ gear: String) -> String? {
+    let value = gear.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty, value != "UNKNOWN", value != "—" else { return nil }
+    return value
+}
+
+private func vehicleTitle(model: String?, gear: String, fallback: String) -> String {
+    if let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return model
+    }
+    return validGear(gear) ?? fallback
+}
+
 /// 锁屏卡片。
 struct LockScreenView: View {
     let state: CanActivityAttributes.ContentState
@@ -92,12 +122,19 @@ struct LockScreenView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label(deviceName, systemImage: "antenna.radiowaves.left.and.right")
-                    .font(.caption.weight(.semibold))
+                Label(
+                    vehicleTitle(model: state.vehicleModel, gear: state.gear, fallback: deviceName),
+                    systemImage: "car.side"
+                )
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 Spacer()
-                Text(state.gear)
-                    .font(.caption2.weight(.semibold))
-                    .monospacedDigit()
+                if let gear = validGear(state.gear) {
+                    Text(gear)
+                        .font(.caption2.weight(.semibold))
+                        .monospacedDigit()
+                }
                 Text(state.updatedAt.formatted(date: .omitted, time: .shortened))
                     .font(.caption2)
                     .foregroundStyle(.secondary)

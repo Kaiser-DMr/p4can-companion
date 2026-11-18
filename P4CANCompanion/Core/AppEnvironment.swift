@@ -402,10 +402,7 @@ final class AppEnvironment: ObservableObject {
                 detail: bus.rxCount.map { "收 \($0) 帧" } ?? bus.stateText
             )
         }
-        // 车辆未上电/无 0x118 时固件上报 UNKNOWN；灵动岛与锁屏改显示当前选择的车型。
-        let rawGear = group("r79")["gearName"]?.stringValue
-        let gearIsUnknown = rawGear == nil || rawGear == "UNKNOWN" || rawGear == "—" || rawGear?.isEmpty == true
-        let gear = gearIsUnknown ? (profileName ?? "P4-CAN") : (rawGear ?? "P4-CAN")
+        let gear = group("r79")["gearName"]?.stringValue ?? "—"
         return CanActivityAttributes.ContentState(
             buses: buses,
             nagEnabled: nagConfig?["enabled"]?.boolValue ?? false,
@@ -414,6 +411,7 @@ final class AppEnvironment: ObservableObject {
                 ?? slowGroups["summon"]?["tlssc"]?.boolValue
                 ?? false,
             gear: gear,
+            vehicleModel: profileName,
             updatedAt: Date()
         )
     }
