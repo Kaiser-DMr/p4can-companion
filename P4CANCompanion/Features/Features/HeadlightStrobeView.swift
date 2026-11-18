@@ -28,6 +28,8 @@ struct HeadlightStrobeView: View {
     @State private var supported = true
     @State private var stalkVariant = "STALK"
     @State private var busy = false
+    /// 保存成功后的短暂「已保存」态：确认出现在手指位置，而不是被标签栏挡住的行里。
+    @State private var justSaved = false
     @State private var confirms = false
     /// 触发按钮的相位（SwiftPieces CommitButton）：空闲 / 进行中 / 成功 / 失败 / 不可用。
     @State private var commitPhase: CommitButton.Phase = .idle
@@ -69,6 +71,10 @@ struct HeadlightStrobeView: View {
     }
 
     private var intervalStepText: String { "10" }
+
+    private var saveDisabled: Bool { busy || !dirty || active }
+
+    private var revertDisabled: Bool { busy || !dirty }
 
     /// 撤销按钮的弹性样式：中性玻璃底 + 主文字色，弱于主操作但仍是可点实体；
     /// 尺寸与保存按钮完全一致（50pt / 12pt 圆角 / 同内边距），保证两行边缘对齐。
@@ -244,13 +250,9 @@ struct HeadlightStrobeView: View {
                     range: 50...500,
                     step: 10,
                     majorEvery: 5,
-                    caption: L10n.t("开/关之间的半周期，立即写入设备，同时作用于按住拨杆触发。",
-                                     "Half-period between on/off. Applied immediately and shared with hold-to-strobe.")
+                    caption: L10n.t("开/关之间的半周期，随「保存参数」一起写入设备。",
+                                     "Half-period between on/off, written with Save settings.")
                 )
-                .onChange(of: intervalMs) { _, newValue in
-                    Task { await applyInterval(newValue) }
-                }
-
                 Picker(selection: $triggerSource) {
                     Text(L10n.t("App 按钮", "App button")).tag(0)
                     Text(L10n.t("S3XY 按键", "S3XY button")).tag(1)
@@ -267,40 +269,45 @@ struct HeadlightStrobeView: View {
             .id("params")
 
             Section {
-                // 两个动作同宽、同高、同圆角，放进一个 VStack：
-                // 既保证左右边缘对齐，也避免系统行分隔线切在两颗玻璃按钮中间。
-                VStack(spacing: 12) {
-                    Button {
-                        Task { await saveConfig() }
-                    } label: {
-                        HStack(spacing: 8) {
-                            if busy {
-                                ProgressView().controlSize(.small).tint(.white)
-                            } else {
-                                Image(systemName: "checkmark.circle.fill")
-                            }
-                            Text(L10n.t("保存参数", "Save settings"))
+                // 每个按钮独占一行：List 行内放多个按钮时，行级手势会吞掉点击
+                // （表现为「按下去没有动画、也没有反应」）。分行的同时保持同宽同高，
+                // 用 listRowSeparator(.hidden) 去掉中间那条分隔线。
+                Button {
+                    Task { await saveConfig() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if busy {
+                            ProgressView().controlSize(.small).tint(.white)
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
                         }
-                        .frame(maxWidth: .infinity)
+                        Text(justSaved ? L10n.t("已保存", "Saved")
+                                       : L10n.t("保存参数", "Save settings"))
                     }
-                    // SwiftPieces ElasticButton：按下向触点挤压缩放、拖拽有橡皮筋阻力，
-                    // 抬起带一点回弹；表面是同款液体玻璃，与上方触发按钮同一套材质语言。
-                    .buttonStyle(.elastic(saveButtonStyle))
-                    .disabled(busy || !dirty || active)
-                    .accessibilityHint(L10n.t("保存次数与触发入口；间隔会即时生效",
-                                              "Saves count and trigger source; interval applies immediately"))
-
-                    Button {
-                        resetToSaved()
-                    } label: {
-                        Text(L10n.t("撤销未保存修改", "Revert unsaved changes"))
-                            .frame(maxWidth: .infinity)
-                    }
-                    // 同为 ElasticButton，中性玻璃底，尺寸与保存按钮完全一致。
-                    .buttonStyle(.elastic(revertButtonStyle))
-                    .disabled(busy || !dirty)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.vertical, 2)
+                // SwiftPieces ElasticButton：按下向触点挤压缩放、拖拽有橡皮筋阻力，
+                // 抬起带一点回弹；表面是同款液体玻璃，与上方触发按钮同一套材质语言。
+                .buttonStyle(.elastic(saveButtonStyle))
+                .disabled(saveDisabled)
+                .listRowSeparator(.hidden)
+                // 玻璃材质会把底衬冲淡（实测红色只剩约 1/4），所以禁用感靠整体降低不透明度，
+                // 不再垫灰底。启用时是实心蓝玻璃，两种状态区分依然明显。
+                .opacity(saveDisabled ? 0.7 : 1)
+                .accessibilityHint(L10n.t("保存闪烁次数、间隔与触发入口",
+                                          "Saves flashes, interval and trigger source"))
+
+                Button {
+                    resetToSaved()
+                } label: {
+                    Text(L10n.t("撤销未保存修改", "Revert unsaved changes"))
+                        .frame(maxWidth: .infinity)
+                }
+                // 同为 ElasticButton，中性玻璃底，尺寸与保存按钮完全一致。
+                .buttonStyle(.elastic(revertButtonStyle))
+                .disabled(revertDisabled)
+                .opacity(revertDisabled ? 0.7 : 1)
+
             }
 
             if let errorText {
@@ -459,10 +466,12 @@ struct HeadlightStrobeView: View {
     }
 
     private func resetToSaved() {
+        guard dirty else { return }
         count = saved.count
         intervalMs = saved.intervalMs
         triggerSource = saved.trigger
         holdEnabled = saved.hold
+        Haptics.impact()
     }
 
     private func saveConfig() async {
@@ -479,6 +488,11 @@ struct HeadlightStrobeView: View {
             stats = value
             saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled)
             Haptics.success()
+            withAnimation(.spring(response: 0.28, dampingFraction: 1.0)) { justSaved = true }
+            Task {
+                try? await Task.sleep(for: .milliseconds(2500))
+                withAnimation(.easeOut(duration: 0.2)) { justSaved = false }
+            }
             environment.toast = P4Toast(message: L10n.t("爆闪参数已保存", "Strobe settings saved"), style: .success)
         } catch {
             errorText = AppEnvironment.friendly(error)
@@ -505,23 +519,6 @@ struct HeadlightStrobeView: View {
             holdEnabled = !on
             errorText = AppEnvironment.friendly(error)
             Haptics.error()
-        }
-    }
-
-    /// 间隔即时写入：连续拖动时只提交最后一次。
-    private func applyInterval(_ value: Int) async {
-        let clamped = min(max(value, 50), 500)
-        try? await Task.sleep(for: .milliseconds(350))
-        guard clamped == intervalMs else { return }
-        do {
-            let json = try await environment.api.post(P4Route.headlightStrobeConfig, query: [
-                P4Param("intervalMs", String(clamped)),
-            ])
-            stats = json
-            saved = Config(count: saved.count, intervalMs: clamped,
-                           trigger: saved.trigger, hold: saved.hold)
-        } catch {
-            errorText = AppEnvironment.friendly(error)
         }
     }
 
