@@ -220,6 +220,14 @@ final class AppEnvironment: ObservableObject {
         L10n.selection = self.language
         let savedAppearance = UserDefaults.standard.string(forKey: Self.appearanceDefaultsKey) ?? "system"
         self.appearance = AppAppearance(rawValue: savedAppearance) ?? .system
+        #if DEBUG
+        // 本地联调：SIMCTL_CHILD_P4CAN_APPEARANCE=dark 强制外观（不写回偏好）。
+        // 必须放在读取偏好之后，否则会被上面的赋值覆盖。
+        if let raw = ProcessInfo.processInfo.environment["P4CAN_APPEARANCE"],
+           let forced = AppAppearance(rawValue: raw) {
+            self.appearance = forced
+        }
+        #endif
         let savedPoll = UserDefaults.standard.integer(forKey: Self.pollIntervalDefaultsKey)
         self.pollIntervalMs = Self.pollIntervalOptions.contains(savedPoll) ? savedPoll : 500
     }

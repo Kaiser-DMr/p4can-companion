@@ -64,7 +64,8 @@ struct DashboardView: View {
                 #endif
                 .overlay(alignment: .bottom) { ToastOverlay() }
                 .navigationTitle(L10n.t("设备状态", "Status"))
-                .navigationBarTitleDisplayMode(.inline)
+                // 根标签页统一使用大标题（与功能/系统页一致）；详情页才用 inline。
+                .navigationBarTitleDisplayMode(.large)
                 .toolbarBackground(Color.p4Background, for: .navigationBar)
                 .sheet(isPresented: $showsGuide) { ConnectionGuideView() }
             }
@@ -137,11 +138,8 @@ struct DashboardView: View {
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
-            HStack(alignment: .top, spacing: Theme.spacing(1)) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(connectionTone.color)
-                    .frame(width: 3)
-                VStack(alignment: .leading, spacing: 2) {
+            // 状态由右侧胶囊表达，不在卡片上再加一条彩色竖条（装饰色不属于系统语汇）。
+            VStack(alignment: .leading, spacing: 2) {
                     // 只有「标题 + 胶囊」参与横向取舍：标题放得下就同行右对齐，
                     // 大字号 / 长车型名放不下时改为上下排。副标题不参与，避免它把整行挤成竖排。
                     ViewThatFits(in: .horizontal) {
@@ -156,7 +154,6 @@ struct DashboardView: View {
                         }
                     }
                     heroSubtitleText
-                }
             }
 
             // 三颗胶囊按可用宽度自动换行：大字号 / 窄屏下不会把「蓝牙开」压成竖排。
@@ -186,7 +183,10 @@ struct DashboardView: View {
         }
         .padding(Theme.spacing(2))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.p4Card, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .background(
+            Color.p4Card,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        )
         .accessibilityElement(children: .combine)
     }
 
@@ -348,7 +348,7 @@ struct DashboardView: View {
             Card(title: L10n.t("电池", "Battery"), systemImage: "battery.75percent") {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.spacing(1)) {
                     Text(String(format: "%.0f", soc.value))
-                        .font(Theme.TypeScale.metric(30))
+                        .font(Theme.TypeScale.metricLarge)
                         .monospacedDigit()
                     Text("%").font(.caption).foregroundStyle(.secondary)
                     Spacer(minLength: Theme.spacing(1))

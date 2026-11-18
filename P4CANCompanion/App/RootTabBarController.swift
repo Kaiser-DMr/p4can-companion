@@ -32,16 +32,18 @@ final class RootTabBarController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // 全 App 唯一强调色：琥珀（浅色下压深）。UIKit 壳层（标签栏、返回键）也要同步，
-        // 否则 SwiftUI 用 p4Accent、系统控件还是默认蓝，会出现两种强调色。
+        // 强调色统一为系统蓝（p4Accent）。UIKit 壳层（标签栏、返回键）必须同步，
+        // 否则 SwiftUI 用 p4Accent、系统控件仍是默认色，会出现两种强调色。
         let accent = UIColor(Color.p4Accent)
         view.tintColor = accent
         tabBar.tintColor = accent
         tabBar.unselectedItemTintColor = UIColor.secondaryLabel
+        // 标签栏是浮在内容之上的材质层：内容从它下面滚过，而不是被一条实色栏切掉。
         let appearance = UITabBarAppearance()
         appearance.configureWithDefaultBackground()
         tabBar.standardAppearance = appearance
         tabBar.scrollEdgeAppearance = appearance
+        tabBar.isTranslucent = true
 
         overviewController = makeHosting(
             DashboardView(),

@@ -75,6 +75,7 @@ struct RearFogStrobeView: View {
                         Spacer()
                     }
                 }
+                .tint(Color.accentColor)
                 .disabled(!canStart)
 
                 Button(role: .destructive) {
@@ -83,10 +84,12 @@ struct RearFogStrobeView: View {
                     HStack(spacing: Theme.spacing(1)) {
                         Spacer()
                         if busy { ProgressView().controlSize(.small) }
-                        Label(L10n.t("停止", "Stop"), systemImage: "stop.fill")
+                        // 表单里的动作行按系统习惯只用文字，不再挂一个方块图标。
+                        Text(L10n.t("停止", "Stop"))
                         Spacer()
                     }
                 }
+                .tint(Color.p4Err)
                 .disabled(!isActive || busy)
             } footer: {
                 Text(L10n.t("开始后立即注入 0x273，最长 30 秒后自动停止；停止后整车下一帧即恢复触发前的后雾灯状态。",
@@ -147,7 +150,8 @@ struct RearFogStrobeView: View {
                     .animation(.linear(duration: 0.4), value: progress)
                 VStack(spacing: 2) {
                     Text(isActive ? String(format: "%.1f", Double(remainingMs) / 1000) : "30.0")
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        // 语义字号（.largeTitle 默认 34pt）随动态字体缩放，不写死 point size。
+                        .font(.system(.largeTitle, design: .rounded, weight: .semibold))
                         .monospacedDigit()
                         .foregroundStyle(isActive ? Color.primary : Color.secondary)
                     Text(isActive ? L10n.t("秒后自动停止", "s remaining") : L10n.t("单次上限 30 秒", "30 s max"))

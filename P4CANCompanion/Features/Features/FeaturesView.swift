@@ -265,7 +265,6 @@ struct FeaturesView: View {
                         }
                     } header: {
                         sectionHeader(
-                            emoji: "🔍",
                             title: L10n.t("搜索结果", "Results"),
                             count: searchResults.count
                         )
@@ -281,7 +280,6 @@ struct FeaturesView: View {
                         }
                     } header: {
                         sectionHeader(
-                            emoji: "📌",
                             title: L10n.t("常用", "Pinned"),
                             count: pinnedEntries.count
                         )
@@ -299,7 +297,6 @@ struct FeaturesView: View {
                         }
                     } header: {
                         sectionHeader(
-                            emoji: group.section.emoji,
                             title: L10n.t(group.section.rawValue, group.section.englishName),
                             count: group.entries.count
                         )
@@ -443,39 +440,20 @@ struct FeaturesView: View {
     }
 
     /// 列表分组头：emoji + 标题 + 数量胶囊，和卡片左边缘对齐。
-    /// 分组标题（本地化后的字符串）→ 色板。emoji 取消后用它给标题加一个色调圆点。
-    private func sectionTint(for title: String) -> Color {
-        if title == L10n.t("灯光", "Lighting") { return .p4Warn }
-        if title == L10n.t("驾驶辅助", "Driving") { return .p4Info }
-        if title == L10n.t("车身与舒适", "Body") { return .p4OK }
-        if title == L10n.t("实验室功能", "Lab") { return .purple }
-        return .secondary
-    }
-
-    private func sectionHeader(emoji: String, title: String, count: Int) -> some View {
-        HStack(spacing: Theme.spacing(0.75)) {
-            // 分组标题用色调圆点替代 emoji：更克制，也和图标瓦片的色板一致。
-            Circle()
-                .fill(sectionTint(for: title))
-                .frame(width: 6, height: 6)
-                .accessibilityHidden(true)
+    /// 分组标题：系统分组列表的观感——纯文字、次要色、不加色点或胶囊徽标。
+    private func sectionHeader(title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
             Text("\(count)")
-                .font(.caption2.weight(.semibold))
+                .font(.footnote)
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 1)
-                .background(Color.primary.opacity(0.07), in: Capsule())
+                .foregroundStyle(.tertiary)
             if environment.isShowingCachedData {
                 Text(L10n.t("缓存", "Cached"))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.p4Warn)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Color.p4Warn.opacity(0.14), in: Capsule())
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }

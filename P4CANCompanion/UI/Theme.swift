@@ -10,7 +10,8 @@ enum Theme {
         grid * multiple
     }
 
-    /// 圆角规范：卡片 16 / 瓦片 12 / 胶囊由 Capsule 处理。
+    /// 圆角规范：卡片 12 / 瓦片 9 / 按钮 12，胶囊由 Capsule 处理。
+    /// 对齐系统观感：iOS 分组卡片约 10–12，连续曲率（continuous）。
     enum Radius {
         static let card: CGFloat = 12
         static let tile: CGFloat = 9
@@ -19,7 +20,7 @@ enum Theme {
 
     /// 图标规范：全 App 只允许这三种尺寸，避免同一列表里图标大小不一。
     ///
-    /// - `tile`：列表行图标底色瓦片边长（36）；
+    /// - `tile`：列表行图标底色瓦片边长（38）；
     /// - `smallTile`：详情页内嵌链接、次级行（30）；
     /// - `hero`：详情页顶部主图标（46）。
     /// `glyph` 是 emoji / SF Symbol 的视觉字高，与瓦片保持约 0.58 的比例。
@@ -27,14 +28,14 @@ enum Theme {
         static let tile: CGFloat = 38
         static let smallTile: CGFloat = 30
         static let hero: CGFloat = 46
-        /// 图标瓦片圆角（随尺寸等比，基准 36 → 10）。
+        /// 图标瓦片圆角（随尺寸等比，基准 38 → 10）。
         static let corner: CGFloat = 10
         /// 图标与文字的间距。
         static let gap: CGFloat = 12
-        /// 图标字高基准（36 瓦片 → 21，约占瓦片 58%，与系统设置页图标占比一致）。
+        /// 图标字高基准（38 瓦片 → 21，约占瓦片 56%，与系统设置页图标占比一致）。
         static let glyph: CGFloat = 21
 
-        /// 按瓦片尺寸推导字高，保证 30 / 36 / 46 三种尺寸视觉重量一致。
+        /// 按瓦片尺寸推导字高，保证 30 / 38 / 46 三种尺寸视觉重量一致。
         static func glyph(for tile: CGFloat) -> CGFloat {
             (tile * glyph / Theme.Icon.tile).rounded()
         }
@@ -45,14 +46,17 @@ enum Theme {
         }
     }
 
-    /// 字号规范（正文走 Dynamic Type 语义字号，仅"大数字"用固定字号 + 圆体）。
+    /// 字号规范：正文与大数字全部走 Dynamic Type 语义字号。
+    ///
+    /// 大数字用圆体 + `.title2` / `.largeTitle` 语义字号，系统会按用户字号设置缩放，
+    /// 不再写死 point size（写死会在辅助功能字号下不放大，属于可访问性缺陷）。
     enum TypeScale {
         /// 卡片标题（次级、字重 600）
         static let section = Font.subheadline.weight(.semibold)
-        /// 指标大数字
-        static func metric(_ size: CGFloat = 26) -> Font {
-            .system(size: size, weight: .semibold, design: .rounded)
-        }
+        /// 指标大数字（圆体、半粗）
+        static let metric = Font.system(.title2, design: .rounded, weight: .semibold)
+        /// 主指标（电池等需要压住版面的大数字）
+        static let metricLarge = Font.system(.largeTitle, design: .rounded, weight: .bold)
         /// 等宽数字（计数、毫秒、字节）
         static let mono = Font.system(.caption, design: .monospaced)
     }

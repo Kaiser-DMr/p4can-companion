@@ -309,9 +309,10 @@ struct HeadlightStrobeView: View {
             .font(.subheadline)
 
             if let blockReason {
+                // 颜色只表语义：完成=绿、手动停止=次要、可继续的拦截=橙、真失败=红。
                 Text(reasonText(blockReason))
                     .font(.footnote)
-                    .foregroundStyle(.p4Warn)
+                    .foregroundStyle(reasonTone(blockReason))
             }
 
             if let tx = stats?["txOk"]?.intValue, let fail = stats?["txFail"]?.intValue {
@@ -352,6 +353,20 @@ struct HeadlightStrobeView: View {
         case "USER_STOP": return L10n.t("已手动停止", "Stopped by user")
         case "COMPLETE": return L10n.t("已完成并恢复", "Completed and restored")
         default: return raw
+        }
+    }
+
+    private func reasonTone(_ raw: String) -> Color {
+        switch raw {
+        case "COMPLETE": return .p4OK
+        case "USER_STOP": return .secondary
+        case "ALREADY_ACTIVE", "TURN_SIGNAL_ACTIVE", "NO_STOCK_TEMPLATE",
+             "STALKLESS_UNSUPPORTED", "SOURCE_MISMATCH":
+            return .p4Warn
+        case "SEND_FAILED", "CAN_EPOCH_CHANGED":
+            return .p4Err
+        default:
+            return .secondary
         }
     }
 

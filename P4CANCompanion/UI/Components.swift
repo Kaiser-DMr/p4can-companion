@@ -18,7 +18,10 @@ struct Card<Content: View>: View {
         }
         .padding(Theme.spacing(2))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.p4Card, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .background(
+            Color.p4Card,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        )
     }
 }
 
@@ -85,8 +88,19 @@ struct SkeletonRows: View {
 // MARK: - 提示横幅
 
 /// 命令执行结果的浮动提示，自动消失。
+///
+/// Apple 的材料原则：浮层用 Material + 阴影浮在内容之上，不用实色块；
+/// 出现时是「材质化」而不是纯淡入（缩放 + 透明度同时进行）；
+/// 打开「降低透明度」时退回实色底，「增强对比度」时补一圈描边保证可读。
 struct ToastOverlay: View {
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Theme.spacing(1.5), style: .continuous)
+    }
 
     var body: some View {
         if let toast = environment.toast {
@@ -104,14 +118,29 @@ struct ToastOverlay: View {
                     Text(toast.message)
                         .font(.footnote)
                         .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(Theme.spacing(2))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.spacing(1.5)))
+                .background {
+                    if reduceTransparency {
+                        shape.fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    } else {
+                        shape.fill(.regularMaterial)
+                    }
+                }
+                .overlay {
+                    if contrast == .increased {
+                        shape.strokeBorder(Color.primary.opacity(0.25), lineWidth: 1)
+                    }
+                }
+                .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
                 .padding(.horizontal, Theme.spacing(2))
                 .padding(.bottom, Theme.spacing(2))
                 .accessibilityElement(children: .combine)
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.96).combined(with: .opacity))
             }
+            .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 1.0), value: environment.toast?.id)
             .task(id: toast.id) {
                 try? await Task.sleep(for: .seconds(4))
                 if environment.toast?.id == toast.id {
@@ -125,33 +154,42 @@ struct ToastOverlay: View {
 
 // MARK: - 状态胶囊（标签）
 
-/// 状态标签：图标 + 文字 + 语义色，颜色只作辅助，文字本身可读。
+/// 状态徽标：系统灰底胶囊 + 语义色圆点（或图标），文字用主色。
 ///
-/// 尺寸约定（对齐 ShipSwift Status Badge）：横向 8 / 纵向 4 内边距，`caption` 字重 500，
-/// 底色=色 ×0.12、描边=色 ×0.22（0.5pt）。描边是为了让胶囊在浅色卡片上仍有边界，
-/// 只有底色时对比度不足会显得"发灰"。
-/// 文字强制单行 + 横向自适应：字号放大时胶囊变宽而不是竖排换行（竖排会把胶囊拉成椭圆）。
+/// 这是 iOS 自带的状态徽标写法（灰底、彩色小圆点、中性文字），
+/// 不再给整颗胶囊上色——彩色底会同时占用「底色」和「文字色」两个层级，
+/// 一屏出现多颗时版面会很吵，也弱化了真正需要注意的红色/橙色。
+/// 文字单行 + 横向自适应：字号放大时胶囊变宽而不是竖排换行。
 struct StatusChip: View {
     let text: String
     var systemImage: String? = nil
     var tone: P4Tone = .neutral
+
+    private var markColor: Color {
+        tone == .neutral ? Color.secondary : tone.color
+    }
 
     var body: some View {
         HStack(spacing: 4) {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.caption2.weight(.semibold))
+                    .foregroundStyle(markColor)
+                    .accessibilityHidden(true)
+            } else {
+                Circle()
+                    .fill(markColor)
+                    .frame(width: 6, height: 6)
                     .accessibilityHidden(true)
             }
             Text(text)
                 .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
         }
-        .foregroundStyle(tone.color)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(tone.color.opacity(0.12), in: Capsule())
-        .overlay(Capsule().strokeBorder(tone.color.opacity(0.22), lineWidth: 0.5))
+        .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(text)
@@ -275,9 +313,7 @@ struct ModuleIconTile: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .fill(tint.map { $0.opacity(0.12) } ?? Color.p4Tile)
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
+                .fill(tint.map { $0.opacity(0.14) } ?? Color.p4Tile)
             ModuleIcon(name: name, glyphSize: Theme.Icon.glyph(for: size))
                 .foregroundStyle(tint ?? Color.accentColor)
         }
@@ -343,13 +379,24 @@ struct MetricTile: View {
     var footnote: String? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 只有警告/错误才给数值上色；正常状态用主文字色，保持版面安静。
+    private var valueColor: Color {
+        switch tone {
+        case .warn: return .p4Warn
+        case .err: return .p4Err
+        default: return value == "—" ? .secondary : .primary
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
+                // 图标保持次要色：色彩只留给「需要注意」的数值，避免一排彩色小图标抢走层级。
                 Image(systemName: icon)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(tone.color)
+                    .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
                 Text(title)
                     .font(.caption)
@@ -361,17 +408,17 @@ struct MetricTile: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(Theme.TypeScale.metric())
+                    .font(Theme.TypeScale.metric)
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .foregroundStyle(value == "—" ? Color.secondary : Color.primary)
+                    .foregroundStyle(valueColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if let unit {
                     Text(unit).font(.caption2).foregroundStyle(.secondary)
                 }
             }
-            .animation(.snappy(duration: 0.25), value: value)
+            .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 1.0), value: value)
             if let footnote {
                 Text(footnote)
                     .font(.caption2)
@@ -381,10 +428,9 @@ struct MetricTile: View {
         }
         .padding(Theme.spacing(1.5))
         .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
-        .background(Color.p4Card, in: RoundedRectangle(cornerRadius: Theme.Radius.tile))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.tile)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        .background(
+            Color.p4Card,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title)，\(value)\(unit ?? "")")
