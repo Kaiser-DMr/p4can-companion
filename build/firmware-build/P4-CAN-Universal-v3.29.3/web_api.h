@@ -5698,6 +5698,20 @@ static String headlightStrobeJson() {
   jw.string("blockReason", headlightStrobeState.blockReason ? headlightStrobeState.blockReason : "");
   jw.u32("txOk", headlightStrobeState.txOk);
   jw.u32("txFail", headlightStrobeState.txFail);
+  {
+    uint8_t beam = 0;
+    bool ck = false;
+    uint32_t rx = 0;
+    portENTER_CRITICAL(&blinkAMux);
+    beam = (uint8_t)((realRaw249[1] >> 4) & 0x03u);
+    ck = cksumSelfTest;
+    rx = rx249;
+    portEXIT_CRITICAL(&blinkAMux);
+    jw.u32("beamState", beam);
+    jw.boolean("cksumSelfTest", ck);
+    jw.u32("rx249", rx);
+    jw.boolean("holdArmed", headlightStrobeConfig.holdEnabled != 0);
+  }
   jw.finish();
   return json;
 }
@@ -5831,6 +5845,16 @@ static String rearFogStrobeJson() {
                                   frameAge <= REAR_FOG_TEMPLATE_TTL_MS);
   jw.u32("frameAgeMs", frameAge == 0xFFFFFFFFu ? 0xFFFFFFFFu : frameAge);
   jw.boolean("setupMode", vehicleProfileSetupMode);
+  {
+    char hex[20];
+    snprintf(hex, sizeof(hex), "%02X%02X%02X%02X%02X%02X%02X%02X",
+             rearFogStrobeState.templateData[0], rearFogStrobeState.templateData[1],
+             rearFogStrobeState.templateData[2], rearFogStrobeState.templateData[3],
+             rearFogStrobeState.templateData[4], rearFogStrobeState.templateData[5],
+             rearFogStrobeState.templateData[6], rearFogStrobeState.templateData[7]);
+    jw.string("templateHex", hex);
+    jw.u32("bus", rearFogStrobeState.bus);
+  }
   const char *reason = "NONE";
   switch (rearFogStrobeState.stopReason) {
     case REAR_FOG_STOP_USER: reason = "USER_STOP"; break;

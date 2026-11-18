@@ -346,8 +346,11 @@ static void headlightStrobeHoldTick(uint32_t now) {
   hsHoldSeenRx = rx;
   hsHoldLastRxMs = now;
 
-  // 起始判定要过 0x249 校验，避免坏帧误触发。
-  if (beam == HS_BEAM_PULL && ckOk) {
+  // 起始判定不再要求 checksumSelfTest：该自检依赖车型的 0x249 校验算法，
+  // 自检失败时「立即爆闪」仍能用（我们重算校验），但按住拨杆会被永久拦住。
+  // 这里改成「连续 2 帧都是 PULL」去抖，既能挡住单帧坏数据，又不依赖车型校验。
+  (void)ckOk;
+  if (beam == HS_BEAM_PULL) {
     if (hsHoldPullFrames < 0xFF) hsHoldPullFrames++;
     hsHoldFreeFrames = 0;
     if (hsHoldPullSinceMs == 0) hsHoldPullSinceMs = now;   // 开始计时
@@ -371,7 +374,7 @@ static void headlightStrobeHoldTick(uint32_t now) {
   const uint32_t needMs = headlightStrobeClampHoldDelay(headlightStrobeConfig.holdDelayMs);
   const bool heldLongEnough =
       hsHoldPullSinceMs != 0 && (uint32_t)(now - hsHoldPullSinceMs) >= needMs;
-  if (hsHoldPullFrames >= 1u && heldLongEnough) {
+  if (hsHoldPullFrames >= 2u && heldLongEnough) {
     if (!headlightStrobeBegin(HS_TRIGGER_HOLD)) {
       hsHoldPullFrames = 0;   // 被拦（无模板/转向中）时不要每帧重试
     }

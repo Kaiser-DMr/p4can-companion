@@ -39,3 +39,4 @@ build/firmware-build/P4-CAN-Universal-v3.29.3/build/
 build/firmware-build/P4-CAN-Universal-v3.29.3/out*/
 build/firmware-build/**/*.elf
 build/firmware-build/**/*.merged.bin
+build/firmware-build/*.ino.bin

@@ -34,6 +34,7 @@ struct RearFogStrobeState {
   uint32_t templateMs;
   uint32_t startedAtMs;
   uint32_t lastToggleMs;
+  uint32_t lastSendMs;   // 最近一次真正发出 0x273 的时刻（自走节拍用）
   bool phaseOn;
   uint32_t pulses;
   uint32_t txOk;
@@ -44,7 +45,7 @@ struct RearFogStrobeState {
 
 static portMUX_TYPE rearFogStrobeMux = portMUX_INITIALIZER_UNLOCKED;
 static RearFogStrobeState rearFogStrobeState = {
-    false, false, 1, {0, 0, 0, 0, 0, 0, 0, 0}, 8, 0, 0, 0, false, 0, 0, 0, false,
+    false, false, 1, {0, 0, 0, 0, 0, 0, 0, 0}, 8, 0, 0, 0, 0, false, 0, 0, 0, false,
     REAR_FOG_STOP_NONE};
 
 static inline bool rearFogBitOn(const uint8_t *data) {
@@ -109,6 +110,7 @@ static void rearFogStrobeSend(uint8_t bus, const uint8_t *src, uint8_t dlc, bool
   portENTER_CRITICAL(&rearFogStrobeMux);
   if (ok) {
     rearFogStrobeState.txOk++;
+    rearFogStrobeState.lastSendMs = (uint32_t)millis();
   } else {
     rearFogStrobeState.txFail++;
   }
@@ -198,7 +200,9 @@ static void rearFogStrobeTick() {
   if (!active) return;
 
   const uint32_t now = (uint32_t)millis();
-  if (!templateValid || (uint32_t)(now - templateMs) > 500) {
+  // 整车 0x273 是事件/低频帧：原来 500 ms 断流就停，实测会出现「刚起爆 1 帧就 NO_FRAME」。
+  // 放宽到模板 TTL（2 s），期间用最后一份模板自走节拍继续翻相位。
+  if (!templateValid || (uint32_t)(now - templateMs) > REAR_FOG_TEMPLATE_TTL_MS) {
     rearFogStrobeStop(REAR_FOG_STOP_NO_FRAME);
     return;
   }
@@ -208,9 +212,22 @@ static void rearFogStrobeTick() {
   }
   const uint16_t half = rearFogStrobeHalfPeriodMs();
   if ((uint32_t)(now - lastToggle) < half) return;
+  uint8_t bus = 1;
+  uint8_t dlc = 8;
+  uint8_t snapshot[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  bool phase = false;
+  bool needsSend = false;
+  const uint16_t halfPeriod = rearFogStrobeHalfPeriodMs();
   portENTER_CRITICAL(&rearFogStrobeMux);
   rearFogStrobeState.phaseOn = !rearFogStrobeState.phaseOn;
   rearFogStrobeState.lastToggleMs = now;
   if (rearFogStrobeState.phaseOn) rearFogStrobeState.pulses++;
+  phase = rearFogStrobeState.phaseOn;
+  bus = rearFogStrobeState.bus;
+  dlc = rearFogStrobeState.templateDlc;
+  memcpy(snapshot, rearFogStrobeState.templateData, 8);
+  // 整车帧没到、或者这半个周期内还没发过：自己补一帧，让灯真的闪起来。
+  needsSend = (uint32_t)(now - rearFogStrobeState.lastSendMs) >= halfPeriod;
   portEXIT_CRITICAL(&rearFogStrobeMux);
+  if (needsSend) rearFogStrobeSend(bus, snapshot, dlc, phase);
 }
