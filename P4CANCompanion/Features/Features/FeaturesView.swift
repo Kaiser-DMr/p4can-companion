@@ -585,6 +585,7 @@ private struct FeatureRowShell<Trailing: View>: View {
     let icon: String
     let title: String
     let subtitle: String
+    var tint: Color? = nil
     /// 内联开关行要保留 Toggle 的可交互性，不能把子元素合并成一个无障碍元素。
     let combinesAccessibility: Bool
     private let trailing: Trailing
@@ -595,12 +596,14 @@ private struct FeatureRowShell<Trailing: View>: View {
         icon: String,
         title: String,
         subtitle: String,
+        tint: Color? = nil,
         combinesAccessibility: Bool = true,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.icon = icon
         self.title = title
         self.subtitle = subtitle
+        self.tint = tint
         self.combinesAccessibility = combinesAccessibility
         self.trailing = trailing()
     }
@@ -609,7 +612,7 @@ private struct FeatureRowShell<Trailing: View>: View {
         // 辅助功能字号下图标改为顶部对齐，和标题首行齐平（否则图标会漂在高文本块中间）。
         HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center,
                spacing: Theme.Icon.gap) {
-            ModuleIconTile(name: icon)
+            ModuleIconTile(name: icon, tint: tint)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.body.weight(.semibold))
@@ -663,7 +666,8 @@ private struct FeatureRow: View {
     var body: some View {
         FeatureRowShell(icon: module.icon,
                         title: module.localizedTitle,
-                        subtitle: module.localizedSummary) {
+                        subtitle: module.localizedSummary,
+                        tint: module.section.tint) {
             if strobeActive == true {
                 StatusChip(text: L10n.t("爆闪中", "Strobing"),
                            systemImage: "light.beacon.max.fill",

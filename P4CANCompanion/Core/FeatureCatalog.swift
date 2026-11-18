@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// 数值控件规格（成对提交时使用）。
 struct NumberSpec: Sendable {
@@ -74,6 +75,17 @@ struct FeatureModule: Identifiable, Sendable {
         case body = "车身与舒适"
         case lab = "实验室功能"
         case advanced = "高级与兼容"
+
+        /// 分组色板：决定图标瓦片底色，让「灯光/驾驶辅助/车身」一眼可分。
+        var tint: Color {
+            switch self {
+            case .lighting: return .p4Warn
+            case .driving: return .p4Info
+            case .body: return .p4OK
+            case .lab: return .purple
+            case .advanced: return .secondary
+            }
+        }
 
         var englishName: String {
             switch self {
