@@ -281,8 +281,17 @@ final class P4APIClient: Sendable {
     /// OTA：multipart/form-data 上传应用镜像到 `/update`。
     ///
     /// 固件只接受“应用升级版” `.ino.bin`；`.ino.merged.bin` 为串口全量镜像，不可 OTA。
+    ///
+    /// 与普通请求的区别：
+    /// - 走独立的 `P4FirmwareUploader`（长超时：弱网下一颗 1.4 MB 镜像可能要一两分钟）；
+    /// - 提供字节级进度，UI 能显示“已发送 x / y”；
+    /// - 丢包/设备重启导致的“响应丢失”抛 `P4UploadInterrupted`，由调用方按“可能已写入”处理。
     @discardableResult
-    func uploadFirmware(fileName: String, data: Data) async throws -> P4JSON {
+    func uploadFirmware(
+        fileName: String,
+        data: Data,
+        onProgress: (@Sendable (Int, Int) -> Void)? = nil
+    ) async throws -> P4JSON {
         guard !data.isEmpty, data.count <= Self.maxFirmwareBytes else {
             throw P4APIError(message: "固件大小无效：需小于 8 MB")
         }
@@ -298,8 +307,10 @@ final class P4APIClient: Sendable {
         let boundary = "P4CAN-" + UUID().uuidString
         var request = URLRequest(url: url(for: P4Route.otaUpload))
         request.httpMethod = "POST"
-        request.timeoutInterval = 600
+        request.timeoutInterval = 900
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        // ESP32 WebServer 不支持分块传输：显式给出长度，避免中间设备改写为 chunked。
+        request.setValue("close", forHTTPHeaderField: "Connection")
 
         var body = Data()
         body.append(Data("--\(boundary)\r\n".utf8))
@@ -311,8 +322,49 @@ final class P4APIClient: Sendable {
         body.append(Data("\r\n--\(boundary)--\r\n".utf8))
         request.httpBody = body
 
-        let (responseData, response) = try await execute(request, path: P4Route.otaUpload, query: [])
-        return try Self.interpret(data: responseData, response: response, path: P4Route.otaUpload)
+        let started = Date()
+        do {
+            let uploader = P4FirmwareUploader()
+            let (responseData, response) = try await uploader.upload(
+                request: request,
+                body: body,
+                onProgress: onProgress
+            )
+            NetworkLog.shared.append(
+                NetworkLogEntry(
+                    id: UUID(),
+                    date: Date(),
+                    method: "POST",
+                    path: P4Route.otaUpload,
+                    query: "firmware=\(body.count)B",
+                    statusCode: (response as? HTTPURLResponse)?.statusCode,
+                    durationMs: Int(Date().timeIntervalSince(started) * 1000),
+                    bytes: responseData.count,
+                    error: nil
+                )
+            )
+            return try Self.interpret(data: responseData, response: response, path: P4Route.otaUpload)
+        } catch {
+            NetworkLog.shared.append(
+                NetworkLogEntry(
+                    id: UUID(),
+                    date: Date(),
+                    method: "POST",
+                    path: P4Route.otaUpload,
+                    query: "firmware=\(body.count)B",
+                    statusCode: nil,
+                    durationMs: Int(Date().timeIntervalSince(started) * 1000),
+                    bytes: 0,
+                    error: (error as? P4UploadInterrupted)?.description ?? Self.friendlyText(error)
+                )
+            )
+            throw error
+        }
+    }
+
+    private static func friendlyText(_ error: Error) -> String {
+        if let apiError = error as? P4APIError { return apiError.message }
+        return error.localizedDescription
     }
 
     // MARK: - 执行与抓包
@@ -423,5 +475,150 @@ private final class P4RedirectBlocker: NSObject, URLSessionTaskDelegate, @unchec
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
         completionHandler(nil)
+    }
+}
+
+// MARK: - 固件上传
+
+/// 上传在「请求体已全部发出」之后才失败（设备重启、AP 断链、读超时）。
+///
+/// 固件 `httpOtaFinish()` 在回 200 之后约 700 ms 就 `restartP4CanSafely()`，
+/// 手机侧此时常常收不到完整响应；但**设备只有在写入成功时才会重启**，
+/// 所以这种情况不能直接判失败，要交给上层去确认设备是否重启。
+struct P4UploadInterrupted: Error, CustomStringConvertible {
+    let bytesSent: Int
+    let totalBytes: Int
+    let bodyFullySent: Bool
+    let underlying: Error
+
+    var description: String {
+        let pct = totalBytes > 0 ? Int(Double(bytesSent) / Double(totalBytes) * 100) : 0
+        return "上传中断（已发送 \(bytesSent)/\(totalBytes) B，\(pct)%）：\(underlying.localizedDescription)"
+    }
+}
+
+/// 固件上传器：`URLSession.uploadTask` + delegate，拿到字节进度与「是否已发完」。
+///
+/// 单独一条 session 的原因：上传镜像需要 15 分钟级超时，而状态轮询要求 8 秒级超时，
+/// 混用会让弱网下的上传被状态请求的超时策略拖死。
+final class P4FirmwareUploader: NSObject, @unchecked Sendable {
+    private let lock = NSLock()
+    private var session: URLSession?
+    private var continuation: CheckedContinuation<(Data, URLResponse), Error>?
+    private var buffer = Data()
+    private var response: URLResponse?
+    private var sentBytes = 0
+    private var totalBytes = 0
+    private var progressHandler: (@Sendable (Int, Int) -> Void)?
+    private var finished = false
+
+    func upload(
+        request: URLRequest,
+        body: Data,
+        onProgress: (@Sendable (Int, Int) -> Void)?
+    ) async throws -> (Data, URLResponse) {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            self.continuation = continuation
+            self.progressHandler = onProgress
+            self.buffer = Data()
+            self.response = nil
+            self.sentBytes = 0
+            self.totalBytes = body.count
+            self.finished = false
+            lock.unlock()
+
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.timeoutIntervalForRequest = 60
+            configuration.timeoutIntervalForResource = 900
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            configuration.allowsCellularAccess = false
+            configuration.waitsForConnectivity = false
+            let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+            lock.lock()
+            self.session = session
+            lock.unlock()
+            session.uploadTask(with: request, from: body).resume()
+        }
+    }
+
+    private func finish(_ result: Result<(Data, URLResponse), Error>) {
+        lock.lock()
+        guard !finished, let continuation else { lock.unlock(); return }
+        finished = true
+        self.continuation = nil
+        let session = self.session
+        self.session = nil
+        lock.unlock()
+        session?.finishTasksAndInvalidate()
+        continuation.resume(with: result)
+    }
+}
+
+extension P4FirmwareUploader: URLSessionDataDelegate {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        lock.lock()
+        sentBytes = Int(totalBytesSent)
+        let total = totalBytesExpectedToSend > 0 ? Int(totalBytesExpectedToSend) : totalBytes
+        let handler = progressHandler
+        lock.unlock()
+        handler?(Int(totalBytesSent), total)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive data: Data
+    ) {
+        lock.lock()
+        buffer.append(data)
+        lock.unlock()
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        lock.lock()
+        self.response = response
+        lock.unlock()
+        completionHandler(.allow)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        lock.lock()
+        let sent = sentBytes
+        let total = totalBytes
+        let body = buffer
+        let httpResponse = response
+        lock.unlock()
+
+        if let error {
+            let fullySent = total > 0 && sent >= total
+            finish(.failure(P4UploadInterrupted(
+                bytesSent: sent,
+                totalBytes: total,
+                bodyFullySent: fullySent,
+                underlying: error
+            )))
+            return
+        }
+        guard let httpResponse else {
+            finish(.failure(URLError(.badServerResponse)))
+            return
+        }
+        finish(.success((body, httpResponse)))
     }
 }

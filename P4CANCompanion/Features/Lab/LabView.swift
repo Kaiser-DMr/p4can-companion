@@ -53,24 +53,25 @@ struct LabView: View {
 private struct LabRow: View {
     let module: FeatureModule
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        HStack(spacing: Theme.spacing(1.5)) {
-            ModuleIcon(name: module.icon)
-                .foregroundStyle(.tint)
-                .frame(width: 30, height: 30)
-                .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+        // 与功能页同一套行规范：辅助功能字号下图标顶部对齐、说明不截断。
+        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center,
+               spacing: Theme.Icon.gap) {
+            ModuleIconTile(name: module.icon)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(module.localizedTitle)
-                    .font(.body.weight(.medium))
+                    .font(.body.weight(.semibold))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 Text(module.localizedSummary)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             }
             Spacer(minLength: Theme.spacing(1))
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.spacing(0.5))
         .accessibilityElement(children: .combine)
     }
 }

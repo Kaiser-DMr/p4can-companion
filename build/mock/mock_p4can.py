@@ -461,6 +461,7 @@ WIFI = {
     "ip": "192.168.4.1", "networkState": "AP_READY",
     "hostedWifiStarted": True, "bleStartupAllowed": True,
 }
+OTA_DOWN_UNTIL = [0.0]  # 模拟设备重启：这段时间内所有请求直接断开
 OTA = {"ok": True, "inProgress": False, "error": False, "stage": "idle",
        "updateError": "", "attempt": 0, "receivedBytes": 0, "totalBytes": 0}
 
@@ -886,9 +887,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _rebooting(self):
+        if time.time() < OTA_DOWN_UNTIL[0]:
+            self.send_json({"ok": False, "error": "rebooting"}, status=503)
+            return True
+        return False
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path, qs = parsed.path, parse_qs(parsed.query)
+        if self._rebooting():
+            return
 
         if path in ("/api/headlight-strobe/config", "/api/headlight-strobe/stats"):
             return self.send_json(headlight_json())
@@ -932,6 +941,44 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         path, qs = parsed.path, parse_qs(parsed.query)
+        if self._rebooting():
+            return
+        # OTA 上传（与固件 server.on("/update", HTTP_POST, ...) 对齐）：
+        # 按 Content-Length 读满 multipart，取 part 头之后的净载荷长度当写入量。
+        if path == "/update":
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            body = self.rfile.read(length) if length else b""
+            payload = b""
+            if b"\r\n\r\n" in body:
+                payload = body.split(b"\r\n\r\n", 1)[1].rsplit(b"\r\n--", 1)[0]
+            with LOCK:
+                OTA.update(ok=True, inProgress=False, error=False, stage="complete",
+                           attempt=OTA["attempt"] + 1,
+                           receivedBytes=len(payload), totalBytes=len(payload))
+                print(f"[OTA] received {len(payload)} bytes (content-length {length})")
+            mode = os.environ.get("P4CAN_MOCK_OTA_MODE", "")
+            if mode == "fail":
+                OTA.update(ok=False, inProgress=False, error="Update end failed: no space",
+                           stage="end", updateError="No space left", attempt=OTA["attempt"] + 1)
+                return self.send_json(OTA)
+            if mode == "reboot":
+                # 模拟真机：写入成功后 0.7 s 重启，客户端拿不到回包，AP 断链若干秒。
+                OTA_DOWN_UNTIL[0] = time.time() + 8
+                OTA.update(ok=True, stage="idle", attempt=0, error=False, inProgress=False)
+                self.connection.close()
+                self.close_connection = True
+                print("[OTA] simulated reboot (no response, 8 s gap)")
+                return
+            self.send_json(OTA)
+            # 模拟固件 httpOtaFinish()：回包后 700 ms 就 restart，客户端可能读不到完整响应。
+            if os.environ.get("P4CAN_MOCK_OTA_RST") == "1":
+                import socket as _socket
+                import struct as _struct
+                self.connection.setsockopt(
+                    _socket.SOL_SOCKET, _socket.SO_LINGER, _struct.pack("ii", 1, 0))
+                self.connection.close()
+                self.close_connection = True
+            return
         with LOCK:
             error = apply_post(path, qs)
         if error:

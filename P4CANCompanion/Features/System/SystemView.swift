@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 /// 「设置」页：严格对照固件网页 Settings 的分组与顺序。
 ///
@@ -29,7 +30,7 @@ struct SystemView: View {
                     AppSection()
                     DataBrowseSection()
                     LogsSection()
-                    AboutSection()
+                    AboutSection().id("about")
                 }
                 .listStyle(.insetGrouped)
                 .navigationTitle(L10n.t("设置", "Settings"))
@@ -56,6 +57,7 @@ struct SystemView: View {
                     case "wireless": WirelessView()
                     case "diagnostics": DiagnosticsView()
                     case "ota": FirmwareUpdateView()
+                    case "changelog": FirmwareChangelogView()
                     default: EmptyView()
                     }
                 }
@@ -237,6 +239,9 @@ private struct ProfileSection: View {
                             Text(badge)
                                 .font(.subheadline.weight(.bold))
                                 .foregroundStyle(Color.p4OK)
+                                // 44pt 徽标固定尺寸（与 App 图标网格一致），大字号下缩小字重而不是截成 "…"。
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.45)
                                 .frame(width: 44, height: 44)
                                 .background(Color.p4OK.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .accessibilityHidden(true)
@@ -675,11 +680,31 @@ private struct DataBrowseSection: View {
 private struct LogsSection: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var exportingLog: P4LogFile?
+    @State private var exportingBundle = false
     @State private var exportedURL: URL?
     @State private var exportFailed: String?
 
+    private var isExporting: Bool { exportingLog != nil || exportingBundle }
+
     var body: some View {
         Section {
+            Button {
+                exportBundle()
+            } label: {
+                HStack {
+                    Label(L10n.t("诊断包（zip）", "Diagnostics bundle (zip)"), systemImage: "shippingbox")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    if exportingBundle {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundStyle(.tint)
+                    }
+                }
+            }
+            .disabled(isExporting)
+
             ForEach(P4LogFile.all) { log in
                 Button {
                     export(log)
@@ -698,7 +723,7 @@ private struct LogsSection: View {
                         }
                     }
                 }
-                .disabled(exportingLog != nil)
+                .disabled(isExporting)
             }
             if let failed = exportFailed {
                 Label(failed, systemImage: "exclamationmark.triangle")
@@ -708,14 +733,27 @@ private struct LogsSection: View {
         } header: {
             Label(L10n.t("日志与跟踪导出", "Logs & traces"), systemImage: "list.bullet.rectangle")
         } footer: {
-            Text(L10n.t("下载设备端 CSV（启动诊断、CAN 发送跟踪、S3XY、DMS、研究捕获），完成后可分享或存储到文件 App。",
-                        "Download on-device CSV files (boot diagnostics, CAN TX traces, S3XY, DMS, research captures)."))
+            Text(L10n.t("诊断包内含：本机状态摘要、内置网络日志 CSV、最近一次快照 JSON。可直接分享给开发者排查。",
+                        "The bundle contains a status summary, the in-app network log CSV and the latest snapshot JSON."))
         }
         .sheet(item: Binding(
             get: { exportedURL.map { ShareURLWrapper(url: $0) } },
             set: { if $0 == nil { exportedURL = nil } }
         )) { wrapper in
             ActivityShareSheet(items: [wrapper.url])
+        }
+    }
+
+    private func exportBundle() {
+        exportingBundle = true
+        exportFailed = nil
+        Task {
+            do {
+                exportedURL = try environment.makeDiagnosticsArchive()
+            } catch {
+                exportFailed = AppEnvironment.friendly(error)
+            }
+            exportingBundle = false
         }
     }
 
@@ -752,13 +790,29 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
 // MARK: - 关于
 
 private struct AboutSection: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var copied = false
+
     var body: some View {
         Section {
-            LabeledContent(L10n.t("App 版本", "App version"),
-                           value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "3.2")
+            LabeledContent(L10n.t("App 版本", "App version"), value: environment.appVersionText)
             LabeledContent(L10n.t("适配固件", "Firmware"), value: "P4-CAN Universal Unlock v3.29.3")
             LabeledContent(L10n.t("接口契约", "API contract"), value: "web_api.h（query 参数）")
             LabeledContent(L10n.t("连接方式", "Transport"), value: L10n.t("本地 HTTP（192.168.4.1）", "Local HTTP (192.168.4.1)"))
+
+            Button {
+                UIPasteboard.general.string = environment.diagnosticsSummary
+                copied = true
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    copied = false
+                }
+            } label: {
+                Label(copied ? L10n.t("已复制诊断信息", "Diagnostics copied")
+                             : L10n.t("复制诊断信息", "Copy diagnostics"),
+                      systemImage: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                    .foregroundStyle(copied ? Color.p4OK : Color.accentColor)
+            }
         } header: {
             Label(L10n.t("关于", "About"), systemImage: "info.circle")
         } footer: {

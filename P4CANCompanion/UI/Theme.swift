@@ -16,6 +16,34 @@ enum Theme {
         static let tile: CGFloat = 12
     }
 
+    /// 图标规范：全 App 只允许这三种尺寸，避免同一列表里图标大小不一。
+    ///
+    /// - `tile`：列表行图标底色瓦片边长（36）；
+    /// - `smallTile`：详情页内嵌链接、次级行（30）；
+    /// - `hero`：详情页顶部主图标（46）。
+    /// `glyph` 是 emoji / SF Symbol 的视觉字高，与瓦片保持约 0.58 的比例。
+    enum Icon {
+        static let tile: CGFloat = 36
+        static let smallTile: CGFloat = 30
+        static let hero: CGFloat = 46
+        /// 图标瓦片圆角（随尺寸等比，基准 36 → 10）。
+        static let corner: CGFloat = 10
+        /// 图标与文字的间距。
+        static let gap: CGFloat = 12
+        /// 图标字高基准（36 瓦片 → 21，约占瓦片 58%，与系统设置页图标占比一致）。
+        static let glyph: CGFloat = 21
+
+        /// 按瓦片尺寸推导字高，保证 30 / 36 / 46 三种尺寸视觉重量一致。
+        static func glyph(for tile: CGFloat) -> CGFloat {
+            (tile * glyph / Theme.Icon.tile).rounded()
+        }
+
+        /// 按瓦片尺寸推导圆角。
+        static func corner(for tile: CGFloat) -> CGFloat {
+            max((tile * corner / Theme.Icon.tile).rounded(), 6)
+        }
+    }
+
     /// 字号规范（正文走 Dynamic Type 语义字号，仅"大数字"用固定字号 + 圆体）。
     enum TypeScale {
         /// 卡片标题（次级、字重 600）
@@ -26,6 +54,12 @@ enum Theme {
         }
         /// 等宽数字（计数、毫秒、字节）
         static let mono = Font.system(.caption, design: .monospaced)
+    }
+
+    /// 布局规范：宽屏（iPad / Mac 窗口）下内容不再铺满整行，而是居中并限制阅读宽度。
+    enum Layout {
+        /// 单列内容最大宽度。iPhone 上永远不会触发；iPad 11" 约留 55pt 边距，13" 约留 150pt。
+        static let contentMaxWidth: CGFloat = 720
     }
 }
 

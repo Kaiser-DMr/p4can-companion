@@ -64,6 +64,9 @@ struct FeatureControl: Identifiable, Sendable {
 /// 一个功能模块：标题、说明、状态端点与控件集合。
 struct FeatureModule: Identifiable, Sendable {
     enum Section: String, CaseIterable, Sendable {
+        // 顺序即功能页的分组顺序：灯光放最前（外观类、最常演示），
+        // 其后才是驾驶辅助、车身、实验室与高级。
+        case lighting = "灯光"
         case driving = "驾驶辅助"
         case body = "车身与舒适"
         case lab = "实验室功能"
@@ -71,6 +74,7 @@ struct FeatureModule: Identifiable, Sendable {
 
         var englishName: String {
             switch self {
+            case .lighting: return "Lighting"
             case .driving: return "Driving"
             case .body: return "Body"
             case .lab: return "Lab"
@@ -78,12 +82,14 @@ struct FeatureModule: Identifiable, Sendable {
             }
         }
 
-        var symbol: String {
+        /// 分组头的小图标（与模块图标同一套 emoji 语言）。
+        var emoji: String {
             switch self {
-            case .driving: return "car.side"
-            case .body: return "door.left.hand.open"
-            case .lab: return "flask"
-            case .advanced: return "gearshape.2"
+            case .lighting: return "💡"
+            case .driving: return "🚗"
+            case .body: return "🚪"
+            case .lab: return "🧪"
+            case .advanced: return "⚙️"
             }
         }
     }
@@ -384,8 +390,8 @@ enum FeatureCatalog {
             summary: "远光灯按设定次数与间隔快速闪烁，结束后恢复触发前的灯光状态。",
             titleEN: "Headlight Strobe",
             summaryEN: "Flash the high beams a set number of times, then restore the previous light state.",
-            icon: "emoji:🔆",
-            section: .driving,
+            icon: "emoji:🔦",
+            section: .lighting,
             statsPath: P4Route.headlightStrobeStats,
             supportKey: nil,
             controls: []
@@ -397,8 +403,8 @@ enum FeatureCatalog {
             summary: "注入 0x273 的后雾灯位：开始后连续闪烁，单次最长 30 秒，结束自动恢复。",
             titleEN: "Rear Fog Strobe",
             summaryEN: "Pulse the rear fog lamp via 0x273 for up to 30 seconds, then restore automatically.",
-            icon: "emoji:🌫️",
-            section: .driving,
+            icon: "emoji:🚨",
+            section: .lighting,
             statsPath: P4Route.rearFogStrobeStats,
             supportKey: nil,
             controls: []

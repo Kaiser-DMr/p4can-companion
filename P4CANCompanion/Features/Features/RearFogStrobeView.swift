@@ -66,8 +66,9 @@ struct RearFogStrobeView: View {
                 Button {
                     Task { await start() }
                 } label: {
-                    HStack {
+                    HStack(spacing: Theme.spacing(1)) {
                         Spacer()
+                        if busy { ProgressView().controlSize(.small) }
                         Label(isActive ? L10n.t("爆闪中…", "Strobing…") : L10n.t("开始爆闪", "Start strobe"),
                               systemImage: "light.beacon.max")
                             .font(.body.weight(.semibold))
@@ -79,8 +80,9 @@ struct RearFogStrobeView: View {
                 Button(role: .destructive) {
                     Task { await stop() }
                 } label: {
-                    HStack {
+                    HStack(spacing: Theme.spacing(1)) {
                         Spacer()
+                        if busy { ProgressView().controlSize(.small) }
                         Label(L10n.t("停止", "Stop"), systemImage: "stop.fill")
                         Spacer()
                     }

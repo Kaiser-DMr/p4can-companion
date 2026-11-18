@@ -1,8 +1,8 @@
-# P4-CAN 工具箱 · Mac 版运行说明（v1.8 / build 9）
+# P4-CAN 工具箱 · Mac 版运行说明（v3.19 / build 40）
 
 ## 产物
 
-- `P4CAN-Companion-mac-v1.8.zip`（约 1.4 MB）
+- `P4CAN-Companion-mac-v3.19.zip`（约 3.5 MB）
 - 解压即得 `P4CAN-Companion.app`：**macOS 原生应用**（Mac Catalyst）
 - 架构：universal（Apple Silicon arm64 + Intel x86_64）
 - 系统要求：macOS 14.0 或更高
@@ -21,7 +21,7 @@
 | 项目 | Mac 版 |
 |---|---|
 | 导航 | 系统**侧边栏**（状态 / 功能 / 蓝牙 / 系统），不是底部 Tab |
-| 窗口 | 460×640 ~ 1180×1600 可自由缩放，单列信息流不会被拉宽 |
+| 窗口 | 460×640 ~ 1180×1600 可自由缩放；内容列在宽窗口下封顶 720pt 居中 |
 | 灵动岛 / 锁屏实时活动 | ❌ Mac 无此能力（ActivityKit 未提供 Mac 实现），该开关自动隐藏 |
 | 其余功能 | 与 iPhone 版**完全一致**：三路 CAN、17 个固件功能模块、S3XY 蓝牙、OTA、Wi-Fi/热点、日志导出、扭矩趋势、网络日志 |
 

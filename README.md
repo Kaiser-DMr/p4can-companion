@@ -5,16 +5,16 @@ P4-CAN Universal（ESP32-P4 车载 CAN 控制器）的原生 iOS 控制台。UIK
 ![平台](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
 ![版本](https://img.shields.io/badge/version-3.16%20(37)-green)
 
-**下载：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) —— `P4CAN-Companion-v3.16-adhoc.ipa`（iPhone，需自签）/ `P4CAN-Companion-mac-v3.16.zip`（Mac 解压即用）
+**下载：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) —— `P4CAN-Companion-v3.19-adhoc.ipa`（iPhone，需自签）/ `P4CAN-Companion-mac-v3.19.zip`（Mac 解压即用）
 
 ## 功能
 
 | 模块 | 内容 |
 |---|---|
 | **状态** | 设备在线/固件/内存、三路 CAN（BODY / CHASSIS / PARTY）收发与 Bus-Off、扭矩趋势、电池（固件提供才显示）、锁屏与灵动岛实时活动 |
-| **功能** | 固件功能总入口，顺序同网页：NAG、ISA、驾驶员监控、视觉限速、自动转向灯、前大灯爆闪、召唤状态、R79、地区/地图、TLSSC、无确认变道、踏板映射、常驻 AP、AP 加速/回收、S3XY、LAB Menu；无分类，保留搜索 |
+| **功能** | 固件功能总入口，按分类分组：**灯光**（前大灯爆闪 / 后雾灯爆闪）→ 驾驶辅助 → 车身与舒适 → 高级与兼容（含 S3XY、LAB Menu）；支持搜索、长按置顶（顶部「常用」，最多 6 个），灯光组行尾显示「爆闪中」实时状态 |
 | **蓝牙** | 由「功能 → S3XY」开关控制标签显隐；S3XY 设备扫描/配对/连接、单击-双击-长按动作绑定、自动重连、日志导出 |
-| **设置** | 车型卡片与**更改车型**（保存后设备重启）、无线、外观、刷新间隔、诊断/恢复、OTA、三级重置、封禁车辆、App 语言与设备地址 |
+| **设置** | 车型卡片与**更改车型**（保存后设备重启）、无线、外观、刷新间隔、诊断/恢复、**OTA（选包→SHA-256 校验→确认→字节进度→重启确认→记录上次刷写）**、三级重置、封禁车辆、App 语言与设备地址、一键复制诊断信息 / 导出诊断包（zip：摘要 + 网络日志 + 快照）、固件变更记录 |
 | **实验室** | LAB Menu 打开后出现：R79 AP 控制 / R79 状态 / 召唤心跳 / ALC / 主驾车窗 / CAN 研究捕获 / 驾驶员监控捕获 / Mode H 调参（含实时引擎） |
 
 ## 架构
@@ -23,7 +23,7 @@ P4-CAN Universal（ESP32-P4 车载 CAN 控制器）的原生 iOS 控制台。UIK
 P4CANCompanion/
 ├── App/            AppDelegate · SceneDelegate · RootTabBarController（iOS 用 Tab，Mac 用侧边栏）
 ├── Core/           P4APIClient（async/await）· AppEnvironment（单一状态源）· FeatureCatalog（模块与控件 schema）
-├── UI/             Theme（8pt 栅格/语义色）· Components（KpiTile/StatusChip/SlimProgress/RatioBar）· GlassSurface
+├── UI/             Theme（8pt 栅格/语义色/图标尺寸）· Components（ModuleIconTile/NavRow/KpiTile/StatusChip）· GlassSurface
 ├── Features/       Overview / Features / S3XY / System / Lab / LiveActivity / Connect
 ├── SwiftPieces/    第三方组件（FilterRail，MIT + Commons Clause，版权头保留）
 └── Vendor/         SnapKit 5.7.1 源码（内置，避免 SPM 依赖）

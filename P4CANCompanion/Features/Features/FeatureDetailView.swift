@@ -44,12 +44,7 @@ struct FeatureDetailView: View {
     var body: some View {
         List {
             Section {
-                Text(module.summary)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(Theme.spacing(2))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .p4Glass(cornerRadius: Theme.Radius.card)
+                heroHeader
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
             }
@@ -87,19 +82,9 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         HeadlightStrobeView()
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "light.beacon.max.fill")
-                                .foregroundStyle(.tint)
-                                .frame(width: 28)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("爆闪设置与触发", "Strobe settings and trigger"))
-                                    .font(.body)
-                                Text(L10n.t("次数 / 间隔 / 触发入口", "Count / interval / trigger source"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 2)
+                        NavRow(icon: "emoji:🎛️",
+                               title: L10n.t("爆闪设置与触发", "Strobe settings and trigger"),
+                               subtitle: L10n.t("次数 / 间隔 / 触发入口", "Count / interval / trigger source"))
                     }
                 } footer: {
                     Text(L10n.t("爆闪会实际控制远光灯；请只在安全环境使用，并确认周围没有对向车辆。",
@@ -112,19 +97,9 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         RearFogStrobeView()
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "light.beacon.max")
-                                .foregroundStyle(.tint)
-                                .frame(width: 28)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("开始 / 停止爆闪", "Start / stop strobe"))
-                                    .font(.body)
-                                Text(L10n.t("单次最长 30 秒 · 显示剩余时间", "Up to 30 s · live countdown"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 2)
+                        NavRow(icon: "emoji:⏱️",
+                               title: L10n.t("开始 / 停止爆闪", "Start / stop strobe"),
+                               subtitle: L10n.t("单次最长 30 秒 · 显示剩余时间", "Up to 30 s · live countdown"))
                     }
                 } footer: {
                     Text(L10n.t("通过 0x273 的后雾灯位实现；需要车辆上电且能收到整车 0x273。",
@@ -137,20 +112,10 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         ResearchLabelsView()
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "tag")
-                                .foregroundStyle(.tint)
-                                .frame(width: 28)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("捕获标签（A–D）", "Capture labels (A–D)"))
-                                    .font(.body)
-                                Text(L10n.t("给导出的 CSV segment 加注释",
-                                            "Annotate segments in the exported CSV"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 2)
+                        NavRow(icon: "emoji:🏷️",
+                               title: L10n.t("捕获标签（A–D）", "Capture labels (A–D)"),
+                               subtitle: L10n.t("给导出的 CSV segment 加注释",
+                                                "Annotate segments in the exported CSV"))
                     }
                 }
             }
@@ -160,20 +125,10 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         NagAdvancedView()
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "slider.horizontal.3")
-                                .foregroundStyle(.tint)
-                                .frame(width: 28)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t("高级参数（报文级）", "Advanced parameters"))
-                                    .font(.body)
-                                Text(L10n.t("目标 ID / 报文节奏 / 扭矩表（只读）",
-                                            "Frame IDs / timing / torque table (read-only)"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 2)
+                        NavRow(icon: "emoji:🎚️",
+                               title: L10n.t("高级参数（报文级）", "Advanced parameters"),
+                               subtitle: L10n.t("目标 ID / 报文节奏 / 扭矩表（只读）",
+                                                "Frame IDs / timing / torque table (read-only)"))
                     }
                 } footer: {
                     Text(L10n.t("修改 0x370 / 0x399 的报文级参数前，请确认你清楚每一字段的含义；AP 激活时禁止写入。",
@@ -240,6 +195,27 @@ struct FeatureDetailView: View {
         } message: {
             Text("将向设备提交：\(module.title) / \(pendingTrigger?.title ?? "")")
         }
+    }
+
+    // MARK: - 顶部信息
+
+    /// 模块信息卡：图标瓦片 + 说明。
+    ///
+    /// 标题由导航栏承担，卡片里不再重复写一遍模块名；图标尺寸与列表行同源
+    /// （`Theme.Icon` / `ModuleIconTile`），从列表点进来不会有"换了一套图标"的割裂感。
+    private var heroHeader: some View {
+        HStack(alignment: .center, spacing: Theme.Icon.gap) {
+            ModuleIconTile(name: module.icon, size: Theme.Icon.hero)
+            Text(module.localizedSummary)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(Theme.spacing(2))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .p4Glass(cornerRadius: Theme.Radius.card)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - 轮询

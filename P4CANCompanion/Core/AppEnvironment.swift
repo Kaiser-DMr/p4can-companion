@@ -26,6 +26,18 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var host: String
     @Published private(set) var isBusy = false
     @Published private(set) var otaUploading = false
+    /// OTA 上传阶段：上传 → 等待设备重启确认 → 完成 / 失败。
+    enum OTAUploadPhase: Equatable {
+        case idle
+        case uploading
+        case verifying
+        case done
+        case failed
+    }
+    @Published private(set) var otaUploadPhase: OTAUploadPhase = .idle
+    /// 已发送 / 总字节（UI 进度条）。
+    @Published private(set) var otaUploadSent = 0
+    @Published private(set) var otaUploadTotal = 0
     @Published var toast: P4Toast?
 
     // MARK: - 离线缓存
@@ -158,6 +170,8 @@ final class AppEnvironment: ObservableObject {
     private var lastCacheWriteAt: Date?
     /// 上次写入包含的端点数量（新端点出现时立刻补写）。
     private var lastCachedEntryCount = 0
+    /// >0 时暂停后台轮询（OTA 上传/等待重启期间），避免和单线程的固件 WebServer 抢连接。
+    private var exclusiveOperationDepth = 0
 
     /// 当前可缓存的端点数量。
     private var cacheEntryCount: Int {
@@ -193,6 +207,13 @@ final class AppEnvironment: ObservableObject {
         self.liveActivityEnabled = UserDefaults.standard.bool(forKey: Self.liveActivityDefaultsKey)
         let savedLanguage = UserDefaults.standard.string(forKey: Self.languageDefaultsKey) ?? "system"
         self.language = AppLanguage(rawValue: savedLanguage) ?? .system
+        #if DEBUG
+        // 本地联调：SIMCTL_CHILD_P4CAN_LANGUAGE=en 强制语言（不写回偏好）
+        if let raw = ProcessInfo.processInfo.environment["P4CAN_LANGUAGE"],
+           let forced = AppLanguage(rawValue: raw) {
+            self.language = forced
+        }
+        #endif
         L10n.selection = self.language
         let savedAppearance = UserDefaults.standard.string(forKey: Self.appearanceDefaultsKey) ?? "system"
         self.appearance = AppAppearance(rawValue: savedAppearance) ?? .system
@@ -238,6 +259,7 @@ final class AppEnvironment: ObservableObject {
     // MARK: - 刷新
 
     func refreshOnce() async {
+        guard exclusiveOperationDepth == 0 else { return }
         if phase != .online { phase = .connecting }
         let currentClient = client
         tick += 1
@@ -665,17 +687,98 @@ final class AppEnvironment: ObservableObject {
         await refreshOnce()
     }
 
+    /// OTA 上传入口。
+    ///
+    /// 固件的行为决定了不能只看 HTTP 结果：`httpOtaFinish()` 回 200 之后约 700 ms 就重启，
+    /// 手机侧经常收不到回包（-1005 连接中断）。因此：
+    /// 1. 上传期间暂停所有状态轮询（固件是单线程 WebServer，抢连接会让写入变慢甚至中断）；
+    /// 2. 请求体发完却拿不到回包 → 不判失败，进入“确认”阶段；
+    /// 3. 确认阶段以设备是否重启为准（重启 = 写入成功，因为只有 `Update.end(true)` 成功才重启）。
     func uploadFirmware(named name: String, data: Data) async {
         guard !otaUploading else { return }
         otaUploading = true
-        defer { otaUploading = false }
+        otaUploadPhase = .uploading
+        otaUploadSent = 0
+        otaUploadTotal = data.count
+        exclusiveOperationDepth += 1
+        await performUpload(named: name, data: data)
+        exclusiveOperationDepth = max(0, exclusiveOperationDepth - 1)
+        otaUploading = false
+        await refreshOnce()
+    }
+
+    private func performUpload(named name: String, data: Data) async {
+        let attemptBefore = otaStatus?["attempt"]?.intValue ?? 0
         do {
-            _ = try await client.uploadFirmware(fileName: name, data: data)
-            toast = P4Toast(message: "固件已上传，设备正在写入并重启，请勿断电", style: .success)
+            let json = try await client.uploadFirmware(fileName: name, data: data) { @Sendable sent, total in
+                Task { @MainActor [weak self] in
+                    self?.otaUploadSent = sent
+                    self?.otaUploadTotal = max(total, 1)
+                }
+            }
+            otaUploadSent = otaUploadTotal
+            if json["ok"]?.boolValue == false {
+                let message = json["error"]?.stringValue ?? ""
+                otaUploadPhase = .failed
+                toast = P4Toast(
+                    message: message.isEmpty ? "设备拒绝写入固件" : "固件写入失败：\(message)",
+                    style: .failure
+                )
+                return
+            }
+            otaUploadPhase = .verifying
+            await confirmUpload(attemptBefore: attemptBefore)
+        } catch let interrupted as P4UploadInterrupted where interrupted.bodyFullySent {
+            // 请求体已全部发出：设备极可能已写入并重启，转到确认阶段而不是直接报失败。
+            otaUploadPhase = .verifying
+            await confirmUpload(attemptBefore: attemptBefore)
         } catch {
+            otaUploadPhase = .failed
             toast = P4Toast(message: "固件上传失败：\(Self.friendly(error))", style: .failure)
         }
-        await refreshOnce()
+    }
+
+    /// 上传后确认：等设备重启（重启 = 写入成功），或读到设备的失败原因。
+    private func confirmUpload(attemptBefore: Int64) async {
+        var sawDisconnect = false
+        let deadline = Date().addingTimeInterval(120)
+        while Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(1200))
+            do {
+                let status = try await client.get(P4Route.otaStatus)
+                let object = status.objectValue ?? [:]
+                let error = object["error"]?.stringValue ?? ""
+                if !error.isEmpty {
+                    otaUploadPhase = .failed
+                    toast = P4Toast(message: "固件写入失败：\(error)", style: .failure)
+                    return
+                }
+                let attempt = object["attempt"]?.intValue ?? 0
+                let stage = object["stage"]?.stringValue ?? ""
+                // 设备自报 complete = 明确写入成功；stage 回到 idle 且 attempt 归零 = 已重启过。
+                let rebooted = stage == "idle" && attempt < max(attemptBefore, 1)
+                if stage == "complete" {
+                    // 设备自报完成，但重启还没发生（固件回包后约 0.7 s 才 restart）。
+                    otaUploadPhase = .done
+                    toast = P4Toast(message: "固件写入完成，设备即将重启", style: .success)
+                    return
+                }
+                if sawDisconnect || rebooted {
+                    otaUploadPhase = .done
+                    toast = P4Toast(message: "固件已写入，设备已重启", style: .success)
+                    return
+                }
+                if object["inProgress"]?.boolValue == true { continue }
+            } catch {
+                // 连不上：设备正在重启。继续等它回来。
+                sawDisconnect = true
+            }
+        }
+        otaUploadPhase = .failed
+        toast = P4Toast(
+            message: "固件已发送，但没能确认设备重启；请到「状态」页看是否已恢复在线",
+            style: .info
+        )
     }
 
     func exportLogFile(_ log: P4LogFile) async throws -> URL {
@@ -711,9 +814,104 @@ final class AppEnvironment: ObservableObject {
         return profileStatus?[key]?.boolValue
     }
 
+    // MARK: - 诊断
+
+    /// App 版本 + build，来自 Info.plist。
+    var appVersionText: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
+
+    /// 一眼能看懂的诊断摘要：版本、连接、固件、拓扑、总线、OTA。
+    /// 「复制诊断信息」和诊断包里的 diagnostics.txt 用的是同一份内容。
+    var diagnosticsSummary: String {
+        let buses = canBuses
+        let online = buses.filter(\.isOnline).count
+        var lines: [String] = [
+            "P4 管家 \(appVersionText)",
+            "设备 \(host) · \(isOnline ? "在线" : "离线")",
+            "固件 \(systemStats?["fwVersion"]?.stringValue ?? "—") · \(profileName ?? "—")",
+            "拓扑 \(topologyName ?? "—")",
+            "CAN \(online)/\(max(buses.count, 1)) 在线 · 蓝牙 \(isBluetoothEnabled ? "开" : "关") · LAB \(isLabEnabled ? "开" : "关")",
+        ]
+        if let date = lastUpdated {
+            lines.append("最后更新 \(date.formatted(date: .abbreviated, time: .standard))")
+        }
+        if isShowingCachedData, let cachedAt {
+            lines.append("当前显示缓存 · \(cachedAt.formatted(date: .abbreviated, time: .standard))")
+        }
+        for bus in buses {
+            lines.append("· \(bus.displayName) \(bus.stateText) rx=\(bus.rxCount) tx=\(bus.txAccepted)")
+        }
+        if let ota = otaStatus?.objectValue {
+            let stage = ota["stage"]?.stringValue ?? "-"
+            let attempt = ota["attempt"]?.displayText ?? "-"
+            let error = ota["error"]?.stringValue ?? ""
+            lines.append("OTA stage=\(stage) attempt=\(attempt) error=\(error.isEmpty ? "-" : error)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// 生成诊断包 zip：摘要 + 网络日志 CSV + 最近一次快照 JSON。
+    func makeDiagnosticsArchive() throws -> URL {
+        let stamp = Self.diagnosticsStamp.string(from: Date())
+        let log = NetworkLog.shared.snapshot()
+        let iso = ISO8601DateFormatter()
+        var csv = "time,method,path,query,status,durationMs,bytes,error\n"
+        for entry in log {
+            let fields = [
+                iso.string(from: entry.date),
+                entry.method,
+                entry.path,
+                entry.query.replacingOccurrences(of: ",", with: ";"),
+                entry.statusCode.map(String.init) ?? "",
+                String(entry.durationMs),
+                String(entry.bytes),
+                (entry.error ?? "").replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: ",", with: ";"),
+            ]
+            csv += fields.joined(separator: ",") + "\n"
+        }
+        let snapshot = (try? JSONEncoder().encode(mergedStats)) ?? Data("{}".utf8)
+        let archive = ZipArchive.make(entries: [
+            ("diagnostics.txt", Data(diagnosticsSummary.utf8)),
+            ("network-log.csv", Data(csv.utf8)),
+            ("snapshot.json", snapshot),
+        ])
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("P4CAN-diagnostics-\(stamp).zip")
+        try archive.write(to: url, options: .atomic)
+        return url
+    }
+
+    private static let diagnosticsStamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter
+    }()
+
+    /// 把系统网络错误翻成“能照做”的中文提示。
+    ///
+    /// URLSession 的本地化错误对车主没意义（"The request timed out."），
+    /// 这里按失败类型给出下一步动作，避免用户只能反复重试。
     static func friendly(_ error: Error) -> String {
         if let apiError = error as? P4APIError { return apiError.message }
-        return error.localizedDescription
+        if let upload = error as? P4UploadInterrupted { return upload.description }
+        guard let urlError = error as? URLError else { return error.localizedDescription }
+        switch urlError.code {
+        case .timedOut:
+            return "设备响应超时：确认手机仍连在 P4-CAN 的热点上，或稍后重试"
+        case .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet:
+            return "连不上设备：检查「设置 → 设备地址」是否为设备当前 IP，并确认已连上它的 Wi-Fi"
+        case .dnsLookupFailed:
+            return "地址解析失败：设备地址应为 IP，例如 192.168.4.1"
+        case .appTransportSecurityRequiresSecureConnection:
+            return "系统拦截了明文连接：设备地址需以 http:// 开头"
+        case .cancelled:
+            return "请求已取消"
+        default:
+            return urlError.localizedDescription
+        }
     }
 }
 

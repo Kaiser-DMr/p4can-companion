@@ -1,8 +1,8 @@
 {
   "$schema": "https://schemas.figma.com/plugin-typings/variables",
   "name": "P4-CAN Design Tokens",
-  "version": "2.0.0",
-  "description": "状态页 v2.0 设计 token，可用于 Figma Variables（颜色/字号/间距/圆角）。颜色以系统语义色为源，浅深色由 iOS 自动映射。",
+  "version": "2.1.0",
+  "description": "P4-CAN App 设计 token，可用于 Figma Variables（颜色/字号/间距/圆角/图标）。颜色以系统语义色为源，浅深色由 iOS 自动映射。2.1.0 增加 icon 组（功能页图标瓦片 36 / 次级 30 / 主图 46）。",
   "colors": {
     "bg/canvas": { "light": "#F2F2F7", "dark": "#000000", "system": "systemGroupedBackground" },
     "bg/card": { "light": "#FFFFFF", "dark": "#1C1C1E", "system": "secondarySystemGroupedBackground" },
@@ -27,11 +27,30 @@
   },
   "spacing": { "1": 8, "1.5": 12, "2": 16, "4": 32 },
   "radius": { "card": 16, "tile": 12, "chip": 999 },
+  "icon": {
+    "tile": 36,
+    "smallTile": 30,
+    "hero": 46,
+    "corner": 10,
+    "gap": 12,
+    "glyph": 21,
+    "glyphRatio": 0.58
+  },
   "layout": {
     "pageHorizontalPadding": 16,
     "cardPadding": 16,
     "cardGap": 16,
     "grid": 8,
-    "minTouchTarget": 44
+    "minTouchTarget": 44,
+    "contentMaxWidth": 720,
+    "contentMaxWidthNote": "宽屏（iPad / Mac 窗口）下单列内容封顶 720 并居中，iPhone 上等于屏宽"
+  },
+  "state": {
+    "chipFillOpacity": 0.12,
+    "chipStrokeOpacity": 0.22,
+    "chipStrokeWidth": 0.5,
+    "chipPaddingH": 8,
+    "chipPaddingV": 4,
+    "chipNote": "胶囊强制单行 + 横向自适应；一组胶囊用 P4FlowLayout 换行，不压缩、不竖排"
   }
 }

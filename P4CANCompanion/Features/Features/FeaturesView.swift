@@ -2,10 +2,9 @@ import SwiftUI
 
 /// 「功能」页：固件功能总入口（原「设置 → 功能」整段迁移到这里）。
 ///
-/// 顺序严格保持固件网页 Settings → Features：
-/// NAG → ISA → DMS → 视觉限速 → 自动转向灯 → 召唤状态 → R79 → 地区 → TLSSC →
-/// 变道 → 踏板 → 常驻 AP → AP 加速 / 回收 → S3XY → LAB Menu。
-/// 分类筛选已移除，保留搜索；四个快捷开关（ISA / DMS / S3XY / LAB Menu）直接内联。
+/// 列表按 `FeatureModule.Section` 分组，顺序由枚举声明顺序决定：
+/// 灯光 → 驾驶辅助 → 车身与舒适 → 高级与兼容（实验室模块归「实验室」标签页）。
+/// 每个分组头显示 emoji + 名称 + 数量，搜索时退化为单一「搜索结果」分组。
 struct FeaturesView: View {
     @EnvironmentObject private var environment: AppEnvironment
 
@@ -19,6 +18,10 @@ struct FeaturesView: View {
     @State private var busyID: String?
     /// 内联开关的乐观值：点下立即变化，设备回读后清除。
     @State private var gateOverrides: [String: Bool] = [:]
+    /// 灯光类模块的运行态（爆闪中）。读不到该端点时不显示，不伪造。
+    @State private var strobeActive: [String: Bool] = [:]
+    /// 置顶到「常用」的 entry id（顺序即展示顺序，最多 6 个）。
+    @State private var pinnedIDs: [String] = FeaturePinStore.load()
 
     // MARK: - 行模型
 
@@ -33,14 +36,48 @@ struct FeaturesView: View {
         let kind: Kind
     }
 
+    /// 一个分类分组：分类枚举 + 该分类下的行。
+    private struct Group: Identifiable {
+        let section: FeatureModule.Section
+        let entries: [Entry]
+
+        var id: String { section.rawValue }
+    }
+
     /// 功能模块（不含车型卡片与实验室专属工具）
     private var modules: [FeatureModule] {
         FeatureCatalog.modules.filter { $0.section != .lab && $0.id != "profile" }
     }
 
-    private var entries: [Entry] {
+    /// 全量行（含已置顶的）：搜索、置顶解析与深链滚动共用。
+    private var allEntries: [Entry] {
         modules.map { Entry(id: $0.id, kind: .module($0)) }
             + [Entry(id: "s3xy", kind: .s3xy), Entry(id: "lab", kind: .lab)]
+    }
+
+    /// 搜索与调试锚点使用的扁平行列表。
+    private var entries: [Entry] { allEntries }
+
+    private func isPinned(_ id: String) -> Bool { pinnedIDs.contains(id) }
+
+    /// 置顶行（按置顶顺序）。失效的 id（模块被重命名/删除）自动跳过。
+    private var pinnedEntries: [Entry] {
+        pinnedIDs.compactMap { id in allEntries.first { $0.id == id } }
+    }
+
+    /// 按分类分组；空分类不显示。已置顶的行从原分组移出，避免同一功能出现两次。
+    private var groups: [Group] {
+        FeatureModule.Section.allCases.compactMap { section in
+            var items = modules
+                .filter { $0.section == section && !isPinned($0.id) }
+                .map { Entry(id: $0.id, kind: .module($0)) }
+            if section == .advanced {
+                if !isPinned("s3xy") { items.append(Entry(id: "s3xy", kind: .s3xy)) }
+                if !isPinned("lab") { items.append(Entry(id: "lab", kind: .lab)) }
+            }
+            guard !items.isEmpty else { return nil }
+            return Group(section: section, entries: items)
+        }
     }
 
     private var trimmedQuery: String {
@@ -97,12 +134,16 @@ struct FeaturesView: View {
             }
             .overlay(alignment: .bottom) { ToastOverlay() }
         }
-        .task { await loadConfigToggles() }
         .task {
-            // ISA / DMS 的状态不在 snapshot 里，单独慢轮询。
+            await loadConfigToggles()
+            await loadStrobeStates()
+        }
+        .task {
+            // ISA / DMS 的状态不在 snapshot 里，灯光运行态同理，单独慢轮询。
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
                 await loadConfigToggles()
+                await loadStrobeStates()
             }
         }
         .task {
@@ -131,12 +172,13 @@ struct FeaturesView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Theme.spacing(0.75)) {
             Image(systemName: "magnifyingglass")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             TextField(
-                L10n.t("搜索功能（如 踏板 / TLSSC / LAB）", "Search features (e.g. pedal / TLSSC / LAB)"),
+                L10n.t("搜索功能（如 灯光 / 踏板 / TLSSC）", "Search features (e.g. light / pedal / TLSSC)"),
                 text: $query
             )
             .textFieldStyle(.plain)
@@ -162,7 +204,9 @@ struct FeaturesView: View {
             }
         }
         .padding(.horizontal, Theme.spacing(1.5))
-        .frame(height: 38)
+        // 用垂直内边距 + 最小高度代替固定 38pt：大字号下输入框会随文字长高，图标不再溢出圆角。
+        .padding(.vertical, Theme.spacing(1))
+        .frame(minHeight: 40)
         // 用「轻微着色的底 + 细描边」代替玻璃白底：既贴合页面底色，也不会在顶部形成一条白条。
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
@@ -170,7 +214,12 @@ struct FeaturesView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                // 聚焦态：描边换成强调色并加粗到 1pt，和胶囊的"选中=有边界"语言一致。
+                .strokeBorder(
+                    searchFocused ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06),
+                    lineWidth: searchFocused ? 1 : 0.5
+                )
+                .animation(.easeOut(duration: 0.15), value: searchFocused)
         )
         .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
         .onTapGesture { searchFocused = true }
@@ -207,27 +256,51 @@ struct FeaturesView: View {
                     Section {
                         ForEach(searchResults) { entry in
                             row(entry)
+                                .contextMenu { pinMenu(entry) }
                         }
                     } header: {
                         sectionHeader(
+                            emoji: "🔍",
                             title: L10n.t("搜索结果", "Results"),
                             count: searchResults.count
                         )
                     }
                 }
             } else {
-                Section {
-                    ForEach(entries) { entry in
-                        row(entry).id(entry.id)
+                if !pinnedEntries.isEmpty {
+                    Section {
+                        ForEach(pinnedEntries) { entry in
+                            row(entry)
+                                .id(entry.id)
+                                .contextMenu { pinMenu(entry) }
+                        }
+                    } header: {
+                        sectionHeader(
+                            emoji: "📌",
+                            title: L10n.t("常用", "Pinned"),
+                            count: pinnedEntries.count
+                        )
+                    } footer: {
+                        Text(L10n.t("长按任意功能可置顶或取消（最多 \(FeaturePinStore.maxPins) 个）。",
+                                    "Long-press a feature to pin or unpin it (up to \(FeaturePinStore.maxPins))."))
                     }
-                } header: {
-                    sectionHeader(
-                        title: L10n.t("全部功能", "All features"),
-                        count: entries.count
-                    )
-                } footer: {
-                    Text(L10n.t("开关状态全部读取自设备；LAB Menu 打开后底部才出现「实验室」标签。",
-                                "All switch states come from the device. The Lab tab appears only after LAB Menu is turned on."))
+                }
+                ForEach(groups) { group in
+                    Section {
+                        ForEach(group.entries) { entry in
+                            row(entry)
+                                .id(entry.id)
+                                .contextMenu { pinMenu(entry) }
+                        }
+                    } header: {
+                        sectionHeader(
+                            emoji: group.section.emoji,
+                            title: L10n.t(group.section.rawValue, group.section.englishName),
+                            count: group.entries.count
+                        )
+                    } footer: {
+                        sectionFooter(for: group)
+                    }
                 }
             }
         }
@@ -265,7 +338,11 @@ struct FeaturesView: View {
                 NavigationLink {
                     FeatureDetailView(module: module)
                 } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
+                    FeatureRow(
+                        module: module,
+                        features: environment.featuresStatus,
+                        strobeActive: strobeActive[module.id]
+                    )
                 }
             }
 
@@ -297,9 +374,53 @@ struct FeaturesView: View {
         }
     }
 
-    /// 列表分组头：标题 + 数量胶囊，和卡片左边缘对齐，信息与原来的「全部 · N 项」一致。
-    private func sectionHeader(title: String, count: Int) -> some View {
-        HStack(spacing: Theme.spacing(1)) {
+    /// 长按菜单：置顶 / 取消置顶。
+    @ViewBuilder
+    private func pinMenu(_ entry: Entry) -> some View {
+        let pinned = isPinned(entry.id)
+        Button {
+            togglePin(entry.id)
+        } label: {
+            Label(pinned ? L10n.t("取消置顶", "Unpin") : L10n.t("置顶到常用", "Pin to top"),
+                  systemImage: pinned ? "pin.slash" : "pin")
+        }
+    }
+
+    private func togglePin(_ id: String) {
+        Haptics.impact()
+        if let index = pinnedIDs.firstIndex(of: id) {
+            pinnedIDs.remove(at: index)
+        } else {
+            guard pinnedIDs.count < FeaturePinStore.maxPins else {
+                environment.toast = P4Toast(
+                    message: L10n.t("最多置顶 \(FeaturePinStore.maxPins) 个功能", "Up to \(FeaturePinStore.maxPins) pinned features"),
+                    style: .info
+                )
+                return
+            }
+            pinnedIDs.append(id)
+        }
+        FeaturePinStore.save(pinnedIDs)
+    }
+
+    /// 分组脚注：灯光组提示真实灯光风险，最后一组说明状态来源。
+    @ViewBuilder
+    private func sectionFooter(for group: Group) -> some View {
+        if group.section == .lighting {
+            Text(L10n.t("灯光类功能会实际控制车辆灯光，请只在安全环境使用；爆闪期间可随时停止。",
+                        "Lighting features drive the real lamps. Use them only in a safe environment; you can stop a strobe at any time."))
+        } else if group.id == groups.last?.id {
+            Text(L10n.t("开关状态全部读取自设备；LAB Menu 打开后底部才出现「实验室」标签。长按功能可置顶。",
+                        "All switch states come from the device. The Lab tab appears only after LAB Menu is on. Long-press to pin."))
+        }
+    }
+
+    /// 列表分组头：emoji + 标题 + 数量胶囊，和卡片左边缘对齐。
+    private func sectionHeader(emoji: String, title: String, count: Int) -> some View {
+        HStack(spacing: Theme.spacing(0.75)) {
+            Text(emoji)
+                .font(.caption)
+                .accessibilityHidden(true)
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -331,8 +452,8 @@ struct FeaturesView: View {
                 Label(L10n.t("没有匹配的功能", "No matching features"), systemImage: "magnifyingglass")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
-                Text(L10n.t("试试更短的关键词，例如「NAG」「踏板」「TLSSC」「LAB」。",
-                            "Try a shorter keyword such as NAG, pedal, TLSSC or LAB."))
+                Text(L10n.t("试试更短的关键词，例如「灯光」「NAG」「踏板」「LAB」。",
+                            "Try a shorter keyword such as light, NAG, pedal or LAB."))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button(L10n.t("清除搜索", "Clear search")) {
@@ -375,6 +496,20 @@ struct FeaturesView: View {
         }
     }
 
+    /// 灯光类模块的运行态：只读，失败即视为「未知」，不显示徽章。
+    private func loadStrobeStates() async {
+        var fresh: [String: Bool] = [:]
+        if let json = try? await environment.api.get(P4Route.headlightStrobeStats),
+           let active = json.objectValue?["active"]?.boolValue {
+            fresh["headlight"] = active
+        }
+        if let json = try? await environment.api.get(P4Route.rearFogStrobeStats),
+           let active = json.objectValue?["active"]?.boolValue {
+            fresh["rearFog"] = active
+        }
+        strobeActive = fresh
+    }
+
     private func submitInline(_ id: String, label: String, path: String, enabled: Bool) {
         busyID = id
         if id == "isa" { isaEnabled = enabled }
@@ -413,11 +548,85 @@ struct FeaturesView: View {
     }
 }
 
+// MARK: - 行骨架
+
+/// 功能行的统一骨架：36pt 图标瓦片 + 标题 / 说明 + 尾部区域。
+///
+/// 功能页的普通行与内联开关行都走这里，保证图标尺寸、内边距、字重与行高完全一致；
+/// 以后新增行样式（带徽章、带进度）只需要换尾部内容。
+private struct FeatureRowShell<Trailing: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    /// 内联开关行要保留 Toggle 的可交互性，不能把子元素合并成一个无障碍元素。
+    let combinesAccessibility: Bool
+    private let trailing: Trailing
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(
+        icon: String,
+        title: String,
+        subtitle: String,
+        combinesAccessibility: Bool = true,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.combinesAccessibility = combinesAccessibility
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        // 辅助功能字号下图标改为顶部对齐，和标题首行齐平（否则图标会漂在高文本块中间）。
+        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center,
+               spacing: Theme.Icon.gap) {
+            ModuleIconTile(name: icon)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    // 常规字号保持单行；辅助功能字号不限制行数，避免标题被截。
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    // 常规字号两行；辅助功能字号完整展示说明。
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .multilineTextAlignment(.leading)
+            }
+            // 分隔线与文字左边缘对齐（而不是贴着图标瓦片），列表看起来更整齐。
+            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+            Spacer(minLength: Theme.spacing(1))
+            trailing
+                .layoutPriority(1)
+        }
+        .padding(.vertical, Theme.spacing(0.5))
+        .modifier(CombineAccessibilityIfNeeded(enabled: combinesAccessibility))
+    }
+}
+
+/// 条件式无障碍合并，避免在 ViewBuilder 里写 if 造成类型分叉。
+private struct CombineAccessibilityIfNeeded: ViewModifier {
+    let enabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.accessibilityElement(children: .combine)
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - 普通功能行
 
 private struct FeatureRow: View {
     let module: FeatureModule
     let features: P4JSON?
+    /// 灯光类模块是否正在爆闪（nil = 设备未提供该状态）。
+    var strobeActive: Bool? = nil
 
     private var supportState: (text: String, ok: Bool)? {
         guard let key = module.supportKey, let value = features?[key]?.boolValue else { return nil }
@@ -425,34 +634,21 @@ private struct FeatureRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: Theme.spacing(1.5)) {
-            ModuleIcon(name: module.icon)
-                .foregroundStyle(.tint)
-                .frame(width: 32, height: 32)
-                .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(module.localizedTitle)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                Text(module.localizedSummary)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
-            Spacer(minLength: Theme.spacing(1))
-            if let support = supportState {
+        FeatureRowShell(icon: module.icon,
+                        title: module.localizedTitle,
+                        subtitle: module.localizedSummary) {
+            if strobeActive == true {
+                StatusChip(text: L10n.t("爆闪中", "Strobing"),
+                           systemImage: "light.beacon.max.fill",
+                           tone: .ok)
+            } else if let support = supportState {
                 StatusChip(
                     text: support.text,
                     systemImage: support.ok ? "checkmark" : "minus",
                     tone: support.ok ? .ok : .warn
                 )
-                .layoutPriority(1)
             }
         }
-        .padding(.vertical, Theme.spacing(0.5))
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -478,26 +674,13 @@ private struct InlineFeatureRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: Theme.spacing(1.5)) {
-            ModuleIcon(name: icon)
-                .font(.body)
-                .foregroundStyle(.tint)
-                .frame(width: 32, height: 32)
-                .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-            }
-            Spacer(minLength: Theme.spacing(1))
+        FeatureRowShell(icon: icon,
+                        title: title,
+                        subtitle: subtitle,
+                        combinesAccessibility: false) {
             if busy || isOn == nil {
                 ProgressView()
+                    .controlSize(.small)
                     .accessibilityLabel(L10n.t("正在与设备同步", "Syncing with device"))
             } else {
                 Toggle("", isOn: binding)
@@ -506,7 +689,5 @@ private struct InlineFeatureRow: View {
                     .accessibilityLabel(title)
             }
         }
-        .padding(.vertical, Theme.spacing(0.5))
-        .accessibilityElement(children: .combine)
     }
 }

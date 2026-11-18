@@ -143,9 +143,12 @@ struct HeadlightStrobeView: View {
                 Button {
                     confirms = true
                 } label: {
-                    Label(active ? L10n.t("爆闪进行中…", "Strobe active…")
-                                 : L10n.t("立即爆闪", "Flash now"),
-                          systemImage: "light.beacon.max.fill")
+                    HStack(spacing: Theme.spacing(1)) {
+                        if busy { ProgressView().controlSize(.small) }
+                        Label(active ? L10n.t("爆闪进行中…", "Strobe active…")
+                                     : L10n.t("立即爆闪", "Flash now"),
+                              systemImage: "light.beacon.max.fill")
+                    }
                 }
                 .disabled(!canTrigger)
 
@@ -153,7 +156,10 @@ struct HeadlightStrobeView: View {
                     Button(role: .destructive) {
                         Task { await stop() }
                     } label: {
-                        Label(L10n.t("停止并恢复", "Stop and restore"), systemImage: "stop.circle")
+                        HStack(spacing: Theme.spacing(1)) {
+                            if busy { ProgressView().controlSize(.small) }
+                            Label(L10n.t("停止并恢复", "Stop and restore"), systemImage: "stop.circle")
+                        }
                     }
                     .disabled(busy)
                 }

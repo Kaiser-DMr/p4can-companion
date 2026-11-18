@@ -1,12 +1,12 @@
-# P4管家 v3.16 · 安装说明（iPhone + Mac）
+# P4管家 v3.19 · 安装说明（iPhone + Mac）
 
 ## 一、iPhone / iPad（IPA）
 
-- 产物：`P4CAN-Companion-v3.16-adhoc.ipa`（1.5 MB）
+- 产物：`P4CAN-Companion-v3.19-adhoc.ipa`（1.7 MB）
 - 结构：`Payload/P4CANCompanion.app` + `PlugIns/P4CANWidgetExtension.appex`
 - 平台：arm64，iOS 17.0+，iPhone + iPad（v1.5 起兼容 iPad 布局）
-- 签名：**ad-hoc**（App 与 Widget 扩展已分别签名），版本 **3.16 / build 37**
-- 备份：`~/Downloads/P4CAN-Companion-v3.16-adhoc.ipa`
+- 签名：**ad-hoc**（App 与 Widget 扩展已分别签名），版本 **3.19 / build 40**
+- 备份：`~/Downloads/P4CAN-Companion-v3.19-adhoc.ipa`
 
 ### 安装方式（本机无开发者证书，需现场重签）
 

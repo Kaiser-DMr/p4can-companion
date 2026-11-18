@@ -126,6 +126,11 @@ struct ToastOverlay: View {
 // MARK: - 状态胶囊（标签）
 
 /// 状态标签：图标 + 文字 + 语义色，颜色只作辅助，文字本身可读。
+///
+/// 尺寸约定（对齐 ShipSwift Status Badge）：横向 8 / 纵向 4 内边距，`caption` 字重 500，
+/// 底色=色 ×0.12、描边=色 ×0.22（0.5pt）。描边是为了让胶囊在浅色卡片上仍有边界，
+/// 只有底色时对比度不足会显得"发灰"。
+/// 文字强制单行 + 横向自适应：字号放大时胶囊变宽而不是竖排换行（竖排会把胶囊拉成椭圆）。
 struct StatusChip: View {
     let text: String
     var systemImage: String? = nil
@@ -134,16 +139,92 @@ struct StatusChip: View {
     var body: some View {
         HStack(spacing: 4) {
             if let systemImage {
-                Image(systemName: systemImage).font(.caption2.weight(.semibold))
+                Image(systemName: systemImage)
+                    .font(.caption2.weight(.semibold))
+                    .accessibilityHidden(true)
             }
-            Text(text).font(.caption.weight(.medium))
+            Text(text)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
         }
         .foregroundStyle(tone.color)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(tone.color.opacity(0.12), in: Capsule())
+        .overlay(Capsule().strokeBorder(tone.color.opacity(0.22), lineWidth: 0.5))
+        .fixedSize(horizontal: true, vertical: false)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(text)
+    }
+}
+
+// MARK: - 流式布局
+
+/// 按行排列、放不下自动换行的布局（状态胶囊组专用）。
+///
+/// 系统 `HStack` 在窄屏或大字号下会把胶囊压扁、文字竖排；这里让每个子视图保持自身
+/// 理想尺寸，超出可用宽度就整颗换到下一行，行内垂直居中。
+struct P4FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    private struct Line {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func lines(maxWidth: CGFloat, subviews: Subviews) -> [Line] {
+        var result: [Line] = []
+        var current = Line()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let additional = current.indices.isEmpty ? size.width : spacing + size.width
+            if !current.indices.isEmpty, current.width + additional > maxWidth {
+                result.append(current)
+                current = Line(indices: [index], width: size.width, height: size.height)
+            } else {
+                current.indices.append(index)
+                current.width += additional
+                current.height = max(current.height, size.height)
+            }
+        }
+        if !current.indices.isEmpty { result.append(current) }
+        return result
+    }
+
+    /// 计算换行时使用的可用宽度。
+    ///
+    /// 父容器有时会用「无宽度」的 proposal 来测理想尺寸（VStack 的 ideal pass），
+    /// 这时如果按无穷宽算，所有胶囊会排成一行，理想宽度变成三颗胶囊之和，
+    /// 反过来把父容器撑得比屏幕还宽。这里退化到一个保守宽度，真正的布局阶段
+    /// 父容器一定会给出确定宽度，换行仍然准确。
+    private func availableWidth(_ proposal: ProposedViewSize) -> CGFloat {
+        proposal.width ?? 320
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = availableWidth(proposal)
+        let rows = lines(maxWidth: maxWidth, subviews: subviews)
+        let height = rows.reduce(0) { $0 + $1.height } + lineSpacing * CGFloat(max(rows.count - 1, 0))
+        let width = min(rows.map(\.width).max() ?? 0, maxWidth)
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in lines(maxWidth: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(
+                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + spacing
+            }
+            y += row.height + lineSpacing
+        }
     }
 }
 
@@ -151,31 +232,108 @@ struct StatusChip: View {
 // MARK: - 模块图标
 
 /// 模块图标：优先按 Assets 资源名查找（如 TLSSC 的红绿灯），否则回退 SF Symbol。
+///
+/// `glyphSize` 统一由 `Theme.Icon` 推导，保证同一列表里的 emoji / 位图 / 符号三种来源
+/// 视觉大小一致（emoji 自带留白，需要比 SF Symbol 略大一号）。
 struct ModuleIcon: View {
     let name: String
+    var glyphSize: CGFloat = Theme.Icon.glyph
 
     private static let emojiPrefix = "emoji:"
 
     var body: some View {
         if name.hasPrefix(Self.emojiPrefix) {
             Text(String(name.dropFirst(Self.emojiPrefix.count)))
-                .font(.system(size: 17))
+                .font(.system(size: glyphSize))
+                .frame(width: glyphSize * 1.2, height: glyphSize * 1.2)
         } else if UIImage(named: name) != nil {
             Image(name)
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 20, height: 20)
+                .frame(width: glyphSize, height: glyphSize)
         } else {
             Image(systemName: name)
+                .font(.system(size: glyphSize * 0.92, weight: .medium))
+                .frame(width: glyphSize, height: glyphSize)
         }
     }
 }
+
+/// 带底色瓦片的模块图标：功能列表、详情页链接、实验室列表统一使用。
+///
+/// 三层结构固定为「瓦片底 + 0.5pt 描边 + 居中字形」，这样不同底色（卡片 / 玻璃）上
+/// 图标块的视觉重量一致；emoji 本身有颜色，不使用强调色，SF Symbol 才着色。
+struct ModuleIconTile: View {
+    let name: String
+    var size: CGFloat = Theme.Icon.tile
+    /// nil 表示中性瓦片（emoji 场景）；传入强调色时瓦片底色跟随淡化。
+    var tint: Color? = nil
+
+    private var corner: CGFloat { Theme.Icon.corner(for: size) }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(tint.map { $0.opacity(0.12) } ?? Color.p4Tile)
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
+            ModuleIcon(name: name, glyphSize: Theme.Icon.glyph(for: size))
+                .foregroundStyle(tint ?? Color.accentColor)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - 详情页跳转行
+
+/// 详情页里的二级入口行：图标瓦片 + 标题 + 说明。
+///
+/// 放在 `NavigationLink` 的 label 里使用，系统会自动补 chevron 与按压高亮，
+/// 因此不额外加箭头，避免出现双箭头。
+struct NavRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    var tint: Color? = nil
+
+    var body: some View {
+        HStack(spacing: Theme.Icon.gap) {
+            ModuleIconTile(name: icon, size: Theme.Icon.smallTile, tint: tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, Theme.spacing(0.5))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(subtitle)")
+    }
+}
+
+// MARK: - 交互状态约定
+//
+// 功能区的可交互元素统一按下面三态呈现，避免同一页出现两套反馈：
+// - 按压：交给系统（List 行高亮、Toggle / Picker / Stepper 自带）；
+// - 忙：按钮内联 `ProgressView().controlSize(.small)`，同时 `.disabled(true)`；
+// - 生效：行尾用 `StatusChip`（如「爆闪中」「支持 / 不支持」），文字优先、颜色辅助。
 
 // MARK: - KPI 瓦片
 
 /// 关键指标瓦片：图标 + 名称 + 大数字（+ 单位）+ 备注。
 /// 设备未上报时传 "—"，不伪造数值。
+///
+/// 三层结构与 ShipSwift `SWKPICard` 一致：标题行（图标 + caption）→ 主数值 → 脚注。
+/// 数值使用 `numericText` 过渡，轮询刷新时数字是滚动变化而不是硬跳；
+/// 标题允许折到两行、脚注在大字号下允许两行，避免 Dynamic Type 放大后被截成 "AP …"。
 struct MetricTile: View {
     let icon: String
     let title: String
@@ -184,22 +342,28 @@ struct MetricTile: View {
     var tone: P4Tone = .info
     var footnote: String? = nil
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Image(systemName: icon)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(tone.color)
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
                     .font(Theme.TypeScale.metric())
                     .monospacedDigit()
+                    .contentTransition(.numericText())
                     .foregroundStyle(value == "—" ? Color.secondary : Color.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -207,8 +371,12 @@ struct MetricTile: View {
                     Text(unit).font(.caption2).foregroundStyle(.secondary)
                 }
             }
+            .animation(.snappy(duration: 0.25), value: value)
             if let footnote {
-                Text(footnote).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(footnote)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             }
         }
         .padding(Theme.spacing(1.5))

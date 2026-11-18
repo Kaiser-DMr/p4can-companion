@@ -26,7 +26,7 @@ struct LiveDataView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("全部数据")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索字段，如 can1 / gear / das / state")
+        .searchable(text: $query, prompt: L10n.t("搜索字段，如 can1 / gear / das / state", "Search fields, e.g. can1 / gear / das / state"))
         .refreshable { await environment.loadAllEndpoints() }
         .overlay(alignment: .bottom) { ToastOverlay() }
         .task { await poll() }
@@ -38,7 +38,7 @@ struct LiveDataView: View {
         Section {
             Toggle(isOn: $autoRefresh) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("自动刷新（3 秒）")
+                    Text(L10n.t("自动刷新（3 秒）", "Auto refresh (3 s)"))
                     Text("与设备网页使用同一批状态接口")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -48,7 +48,7 @@ struct LiveDataView: View {
                 Task { await environment.loadAllEndpoints() }
             } label: {
                 HStack {
-                    Label("立即刷新全部端点", systemImage: "arrow.clockwise")
+                    Label(L10n.t("立即刷新全部端点", "Refresh all endpoints"), systemImage: "arrow.clockwise")
                     Spacer()
                     if environment.isScanningEndpoints {
                         ProgressView()
@@ -67,7 +67,7 @@ struct LiveDataView: View {
             }
             LabeledContent(
                 "端点数据",
-                value: "\(environment.endpointPayloads.count) 成功 / \(environment.endpointErrors.count) 失败"
+                value: L10n.t("\(environment.endpointPayloads.count) 成功 / \(environment.endpointErrors.count) 失败", "\(environment.endpointPayloads.count) ok / \(environment.endpointErrors.count) failed")
             )
             .font(.footnote)
         } footer: {
@@ -101,7 +101,7 @@ struct LiveDataView: View {
                             }
                         }
                         if hasNested(payload) {
-                            DisclosureGroup("原始 JSON") {
+                            DisclosureGroup(L10n.t("原始 JSON", "Raw JSON")) {
                                 Text(payload.prettyText())
                                     .font(.system(.caption2, design: .monospaced))
                                     .foregroundStyle(.secondary)
@@ -114,7 +114,7 @@ struct LiveDataView: View {
                             Text(path)
                                 .font(.system(.footnote, design: .monospaced))
                             Spacer()
-                            Text("\(scalars.count) 字段")
+                            Text(L10n.t("\(scalars.count) 字段", "\(scalars.count) fields"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -141,12 +141,12 @@ struct LiveDataView: View {
         return Group {
             if matches.isEmpty {
                 Section {
-                    Text("没有匹配「\(query)」的字段")
+                    Text(L10n.t("没有匹配「\(query)」的字段", "No field matches “\(query)”"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Section("匹配 \(matches.count) 个字段") {
+                Section(L10n.t("匹配 \(matches.count) 个字段", "\(matches.count) matching fields")) {
                     ForEach(matches, id: \.id) { item in
                         VStack(alignment: .leading, spacing: 2) {
                             MetricRow(key: item.key, value: item.value)

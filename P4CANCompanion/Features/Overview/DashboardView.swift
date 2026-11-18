@@ -17,10 +17,11 @@ import Charts
 struct DashboardView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var showsGuide = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var updatedText: String {
         guard let date = environment.lastUpdated else { return "尚未同步" }
-        return "已同步 · \(date.formatted(date: .omitted, time: .standard))"
+        return L10n.t("已同步 · \(date.formatted(date: .omitted, time: .standard))", "Synced · \(date.formatted(date: .omitted, time: .standard))")
     }
 
     var body: some View {
@@ -39,6 +40,12 @@ struct DashboardView: View {
                     }
                     .padding(.horizontal, Theme.spacing(2))
                     .padding(.vertical, Theme.spacing(2))
+                    // 宽度只由容器决定：iPhone 上等于屏幕宽，iPad / Mac 窗口上封顶到 720 并居中。
+                    // 用 containerRelativeFrame 而不是 frame(maxWidth:)，是因为后者允许子视图
+                    // 用「理想宽度」把内容撑出屏幕（大字号时曾出现 484 > 393 的横向溢出）。
+                    .containerRelativeFrame(.horizontal) { length, _ in
+                        min(length, Theme.Layout.contentMaxWidth)
+                    }
                 }
                 .background(Color.p4Background)
                 .refreshable { await environment.refreshOnce() }
@@ -56,7 +63,7 @@ struct DashboardView: View {
                 }
                 #endif
                 .overlay(alignment: .bottom) { ToastOverlay() }
-                .navigationTitle("设备状态")
+                .navigationTitle(L10n.t("设备状态", "Status"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(Color.p4Background, for: .navigationBar)
                 .sheet(isPresented: $showsGuide) { ConnectionGuideView() }
@@ -102,12 +109,21 @@ struct DashboardView: View {
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.primary)
                     if let date = environment.cachedAt ?? environment.lastUpdated {
-                        Text("数据时间 \(date.formatted(date: .abbreviated, time: .standard)) · 恢复连接后自动刷新")
+                        Text(L10n.t("数据时间 \(date.formatted(date: .abbreviated, time: .standard)) · 恢复连接后自动刷新", "Data from \(date.formatted(date: .abbreviated, time: .standard)) · refreshes when reconnected"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer(minLength: 0)
+                Button {
+                    showsGuide = true
+                } label: {
+                    Text(L10n.t("排查", "Fix"))
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityLabel(L10n.t("打开连接排查", "Open connection troubleshooting"))
             }
             .padding(.horizontal, Theme.spacing(1.5))
             .padding(.vertical, Theme.spacing(1))
@@ -115,7 +131,7 @@ struct DashboardView: View {
                 Color.p4Warn.opacity(0.12),
                 in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
             )
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
         }
     }
 
@@ -126,38 +142,45 @@ struct DashboardView: View {
                     .fill(connectionTone.color)
                     .frame(width: 3)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(environment.profileName ?? "P4-CAN")
-                        .font(.title2.weight(.bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    Text(heroSubtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    // 只有「标题 + 胶囊」参与横向取舍：标题放得下就同行右对齐，
+                    // 大字号 / 长车型名放不下时改为上下排。副标题不参与，避免它把整行挤成竖排。
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: Theme.spacing(1)) {
+                            heroTitleText
+                            Spacer(minLength: Theme.spacing(1))
+                            connectionChip
+                        }
+                        VStack(alignment: .leading, spacing: Theme.spacing(1)) {
+                            heroTitleText
+                            connectionChip
+                        }
+                    }
+                    heroSubtitleText
                 }
-                Spacer(minLength: Theme.spacing(1))
-                StatusChip(text: connectionText, systemImage: connectionTone.symbol, tone: connectionTone)
             }
 
-            HStack(spacing: Theme.spacing(1)) {
+            // 三颗胶囊按可用宽度自动换行：大字号 / 窄屏下不会把「蓝牙开」压成竖排。
+            P4FlowLayout(spacing: Theme.spacing(1), lineSpacing: Theme.spacing(0.75)) {
                 StatusChip(text: "CAN \(onlineBusCount)/\(max(environment.canBuses.count, 1))", systemImage: "cable.connector", tone: busTone)
                 StatusChip(text: "\(L10n.t("蓝牙", "BT")) \(bluetoothText)",
                            systemImage: "dot.radiowaves.left.and.right", tone: bluetoothTone)
                 StatusChip(text: "LAB \(labText)", systemImage: "flask", tone: labTone)
-                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider().opacity(0.6)
 
-            HStack(spacing: 6) {
-                Image(systemName: "clock.arrow.circlepath").font(.caption2)
-                Text(updatedText).font(.caption2)
-                Spacer(minLength: Theme.spacing(1))
-                Text(environment.isOnline
-                     ? L10n.t("每 \(environment.pollIntervalMs) ms 自动同步",
-                              "Auto-sync every \(environment.pollIntervalMs) ms")
-                     : L10n.t("等待设备", "Waiting for device"))
-                    .font(.caption2)
+            // 同步时间与刷新间隔：大字号下改为两行，不再挤在一行里被裁切。
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    syncTimeLabel
+                    Spacer(minLength: Theme.spacing(1))
+                    pollIntervalLabel
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    syncTimeLabel
+                    pollIntervalLabel
+                }
             }
             .foregroundStyle(.secondary)
         }
@@ -167,6 +190,39 @@ struct DashboardView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var heroTitleText: some View {
+        Text(environment.profileName ?? "P4-CAN")
+            .font(.title2.weight(.bold))
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            .minimumScaleFactor(0.8)
+    }
+
+    private var heroSubtitleText: some View {
+        Text(heroSubtitle)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+    }
+
+    private var connectionChip: some View {
+        StatusChip(text: connectionText, systemImage: connectionTone.symbol, tone: connectionTone)
+    }
+
+    private var syncTimeLabel: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.arrow.circlepath").font(.caption2)
+            Text(updatedText).font(.caption2)
+        }
+    }
+
+    private var pollIntervalLabel: some View {
+        Text(environment.isOnline
+             ? L10n.t("每 \(environment.pollIntervalMs) ms 自动同步",
+                      "Auto-sync every \(environment.pollIntervalMs) ms")
+             : L10n.t("等待设备", "Waiting for device"))
+            .font(.caption2)
+    }
+
     private var connectionTone: P4Tone {
         if environment.isOnline { return .ok }
         if case .offline = environment.phase { return .err }
@@ -174,28 +230,28 @@ struct DashboardView: View {
     }
 
     private var connectionText: String {
-        if environment.isOnline { return "在线" }
-        if case .offline = environment.phase { return "离线" }
-        return "连接中"
+        if environment.isOnline { return L10n.t("在线", "Online") }
+        if case .offline = environment.phase { return L10n.t("离线", "Offline") }
+        return L10n.t("连接中", "Connecting")
     }
 
     private var heroSubtitle: String {
         var parts: [String] = []
         if let topology = environment.topologyName { parts.append(topology) }
         if let fw = environment.systemStats?["fwVersion"]?.stringValue ?? environment.stat("fwVersion")?.stringValue {
-            parts.append("固件 \(fw)")
+            parts.append(L10n.t("固件 \(fw)", "FW \(fw)"))
         }
         if parts.isEmpty, let turn = environment.profileStatus?["turnName"]?.stringValue {
-            parts.append("拨杆 \(turn)")
+            parts.append(L10n.t("拨杆 \(turn)", "Stalk \(turn)"))
         }
-        return parts.isEmpty ? "正在读取设备信息…" : parts.joined(separator: " · ")
+        return parts.isEmpty ? L10n.t("正在读取设备信息…", "Reading device info…") : parts.joined(separator: " · ")
     }
 
     @ViewBuilder
     private var setupModeBanner: some View {
         if environment.isSetupMode {
             Label(
-                "设备处于 Setup 模式：CAN 注入已禁用，需在设备网页选择车型并重启。",
+                L10n.t("设备处于 Setup 模式：CAN 注入已禁用，需在设备网页选择车型并重启。", "Setup mode: CAN injection is disabled. Choose the vehicle profile on the device page and reboot."),
                 systemImage: "gear.badge.questionmark"
             )
             .font(.footnote)
@@ -210,46 +266,47 @@ struct DashboardView: View {
 
     private var kpiGrid: some View {
         LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: Theme.spacing(1)), GridItem(.flexible(), spacing: Theme.spacing(1))],
+            // 自适应列：iPhone 竖屏 2 列，iPad / Mac 窗口自动变 3–4 列，指标不再被拉宽。
+            columns: [GridItem(.adaptive(minimum: 158), spacing: Theme.spacing(1))],
             spacing: Theme.spacing(1)
         ) {
             MetricTile(
                 icon: "steeringwheel",
-                title: "挡位",
+                title: L10n.t("挡位", "Gear"),
                 value: environment.group("r79")["gearName"]?.stringValue ?? "—",
                 tone: .info,
                 footnote: gearFootnote
             )
             MetricTile(
                 icon: "car.side",
-                title: "AP 状态",
-                value: boolText(environment.group("nag")["apActive"]?.boolValue, on: "激活", off: "未激活"),
+                title: L10n.t("AP 状态", "AP"),
+                value: boolText(environment.group("nag")["apActive"]?.boolValue, on: L10n.t("激活", "Active"), off: L10n.t("未激活", "Inactive")),
                 tone: environment.group("nag")["apActive"]?.boolValue == true ? .ok : .neutral,
-                footnote: "自动辅助驾驶"
+                footnote: L10n.t("自动辅助驾驶", "Autopilot")
             )
             MetricTile(
                 icon: "road.lanes",
                 title: "NOA",
-                value: boolText(environment.group("blink")["noaActive"]?.boolValue, on: "激活", off: "未激活"),
+                value: boolText(environment.group("blink")["noaActive"]?.boolValue, on: L10n.t("激活", "Active"), off: L10n.t("未激活", "Inactive")),
                 tone: environment.group("blink")["noaActive"]?.boolValue == true ? .ok : .neutral,
-                footnote: "导航辅助驾驶"
+                footnote: L10n.t("导航辅助驾驶", "Navigate on Autopilot")
             )
             MetricTile(
                 icon: "gauge.with.dots.needle.50percent",
-                title: "扭矩",
+                title: L10n.t("扭矩", "Torque"),
                 value: torqueText,
                 unit: "N·m",
                 tone: .info,
-                footnote: "方向盘实时扭矩"
+                footnote: L10n.t("方向盘实时扭矩", "Live wheel torque")
             )
         }
     }
 
     private var gearFootnote: String {
         if let source = environment.group("r79")["gearSourceName"]?.stringValue, !source.isEmpty {
-            return "来源 \(source)"
+            return L10n.t("来源 \(source)", "via \(source)")
         }
-        return "R79 挡位"
+        return L10n.t("R79 挡位", "R79 gear")
     }
 
     private var torqueText: String {
@@ -288,7 +345,7 @@ struct DashboardView: View {
     private var batteryCard: some View {
         if let soc = batterySoc {
             let fraction = min(max(soc.value / 100, 0), 1)
-            Card(title: "电池", systemImage: "battery.75percent") {
+            Card(title: L10n.t("电池", "Battery"), systemImage: "battery.75percent") {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.spacing(1)) {
                     Text(String(format: "%.0f", soc.value))
                         .font(Theme.TypeScale.metric(30))
@@ -305,7 +362,7 @@ struct DashboardView: View {
                     value: fraction,
                     tint: socTone(fraction),
                     height: 8,
-                    label: soc.value <= 20 ? "电量偏低" : "剩余电量"
+                    label: soc.value <= 20 ? L10n.t("电量偏低", "Low") : L10n.t("剩余电量", "Remaining")
                 )
             }
         }
@@ -321,11 +378,11 @@ struct DashboardView: View {
 
     /// 首页快捷开关（对应网页 homeQuickStrip：NAG / 自动转向灯 / TLSSC）。
     private var quickStrip: some View {
-        Card(title: "快捷开关", systemImage: "switch.2") {
+        Card(title: L10n.t("快捷开关", "Quick toggles"), systemImage: "switch.2") {
             VStack(spacing: Theme.spacing(1)) {
                 quickRow(
-                    title: "NAG 抑制",
-                    subtitle: "方向盘扭矩注入",
+                    title: L10n.t("NAG 抑制", "NAG suppression"),
+                    subtitle: L10n.t("方向盘扭矩注入", "Torque injection"),
                     systemImage: "hands.and.sparkles",
                     isOn: environment.nagConfig?["enabled"]?.boolValue,
                     supported: environment.capability("nagSupported") != false,
@@ -340,8 +397,8 @@ struct DashboardView: View {
                 )
                 Divider()
                 quickRow(
-                    title: "自动转向灯",
-                    subtitle: "拨杆触发自动打灯",
+                    title: L10n.t("自动转向灯", "Auto blinker"),
+                    subtitle: L10n.t("拨杆触发自动打灯", "Stalk-triggered blinker"),
                     systemImage: "arrow.triangle.turn.up.right.diamond",
                     isOn: environment.group("blink")["enabled"]?.boolValue,
                     supported: environment.capability("advancedEapSupported") != false,
@@ -356,8 +413,8 @@ struct DashboardView: View {
                 )
                 Divider()
                 quickRow(
-                    title: "TLSSC 注入",
-                    subtitle: "交通灯与停止标志控制",
+                    title: L10n.t("TLSSC 注入", "TLSSC injection"),
+                    subtitle: L10n.t("交通灯与停止标志控制", "Traffic light & stop sign control"),
                     systemImage: "car.top.radiowaves.rear.right",
                     isOn: environment.group("summon")["tlssc"]?.boolValue
                         ?? environment.slowGroups["summon"]?["tlssc"]?.boolValue,
@@ -401,7 +458,7 @@ struct DashboardView: View {
                 Toggle("", isOn: Binding(get: { isOn }, set: { action($0) }))
                     .labelsHidden()
                     .disabled(!supported || environment.isBusy || environment.isSetupMode)
-                    .accessibilityLabel("\(title)开关")
+                    .accessibilityLabel(L10n.t("\(title)开关", "\(title) switch"))
             } else {
                 Text("读取中…")
                     .font(.caption2)
@@ -414,15 +471,15 @@ struct DashboardView: View {
 
     /// 三路 CAN（CAN 1 BODY / CAN 2 CHASSIS / CAN 3 PARTY）。
     private var canBusCard: some View {
-        Card(title: "CAN 总线", systemImage: "cable.connector") {
+        Card(title: L10n.t("CAN 总线", "CAN buses"), systemImage: "cable.connector") {
             if environment.canBuses.isEmpty {
-                Text("快照 cantraffic 组尚未返回，请在「全部数据」查看 /api/snapshot。")
+                Text(L10n.t("快照 cantraffic 组尚未返回，请在「全部数据」查看 /api/snapshot。", "The cantraffic group has not returned yet; check /api/snapshot under All data."))
                     .font(.footnote).foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
                     HStack {
                         StatusChip(
-                            text: "\(onlineBusCount)/\(environment.canBuses.count) 在线",
+                            text: L10n.t("\(onlineBusCount)/\(environment.canBuses.count) 在线", "\(onlineBusCount)/\(environment.canBuses.count) online"),
                             systemImage: busTone.symbol,
                             tone: busTone
                         )
@@ -448,7 +505,7 @@ struct DashboardView: View {
                     NavigationLink {
                         LiveDataView()
                     } label: {
-                        Label("查看全部总线字段", systemImage: "chevron.right")
+                        Label(L10n.t("查看全部总线字段", "All bus fields"), systemImage: "list.bullet.rectangle")
                             .font(.footnote.weight(.medium))
                     }
                 }
@@ -471,20 +528,18 @@ struct DashboardView: View {
                 StatusChip(text: bus.stateText, systemImage: P4BusState.symbol(for: bus.stateText), tone: tone)
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
+            // 三个计数保持固定组距（不再各占 1/3 宽度），宽屏下不会散落到卡片两端。
+            HStack(alignment: .firstTextBaseline, spacing: Theme.spacing(2.5)) {
                 counter("收", bus.rxCount)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 counter("发", bus.txAccepted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 counter("拒", bus.txRejected ?? 0, tone: (bus.txRejected ?? 0) > 0 ? .warn : .neutral)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: Theme.spacing(1))
                 if let busOff = bus.busOff, busOff > 0 {
                     StatusChip(text: "Bus-Off \(P4Format.number(busOff))", tone: .err)
                 } else if let age = bus.trafficAgeMs, age >= 0 {
-                    Text("\(P4Format.milliseconds(age))前")
+                    Text(L10n.t("\(P4Format.milliseconds(age))前", "\(P4Format.milliseconds(age)) ago"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
                         .lineLimit(1)
                 }
             }
@@ -499,7 +554,7 @@ struct DashboardView: View {
                         .frame(width: 34, alignment: .trailing)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(bus.displayName) 发送成功率 \(Int(rate * 100))%")
+                .accessibilityLabel(L10n.t("\(bus.displayName) 发送成功率 \(Int(rate * 100))%", "\(bus.displayName) TX success rate \(Int(rate * 100))%"))
             }
         }
     }
@@ -514,7 +569,7 @@ struct DashboardView: View {
                 .minimumScaleFactor(0.7)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label) \(value.map { P4Format.number($0) } ?? "无数据")")
+        .accessibilityLabel("\(label) \(value.map { P4Format.number($0) } ?? L10n.t("无数据", "no data"))")
     }
 
     /// 发送成功率 = 接受 / (接受 + 拒绝)；无数据返回 nil（不显示假的 100%）。
@@ -576,9 +631,9 @@ struct DashboardView: View {
     // MARK: - 5. 扭矩趋势
 
     private var trendCard: some View {
-        Card(title: "扭矩趋势 · 近 3 分钟", systemImage: "chart.xyaxis.line") {
+        Card(title: L10n.t("扭矩趋势 · 近 3 分钟", "Torque trend · last 3 min"), systemImage: "chart.xyaxis.line") {
             if environment.trendSamples.count < 2 {
-                Text("等待 NAG 扭矩数据（需车辆唤醒）…")
+                Text(L10n.t("等待 NAG 扭矩数据（需车辆唤醒）…", "Waiting for NAG torque (wake the car)…"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
@@ -651,13 +706,14 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) \(value.map { String(format: "%.2f", $0) } ?? "无数据") 牛米")
+        .accessibilityLabel(L10n.t("\(title) \(value.map { String(format: "%.2f", $0) } ?? "无数据") 牛米",
+                                    "\(title) \(value.map { String(format: "%.2f", $0) } ?? "no data") N·m"))
     }
 
     // MARK: - 6. 车型与能力
 
     private var vehicleCard: some View {
-        Card(title: "车型与能力", systemImage: "car.side") {
+        Card(title: L10n.t("车型与能力", "Vehicle & capabilities"), systemImage: "car.side") {
             VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
                 if let profileName = environment.profileName {
                     HStack(spacing: Theme.spacing(1)) {
@@ -697,7 +753,7 @@ struct DashboardView: View {
         .padding(.vertical, 6)
         .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) 角色 \(value)")
+        .accessibilityLabel(L10n.t("\(title) 角色 \(value)", "\(title) role \(value)"))
     }
 
     private struct CapabilityChip: Identifiable {
@@ -715,7 +771,7 @@ struct DashboardView: View {
             .init(id: "BODY CTRL", icon: "car.side.front.open", supported: environment.capability("bodyControlsSupported")),
         ]
         return LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: Theme.spacing(1)), GridItem(.flexible(), spacing: Theme.spacing(1))],
+            columns: [GridItem(.adaptive(minimum: 148), spacing: Theme.spacing(1))],
             alignment: .leading,
             spacing: Theme.spacing(1)
         ) {
@@ -736,7 +792,7 @@ struct DashboardView: View {
                 .padding(.vertical, 7)
                 .background(tone.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(item.id) \(item.supported == true ? "支持" : item.supported == false ? "不支持" : "未知")")
+                .accessibilityLabel("\(item.id) \(item.supported == true ? L10n.t("支持", "supported") : item.supported == false ? L10n.t("不支持", "unsupported") : L10n.t("未知", "unknown"))")
             }
         }
     }
@@ -744,11 +800,11 @@ struct DashboardView: View {
     // MARK: - 7. 次要信息
 
     private var bluetoothCard: some View {
-        Card(title: "蓝牙（S3XY）", systemImage: "dot.radiowaves.left.and.right") {
+        Card(title: L10n.t("蓝牙（S3XY）", "Bluetooth (S3XY)"), systemImage: "dot.radiowaves.left.and.right") {
             HStack(spacing: Theme.spacing(2)) {
-                bluetoothStat(title: "总开关", value: bluetoothText, tone: bluetoothTone)
-                bluetoothStat(title: "已配对", value: environment.s3xyStats?["pairedCount"]?.intValue.map(String.init) ?? "—")
-                bluetoothStat(title: "已连接", value: environment.s3xyStats?["connectedCount"]?.intValue.map(String.init) ?? "—")
+                bluetoothStat(title: L10n.t("总开关", "Enabled"), value: bluetoothText, tone: bluetoothTone)
+                bluetoothStat(title: L10n.t("已配对", "Paired"), value: environment.s3xyStats?["pairedCount"]?.intValue.map(String.init) ?? "—")
+                bluetoothStat(title: L10n.t("已连接", "Connected"), value: environment.s3xyStats?["connectedCount"]?.intValue.map(String.init) ?? "—")
                 Spacer(minLength: 0)
             }
             Text("在「蓝牙」标签页完成扫描、配对与动作绑定")
@@ -767,7 +823,7 @@ struct DashboardView: View {
     }
 
     private var otaCard: some View {
-        Card(title: "固件升级", systemImage: "arrow.down.circle") {
+        Card(title: L10n.t("固件升级", "Firmware update"), systemImage: "arrow.down.circle") {
             if let ota = environment.otaStatus?.objectValue,
                ota["inProgress"]?.boolValue == true {
                 let received = ota["receivedBytes"]?.doubleValue ?? 0
@@ -782,12 +838,12 @@ struct DashboardView: View {
                 }
             } else {
                 HStack {
-                    StatusChip(text: "空闲", systemImage: "checkmark.circle", tone: .neutral)
+                    StatusChip(text: L10n.t("空闲", "Idle"), systemImage: "checkmark.circle", tone: .neutral)
                     Spacer()
                     Text("在「系统」页上传 .ino.bin").font(.caption).foregroundStyle(.secondary)
                 }
                 if let error = environment.otaStatus?["error"]?.boolValue, error {
-                    Label(environment.otaStatus?["updateError"]?.stringValue ?? "上次升级失败", systemImage: "exclamationmark.triangle")
+                    Label(environment.otaStatus?["updateError"]?.stringValue ?? L10n.t("上次升级失败", "Last update failed"), systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.p4Err)
                 }
             }
@@ -795,7 +851,7 @@ struct DashboardView: View {
     }
 
     private var deviceCard: some View {
-        Card(title: "设备", systemImage: "memorychip") {
+        Card(title: L10n.t("设备", "Device"), systemImage: "memorychip") {
             VStack(spacing: Theme.spacing(1)) {
                 ForEach(deviceKeys, id: \.self) { key in
                     if let value = environment.systemStats?[key] ?? environment.stat(key) {
@@ -812,14 +868,14 @@ struct DashboardView: View {
 
     /// 锁屏 / 灵动岛实时活动开关。
     private var liveActivityCard: some View {
-        Card(title: "锁屏与灵动岛", systemImage: "platter.filled.top.and.arrow.up.iphone") {
+        Card(title: L10n.t("锁屏与灵动岛", "Lock screen & Dynamic Island"), systemImage: "platter.filled.top.and.arrow.up.iphone") {
             Toggle(isOn: Binding(
                 get: { environment.liveActivityEnabled },
                 set: { environment.setLiveActivity($0) }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("显示实时状态").font(.subheadline)
-                    Text("三路总线在线情况 + 挡位 + NAG / Blink / TLSSC")
+                    Text(L10n.t("三路总线在线情况 + 挡位 + NAG / Blink / TLSSC", "Bus status + gear + NAG / Blink / TLSSC"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -827,7 +883,7 @@ struct DashboardView: View {
             .disabled(!environment.isLiveActivitySupported)
             .accessibilityLabel("锁屏与灵动岛实时状态开关")
             if !environment.isLiveActivitySupported {
-                Text("系统已关闭实时活动权限，可在 设置 → P4管家 中开启。")
+                Text(L10n.t("系统已关闭实时活动权限，可在 设置 → P4管家 中开启。", "Live Activities are off. Enable them in Settings → P4管家."))
                     .font(.caption2)
                     .foregroundStyle(.p4Warn)
             }
@@ -839,7 +895,7 @@ struct DashboardView: View {
     private var offlineContent: some View {
         VStack(spacing: Theme.spacing(2)) {
             heroCard
-            Card(title: "等待设备", systemImage: "antenna.radiowaves.left.and.right") {
+            Card(title: L10n.t("等待设备", "Waiting for device"), systemImage: "antenna.radiowaves.left.and.right") {
                 VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
                     if case .offline(let reason) = environment.phase {
                         Label(reason, systemImage: "wifi.exclamationmark")
