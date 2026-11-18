@@ -154,6 +154,9 @@ final class AppEnvironment: ObservableObject {
         P4Route.driverWindowStats,
         P4Route.wifiStatus,
         P4Route.otaStatus,
+        // 灯光爆闪：这两条原先没进浏览清单，现场排查时搜不到 beam/held 等字段
+        P4Route.headlightStrobeStats,
+        P4Route.rearFogStrobeStats,
     ]
 
     /// 离线时放慢重试；在线间隔由用户设置（默认 500 ms，与网页一致）。
