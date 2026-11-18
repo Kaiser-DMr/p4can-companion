@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P4 管家 · UI 重设计方案 v1</title>
+<style>
+  :root{
+    --ink:#0E1116;
+    --ink-2:#3C4450;
+    --ink-3:#6C7683;
+    --line:#E5E7EB;
+    --paper:#FFFFFF;
+    --paper-2:#F6F7F9;
+    --accent:#B26A00;
+    --accent-soft:#FFF3DC;
+    --ok:#0E7A5F;
+    --err:#B3261E;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--paper-2);color:var(--ink);
+    font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:56px 28px 96px}
+  header.hero{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:44px}
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px}
+  h1{font-size:38px;line-height:1.2;letter-spacing:-.02em;margin:0 0 12px;font-weight:700}
+  .lede{font-size:17px;color:var(--ink-2);max-width:760px;margin:0}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:18px;font-size:13px;color:var(--ink-3)}
+  .meta b{color:var(--ink-2);font-weight:600}
+
+  section{margin:56px 0 0}
+  h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 18px;font-weight:600}
+  h3{font-size:20px;margin:0 0 8px;letter-spacing:-.01em}
+  p{margin:0 0 12px;color:var(--ink-2)}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media (max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px}
+  .card h4{margin:0 0 6px;font-size:15px}
+  .card p{font-size:13.5px;margin:0}
+  .num{font:600 12px/1 var(--mono);color:var(--accent);letter-spacing:.06em}
+
+  ul.clean{margin:0;padding-left:18px;color:var(--ink-2);font-size:14px}
+  ul.clean li{margin:0 0 6px}
+
+  /* token swatches */
+  .swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  @media (max-width:900px){.swatches{grid-template-columns:repeat(3,1fr)}}
+  .sw{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+  .sw i{display:block;height:56px}
+  .sw span{display:block;padding:8px 10px;font-size:11px;color:var(--ink-3);line-height:1.4}
+  .sw b{display:block;color:var(--ink);font:600 12px/1.4 var(--mono)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:600}
+  td.mono{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+
+  .stage{background:#0B0D10;border-radius:20px;padding:34px 24px;display:flex;gap:26px;justify-content:center;flex-wrap:wrap}
+  .phone{width:390px;height:844px;background:#000;border-radius:52px;padding:10px;box-shadow:0 30px 60px rgba(0,0,0,.35);flex:0 0 auto}
+  .screen{position:relative;width:100%;height:100%;background:#0B0D10;border-radius:44px;overflow:hidden;color:#F2F5F9;display:flex;flex-direction:column}
+  .island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:112px;height:30px;background:#000;border-radius:16px;z-index:9}
+  .statusbar{height:52px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;color:#C9D1DB;flex:0 0 auto}
+  .navbar{display:flex;align-items:center;justify-content:space-between;padding:6px 20px 10px;flex:0 0 auto}
+  .navbar h5{margin:0;font-size:20px;letter-spacing:-.01em}
+  .navbar .r{width:34px;height:34px;border-radius:50%;background:#171C24;display:grid;place-items:center;color:#9AA4B2;font-size:15px}
+  .scroll{flex:1;overflow:hidden;padding:6px 16px 92px}
+  .tabbar{position:absolute;left:10px;right:10px;bottom:10px;height:72px;border-radius:22px;background:rgba(20,24,31,.92);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-around;padding:0 8px}
+  .tabbar div{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:#7C8797}
+  .tabbar div.on{color:#FFB020}
+  .tabbar svg{width:21px;height:21px}
+
+  .p-card{background:#14181F;border:1px solid rgba(255,255,255,.06);border-radius:18px;padding:16px;margin:0 0 12px}
+  .p-card.tight{padding:14px 16px}
+  .overline{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#78828F;margin:18px 4px 8px;font-weight:600}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0}
+  .row + .row{border-top:1px solid rgba(255,255,255,.055)}
+  .row .k{font-size:15px;color:#E8EDF4}
+  .row .k small{display:block;font-size:12px;color:#77818F;margin-top:2px}
+  .row .v{font-size:15px;font-variant-numeric:tabular-nums;color:#AEB8C5}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.01em}
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .pill.ok{color:#3DDC97;background:rgba(61,220,151,.12)}
+  .pill.warn{color:#FFB020;background:rgba(255,176,32,.13)}
+  .pill.err{color:#FF6B6B;background:rgba(255,107,107,.13)}
+  .pill.idle{color:#93A0B0;background:rgba(147,160,176,.12)}
+
+  .hero-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,.06);border-radius:14px;overflow:hidden;margin-top:14px}
+  .hm{background:#14181F;padding:12px 12px 14px}
+  .hm .lab{font-size:11px;color:#7C8797;letter-spacing:.04em}
+  .hm .val{font-size:26px;font-weight:650;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+  .hm .val span{font-size:12px;font-weight:500;color:#8792A1;margin-left:2px}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:14px;font-size:15px;font-weight:600;border:0}
+  .btn.primary{background:#FFB020;color:#1A1200}
+  .btn.secondary{background:#1B2029;color:#E8EDF4;border:1px solid rgba(255,255,255,.09)}
+  .btn.danger{background:rgba(255,107,107,.12);color:#FF8080;border:1px solid rgba(255,107,107,.25)}
+  .btn.block{width:100%}
+  .btn.sm{height:40px;font-size:13.5px;padding:0 16px;border-radius:12px}
+
+  .ruler{position:relative;height:70px;background:#101419;border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden;margin-top:10px}
+  .ticks{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;gap:0;padding-top:14px}
+  .tick{flex:0 0 14px;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .tick i{width:1px;height:10px;background:rgba(255,255,255,.18)}
+  .tick.maj i{height:18px;width:1.5px;background:rgba(255,255,255,.34)}
+  .tick span{font-size:10px;color:#6F7A88;font-variant-numeric:tabular-nums}
+  .tick.sel i{background:#FFB020;width:2px;height:22px}
+  .cursor{position:absolute;left:50%;top:0;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #FFB020}
+  .ruler-head{display:flex;align-items:baseline;justify-content:space-between}
+  .ruler-head .t{font-size:13px;color:#AEB8C5}
+  .ruler-head .n{font-size:24px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .ruler-head .n em{font-style:normal;font-size:12px;color:#8792A1;font-weight:500;margin-left:3px}
+
+  .icon-tile{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto}
+  .it-amber{background:rgba(255,176,32,.13);color:#FFB020}
+  .it-blue{background:rgba(90,169,255,.13);color:#5AA9FF}
+  .it-green{background:rgba(61,220,151,.12);color:#3DDC97}
+  .it-grey{background:rgba(147,160,176,.12);color:#9AA4B2}
+  .feat{display:flex;align-items:center;gap:12px;padding:12px 0}
+  .feat + .feat{border-top:1px solid rgba(255,255,255,.055)}
+  .feat .txt{flex:1}
+  .feat .txt b{display:block;font-size:15px;font-weight:600;color:#EDF1F6}
+  .feat .txt small{font-size:12px;color:#77818F}
+  .chev{color:#4C5663;font-size:15px}
+
+  /* desktop mock */
+  .desk{width:1040px;max-width:100%;height:660px;background:#0B0D10;border-radius:16px;border:1px solid #232932;display:flex;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,.35)}
+  .side{width:216px;background:#0E1218;border-right:1px solid #1B212A;padding:18px 12px;color:#C7D0DB;display:flex;flex-direction:column;gap:4px}
+  .side .brand{font-size:13px;font-weight:700;letter-spacing:.04em;color:#E8EDF4;padding:4px 10px 14px}
+  .side a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;font-size:13.5px;color:#9BA6B4;text-decoration:none}
+  .side a.on{background:rgba(255,176,32,.12);color:#FFB020}
+  .main{flex:1;padding:22px 26px;overflow:hidden}
+  .main h6{margin:0 0 4px;font-size:18px;color:#F2F5F9;letter-spacing:-.01em}
+  .main .sub{font-size:12.5px;color:#7C8797;margin-bottom:16px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+  .step{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+  .arrow{color:var(--ink-3)}
+  .note{background:var(--accent-soft);border:1px solid #F3D9A8;border-radius:12px;padding:12px 14px;font-size:13px;color:#6B4400}
+  footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;font-size:12px;color:var(--ink-3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="kicker">P4 管家 · 界面重设计</p>
+    <h1>把「参数面板」做成「仪表盘」</h1>
+    <p class="lede">
+      现在的问题不是某一页不好看，而是没有统一的视觉语言：emoji 图标、三种按钮尺寸、数值与单位各排各的、状态信息在三个地方重复。这份方案给出一套可落地的设计系统，并用真实页面稿验证它在手机与 Mac 上都成立。
+    </p>
+    <div class="meta">
+      <span><b>版本</b> v1.0</span>
+      <span><b>日期</b> 2026-11-18</span>
+      <span><b>适用</b> iPhone / Mac Catalyst</span>
+      <span><b>落地</b> SwiftUI（iOS 17+）</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>01 · 现状诊断</h2>
+    <div class="grid g2">
+      <div class="card"><span class="num">A</span><h4>视觉语言不统一</h4><p>功能页用彩色 emoji 瓦片，设置页是纯文字行，详情页混用胶囊、卡片、系统行；同一类「入口」有三种长相。</p></div>
+      <div class="card"><span class="num">B</span><h4>按钮没有层级</h4><p>50pt 全宽填充、44pt 胶囊、行内文字按钮同时出现，主次不分，主操作用户反而要多找一秒。</p></div>
+      <div class="card"><span class="num">C</span><h4>数值可读性差</h4><p>数值靠右小字、单位混在字符串里、比例字体导致数字跳动；滑动条与步进器混用。</p></div>
+      <div class="card"><span class="num">D</span><h4>状态重复且分散</h4><p>「爆闪中」在行尾胶囊、状态行、footer 各说一遍；用户需要读三处才能确认当前状态。</p></div>
+      <div class="card"><span class="num">E</span><h4>缺少桌面思路</h4><p>Mac 版只是把手机列表拉宽，宽屏出现大片空白，信息密度反而低于手机。</p></div>
+      <div class="card"><span class="num">F</span><h4>色彩语义过载</h4><p>绿/橙/红/蓝随处使用，强调色不唯一，导致「哪一个是主操作」需要靠猜。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>02 · 设计目标与原则</h2>
+    <div class="grid g4">
+      <div class="card"><h4>像仪表，不像设置</h4><p>大数字、等宽字形、克制的装饰；一屏之内回答「车在什么状态、我能做什么」。</p></div>
+      <div class="card"><h4>一个强调色</h4><p>只有琥珀色代表「可执行的主操作」；绿/红只表示结果状态，不再参与装饰。</p></div>
+      <div class="card"><h4>熟悉感优先</h4><p>沿用 iOS 原生导航、分组列表、SF Symbols、系统手势；不发明新交互，只重排层级。</p></div>
+      <div class="card"><h4>两档信息密度</h4><p>手机=一次一件事；Mac=同屏两列，指针与键盘可达，不做简单放大。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>03 · 整体风格 · Instrument Dark</h2>
+    <p>主推深色「驾驶舱」：车内夜间使用不刺眼，数据对比度高。浅色作为系统跟随的备选，使用同一套层级与强调色，不做第二套设计。</p>
+    <div class="swatches" style="margin-top:16px">
+      <div class="sw"><i style="background:#0B0D10"></i><span><b>#0B0D10</b>画布</span></div>
+      <div class="sw"><i style="background:#14181F"></i><span><b>#14181F</b>卡片</span></div>
+      <div class="sw"><i style="background:#1B2029"></i><span><b>#1B2029</b>浮层/次级</span></div>
+      <div class="sw"><i style="background:#FFB020"></i><span><b>#FFB020</b>强调（主操作）</span></div>
+      <div class="sw"><i style="background:#3DDC97"></i><span><b>#3DDC97</b>正常</span></div>
+      <div class="sw"><i style="background:#FF6B6B"></i><span><b>#FF6B6B</b>危险/失败</span></div>
+    </div>
+    <div class="note" style="margin-top:16px">
+      浅色模式映射：画布 <b>#F6F7F9</b>、卡片 <b>#FFFFFF</b>、强调 <b>#B26A00</b>（保证白底对比度 ≥ 4.5:1）、正常 <b>#0E7A5F</b>、危险 <b>#B3261E</b>。切主题只换 token，不换布局。
+    </div>
+  </section>
+
+  <section>
+    <h2>04 · 字体与数字规范</h2>
+    <table>
+      <thead><tr><th>用途</th><th>样式</th><th>字号/字重</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>页面标题</td><td class="mono">.title2 / semibold</td><td>22 / 600</td><td>导航栏内联，不再用超大标题占空间</td></tr>
+        <tr><td>关键数值</td><td class="mono">rounded / semibold</td><td>26–34 / 600</td><td>圆体 + 等宽数字（tabular-nums），切换数值不抖动</td></tr>
+        <tr><td>行标题</td><td class="mono">.body</td><td>17 / 400</td><td>单行，超长省略而非换行</td></tr>
+        <tr><td>行说明</td><td class="mono">.footnote</td><td>13 / 400</td><td>次要色，最多两行</td></tr>
+        <tr><td>分组标题</td><td class="mono">.caption2 + 字距</td><td>11 / 600</td><td>全大写+加宽字距，替换 emoji 标题</td></tr>
+        <tr><td>单位</td><td class="mono">.footnote</td><td>13 / 500</td><td>永远独立于数值，置于其后、次要色</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:14px">数字统一 <span class="mono">font-variant-numeric: tabular-nums</span>；小数位按量程固定（扭矩 2 位、时长 1 位、字节 1 位），不做可变精度。</p>
+  </section>
+
+  <section>
+    <h2>05 · 核心组件</h2>
+    <div class="grid g3">
+      <div class="card">
+        <h4>按钮（三种，仅三种）</h4>
+        <p style="margin-bottom:10px">Primary 琥珀实心 / Secondary 深色描边 / Destructive 红字浅底。统一 48pt 高、14pt 圆角、水平 20pt 内边距。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="btn primary sm" style="background:#FFB020;color:#1A1200">立即爆闪</span>
+          <span class="btn secondary sm">取消</span>
+          <span class="btn danger sm">停止并恢复</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>状态胶囊</h4>
+        <p style="margin-bottom:10px">一个页面只出现一次当前状态；带圆点，颜色只表达结果。</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span class="pill ok"><i class="dot"></i>在线</span>
+          <span class="pill warn"><i class="dot"></i>爆闪中</span>
+          <span class="pill err"><i class="dot"></i>已拦截</span>
+          <span class="pill idle"><i class="dot"></i>就绪</span>
+        </div>
+      </div>
+      <div class="card">
+        <h4>指标块 Metric</h4>
+        <p style="margin-bottom:10px">数值 26pt 等宽，单位 12pt 次要色，标签 11pt；三块一组，用 1px 分割。</p>
+        <div style="display:flex;gap:14px;background:#0B0D10;border-radius:12px;padding:12px">
+          <div><div style="font-size:10px;color:#7C8797">挡位</div><div style="font-size:22px;color:#F2F5F9;font-weight:650">D</div></div>
+          <div><div style="font-size:10px;color:#7C8797">扭矩</div><div style="font-size:22px;color:#F2F5F9;font-weight:650">1.35<span style="font-size:10px;color:#8792A1;margin-left:3px">N·m</span></div></div>
+          <div><div style="font-size:10px;color:#7C8797">电量</div><div style="font-size:22px;color:#F2F5F9;font-weight:650">68<span style="font-size:10px;color:#8792A1;margin-left:3px">%</span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h4>控制行 ControlRow</h4>
+        <p style="margin-bottom:10px">图标瓦片 38pt + 标题/说明 + 尾部开关或数值；整行可点，命中区 ≥ 44pt。</p>
+        <div style="background:#0B0D10;border-radius:12px;padding:6px 12px">
+          <div class="feat"><span class="icon-tile it-amber">⚡</span><div class="txt"><b>前大灯爆闪</b><small>按住拨杆 2.5 s 触发</small></div><span class="chev">›</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h4>刻度尺 Slider</h4>
+        <p style="margin-bottom:10px">所有可调数值统一用它：拖动吸附、点击跳值、触感反馈；数值在标题右侧实时显示。</p>
+        <div style="background:#0B0D10;border-radius:12px;padding:12px">
+          <div class="ruler-head" style="margin-bottom:6px"><span class="t">间隔</span><span class="n">100<em>ms</em></span></div>
+          <div class="ruler" data-from="50" data-to="500" data-step="10" data-label-every="50" data-value="100" style="height:56px"></div>
+        </div>      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>06 · 页面布局（手机）</h2>
+    <p>三段式：<b>概览（我现在怎么样）→ 控制（我能做什么）→ 细节（参数与诊断）</b>。所有页面共享同一节奏：16pt 边距、18pt 卡片圆角、12pt 卡片间距。</p>
+
+    <div class="stage" style="margin-top:18px">
+      <!-- 状态 -->
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>23:04</span><span>●●● ⌁ ▮</span></div>
+        <div class="navbar"><h5>状态</h5><div class="r">⚙</div></div>
+        <div class="scroll">
+          <div class="p-card">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <div style="font-size:17px;font-weight:650">Model Y · Juniper</div>
+                <div style="font-size:12px;color:#77818F;margin-top:2px">BODY + CHASSIS + PARTY · 固件 v3.29.3</div>
+              </div>
+              <span class="pill ok"><i class="dot"></i>在线</span>
+            </div>
+            <div class="hero-metrics">
+              <div class="hm"><div class="lab">挡位</div><div class="val">D</div></div>
+              <div class="hm"><div class="lab">扭矩</div><div class="val">1.35<span>N·m</span></div></div>
+              <div class="hm"><div class="lab">电量</div><div class="val">68<span>%</span></div></div>
+            </div>
+          </div>
+
+          <div class="overline">驾驶辅助</div>
+          <div class="p-card tight">
+            <div class="row"><div class="k">AP 状态</div><div class="v">激活</div></div>
+            <div class="row"><div class="k">NAG 抑制</div><div class="v">已开启</div></div>
+            <div class="row"><div class="k">CAN 总线</div><div class="v">3 / 3 在线</div></div>
+          </div>
+
+
+        </div>
+        <div class="tabbar">
+          <div class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span>状态</span></div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>功能</span></div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h6v5l4 9a2 2 0 0 1-2 3H7a2 2 0 0 1-2-3l4-9z"/></svg><span>实验室</span></div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7l10 10M17 7L7 17"/></svg><span>蓝牙</span></div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>系统</span></div>
+        </div>
+      </div></div>
+
+      <!-- 功能 -->
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>23:04</span><span>●●● ⌁ ▮</span></div>
+        <div class="navbar"><h5>功能</h5><div class="r">⌕</div></div>
+        <div class="scroll">
+          <div class="overline" style="margin-top:4px">灯光</div>
+          <div class="p-card tight">
+            <div class="feat"><span class="icon-tile it-amber">☀</span><div class="txt"><b>前大灯爆闪</b><small>按住拨杆 2.5 秒 · 10 次 / 100 ms</small></div><span class="pill warn" style="margin-right:6px"><i class="dot"></i>运行中</span><span class="chev">›</span></div>
+            <div class="feat"><span class="icon-tile it-amber">◍</span><div class="txt"><b>后雾灯爆闪</b><small>最长 30 秒 · 需车身总线在线</small></div><span class="chev">›</span></div>
+          </div>
+
+          <div class="overline">驾驶辅助</div>
+          <div class="p-card tight">
+            <div class="feat"><span class="icon-tile it-blue">◈</span><div class="txt"><b>NAG 抑制</b><small>方向盘扭矩注入</small></div><span class="chev">›</span></div>
+            <div class="feat"><span class="icon-tile it-blue">↔</span><div class="txt"><b>自动转向灯</b><small>拨杆触发自动打灯</small></div><span class="chev">›</span></div>
+            <div class="feat"><span class="icon-tile it-grey">▤</span><div class="txt"><b>ISA 抑制</b><small>限速识别提示</small></div><span class="pill idle">关闭</span></div>
+          </div>
+
+
+        </div>
+        <div class="tabbar">
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span>状态</span></div>
+          <div class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>功能</span></div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h6v5l4 9a2 2 0 0 1-2 3H7a2 2 0 0 1-2-3l4-9z"/></svg><span>实验室</span></div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 7l10 10M17 7L7 17"/></svg><span>蓝牙</span></div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>系统</span></div>
+        </div>
+      </div></div>
+
+      <!-- 详情 -->
+      <div class="phone"><div class="screen">
+        <div class="island"></div>
+        <div class="statusbar"><span>23:04</span><span>●●● ⌁ ▮</span></div>
+        <div class="navbar"><h5 style="font-size:17px">‹ 前大灯爆闪</h5><span class="pill idle">就绪</span></div>
+        <div class="scroll" style="padding-top:2px">
+          <div class="p-card">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+              <div>
+                <div style="font-size:12px;color:#77818F">按住远光拨杆</div>
+                <div style="font-size:30px;font-weight:650;letter-spacing:-.02em;margin-top:2px">2.5<span style="font-size:13px;color:#8792A1;font-weight:500">秒</span></div>
+              </div>
+              <div style="width:52px;height:32px;border-radius:999px;background:#FFB020;position:relative"><span style="position:absolute;right:3px;top:3px;width:26px;height:26px;border-radius:50%;background:#1A1200"></span></div>
+            </div>
+            <div style="font-size:12px;color:#77818F;margin-top:8px">拉住拨杆到设定时长开始爆闪，松开立即停止并恢复原灯光。</div>
+          </div>
+
+          <div style="display:flex;gap:10px;margin:14px 0 4px">
+            <span class="btn primary block" style="background:#FFB020;color:#1A1200">立即爆闪</span>
+          </div>
+          <div style="font-size:11.5px;color:#7C8797;text-align:center;margin-bottom:14px">参数改动需先保存；爆闪期间可随时停止</div>
+
+          <div class="overline" style="margin-top:6px">参数</div>
+          <div class="p-card">
+            <div class="ruler-head"><span class="t">闪烁次数</span><span class="n">10<em>次</em></span></div>
+            <div class="ruler" data-from="1" data-to="30" data-step="1" data-label-every="5" data-value="10" style="height:58px"></div>
+
+            <div class="ruler-head" style="margin-top:16px"><span class="t">间隔</span><span class="n">100<em>ms</em></span></div>
+            <div class="ruler" data-from="50" data-to="500" data-step="10" data-label-every="50" data-value="100" style="height:58px"></div>
+            <div style="font-size:11.5px;color:#7C8797;margin-top:10px">总时长 = 次数 × 2 × 间隔 = 2.0 s</div>
+          </div>
+
+        </div>
+      </div></div>
+    </div>
+    <p style="margin-top:16px;font-size:13px;color:var(--ink-3)">左：状态 · 中：功能 · 右：前大灯详情（操作在上、参数在下、状态只出现一次）</p>
+  </section>
+
+  <section>
+    <h2>07 · 桌面端（Mac Catalyst）</h2>
+    <p>不用手机布局拉伸：左侧固定导航、右侧内容区最大 1080pt 居中，宽度 ≥ 900pt 时卡片自动两列；指针悬停出现 hover 反馈，行高比手机更紧凑。</p>
+    <div class="stage" style="margin-top:16px;padding:24px">
+      <div class="desk">
+        <div class="side">
+          <div class="brand">P4 管家</div>
+          <a class="on">◉ 状态</a>
+          <a>▦ 功能</a>
+          <a>⚗ 实验室</a>
+          <a>✳ 蓝牙</a>
+          <a>⚙ 系统</a>
+          <div style="margin-top:auto;font-size:11px;color:#5C6674;padding:0 10px">v3.21 · 已连接</div>
+        </div>
+        <div class="main">
+          <h6>状态</h6>
+          <div class="sub">Model Y · Juniper · 固件 v3.29.3 · 3 路 CAN 在线</div>
+          <div class="cols">
+            <div class="p-card">
+              <div class="overline" style="margin:0 0 8px">实时</div>
+              <div class="row"><div class="k">挡位</div><div class="v">D</div></div>
+              <div class="row"><div class="k">扭矩</div><div class="v">1.35 N·m</div></div>
+              <div class="row"><div class="k">AP 状态</div><div class="v">激活</div></div>
+              <div class="row"><div class="k">电量</div><div class="v">68%</div></div>
+            </div>
+            <div class="p-card">
+              <div class="overline" style="margin:0 0 8px">快捷</div>
+              <div class="row"><div class="k">前大灯爆闪</div><div class="v" style="color:#FFB020">运行中</div></div>
+              <div class="row"><div class="k">NAG 抑制</div><div class="v">已开启</div></div>
+              <div class="row"><div class="k">后雾灯爆闪</div><div class="v">就绪</div></div>
+              <div class="row"><div class="k">CAN 3 · PARTY</div><div class="v">在线</div></div>
+            </div>
+          </div>
+          <div class="p-card" style="margin-top:14px">
+            <div class="overline" style="margin:0 0 8px">扭矩趋势 · 近 3 分钟</div>
+            <svg viewBox="0 0 900 90" width="100%" height="90" preserveAspectRatio="none">
+              <polyline points="0,60 60,52 120,58 180,44 240,46 300,38 360,42 420,30 480,36 540,28 600,32 660,26 720,30 780,22 840,26 900,18"
+                fill="none" stroke="#FFB020" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>08 · 关键交互流程</h2>
+    <div class="grid g3">
+      <div class="card">
+        <h4>触发爆闪</h4>
+        <div class="flow" style="margin-top:10px">
+          <span class="step">点按</span><span class="arrow">→</span><span class="step">确认弹窗</span><span class="arrow">→</span><span class="step">胶囊变「爆闪中」</span><span class="arrow">→</span><span class="step">完成/停止</span>
+        </div>
+        <p style="margin-top:10px">按钮在运行中变为「停止并恢复」，进度用同一行的数值展示，不再另开状态区。</p>
+      </div>
+      <div class="card">
+        <h4>调参数</h4>
+        <div class="flow" style="margin-top:10px">
+          <span class="step">拖刻度</span><span class="arrow">→</span><span class="step">数值跳动 + 触感</span><span class="arrow">→</span><span class="step">出现「保存」</span><span class="arrow">→</span><span class="step">保存后按钮可用</span>
+        </div>
+        <p style="margin-top:10px">间隔即时生效（沿用现有逻辑），次数需保存；未保存时主按钮禁用并给出原因。</p>
+      </div>
+      <div class="card">
+        <h4>连接异常</h4>
+        <div class="flow" style="margin-top:10px">
+          <span class="step">轮询失败</span><span class="arrow">→</span><span class="step">顶部胶囊变「离线」</span><span class="arrow">→</span><span class="step">显示缓存与时间</span><span class="arrow">→</span><span class="step">一键排查</span>
+        </div>
+        <p style="margin-top:10px">不用弹窗打断；离线横幅只出现一次，内含「排查」入口。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>09 · 可访问性与适配</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h4>可读性</h4>
+        <ul class="clean">
+          <li>正文对比度 ≥ 4.5:1，次要文字 ≥ 3:1；深色下不用纯白正文（#F2F5F9）</li>
+          <li>数值与单位分离，单位不参与字号缩放竞争</li>
+          <li>动态字体到「辅助功能 XXXL」时，刻度尺间距放大（14 → 26pt），数值行不换行</li>
+          <li>支持 Reduce Motion：刻度吸附改为淡入，不做长距离弹跳</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>可操作性</h4>
+        <ul class="clean">
+          <li>所有可点区域 ≥ 44×44pt；列表行整行可点，不做「只有文字能点」</li>
+          <li>刻度尺作为 adjustable 元素，VoiceOver 上下滑增减并朗读「当前值 + 单位」</li>
+          <li>主按钮带 accessibilityHint 说明后果（会控制真实远光灯）</li>
+          <li>Mac 端支持 Tab 聚焦、空格触发、Esc 关闭弹窗</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>10 · 落地路径</h2>
+    <table>
+      <thead><tr><th>阶段</th><th>内容</th><th>风险</th></tr></thead>
+      <tbody>
+        <tr><td><b>P0 · 令牌</b></td><td>新增 <span class="mono">DesignTokens.swift</span>：色板（深/浅两套）、字号、间距、圆角；现有 Theme 逐步映射到它</td><td>低，纯新增</td></tr>
+        <tr><td><b>P1 · 组件</b></td><td>PrimaryButton / SecondaryButton / StatusPill / MetricTile / ControlRow / SectionHeader / RulerSlider（已有雏形）</td><td>低，可逐页替换</td></tr>
+        <tr><td><b>P2 · 页面</b></td><td>按 状态 → 功能 → 前大灯/后雾灯 → 设置 的顺序替换；每页保留原有接口与状态字段</td><td>中，需回归 UI 测试</td></tr>
+        <tr><td><b>P3 · 桌面</b></td><td>NavigationSplitView + 两列栅格；宽屏 ≥ 900pt 生效</td><td>中，需在 Mac 实机校对</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:14px">迁移期间新旧组件可共存，按页面切换，不做一次性大改；每个阶段结束跑一遍「状态页 / 功能页 / 爆闪详情 / OTA / 设置」的回归清单。</p>
+  </section>
+
+  <footer>
+    P4 管家 UI 重设计方案 v1.0 · 2026-11-18 · 稿件为设计示意，数值与文案以固件实际字段为准
+  </footer>
+</div>
+<script>
+document.querySelectorAll('.ruler[data-from]').forEach(function(el){
+  var step=+el.dataset.step||1, labelEvery=+el.dataset.labelEvery||10,
+      value=+el.dataset.value, from=+el.dataset.from, to=+el.dataset.to;
+  var half=10, html='';
+  for(var i=-half;i<=half;i++){
+    var v=value+i*step;
+    // 量程之外留空位，保持刻度间距与居中位置不变
+    if(v<from-0.001 || v>to+0.001){
+      html+='<div class="tick" style="visibility:hidden"><i></i></div>';
+      continue;
+    }
+    var major = (v % labelEvery === 0);
+    var cls='tick'+(major?' maj':'')+(i===0?' sel':'');
+    html+='<div class="'+cls+'"><i></i>'+(major?'<span>'+v+'</span>':'')+'</div>';
+  }
+  el.innerHTML='<div class="ticks">'+html+'</div><div class="cursor"></div>';
+});
+</script>
+</body>
+</html>
