@@ -28,6 +28,20 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var otaUploading = false
     @Published var toast: P4Toast?
 
+    // MARK: - 离线缓存
+
+    /// 当前展示的是否为磁盘缓存（连不上设备时读上一次成功的数据）。
+    @Published private(set) var isShowingCachedData = false
+    /// 缓存写入时间（用于界面上的「数据时间」）。
+    @Published private(set) var cachedAt: Date?
+
+    /// 是否有任何可渲染的数据（实时或缓存），用于决定首页显示真实内容还是「等待设备」。
+    var hasRenderableData: Bool {
+        !fastGroups.isEmpty || !slowGroups.isEmpty
+            || profileStatus != nil || !mergedStats.isEmpty
+    }
+
+
     // MARK: - 快照分组（网页同源）
 
     /// `snapshot?groups=home-fast` 的 `fast` 对象
@@ -140,6 +154,26 @@ final class AppEnvironment: ObservableObject {
     private var client: P4APIClient
     private var tick = 0
     private var lastLiveActivityAttempt: Date?
+    /// 上次写缓存的时间（节流用）。
+    private var lastCacheWriteAt: Date?
+    /// 上次写入包含的端点数量（新端点出现时立刻补写）。
+    private var lastCachedEntryCount = 0
+
+    /// 当前可缓存的端点数量。
+    private var cacheEntryCount: Int {
+        var count = 0
+        if !fastGroups.isEmpty { count += 1 }
+        if !slowGroups.isEmpty { count += 1 }
+        if profileStatus != nil { count += 1 }
+        if featuresStatus != nil { count += 1 }
+        if systemStats != nil { count += 1 }
+        if dasStats != nil { count += 1 }
+        if s3xyStats != nil { count += 1 }
+        if wifiStatus != nil { count += 1 }
+        if otaStatus != nil { count += 1 }
+        if nagConfig != nil { count += 1 }
+        return count
+    }
     private let liveActivity = LiveActivityController.shared
 
     // MARK: - 生命周期
@@ -273,26 +307,81 @@ final class AppEnvironment: ObservableObject {
             onBluetoothTabVisibilityChange?()
         }
 
-        if snapshot != nil {
+        let gotSnapshot = snapshot != nil
+        let gotMeta = includeMeta && (profile != nil || features != nil || system != nil)
+
+        if gotSnapshot || gotMeta {
             phase = .online
             lastUpdated = Date()
+            if isShowingCachedData {
+                isShowingCachedData = false
+                cachedAt = nil
+            }
+            persistCacheIfDue()
             #if DEBUG
             // 本地联调：SIMCTL_CHILD_P4CAN_LIVEACTIVITY=1 首次联网自动开启实时活动
-            if ProcessInfo.processInfo.environment["P4CAN_LIVEACTIVITY"] == "1",
+            if gotSnapshot,
+               ProcessInfo.processInfo.environment["P4CAN_LIVEACTIVITY"] == "1",
                !liveActivityEnabled {
                 setLiveActivity(true)
             }
             #endif
-        } else if includeMeta, (profile != nil || features != nil || system != nil) {
-            phase = .online
-            lastUpdated = Date()
         } else {
             let reason = await Self.probeReason(client: currentClient)
             phase = .offline(reason: reason)
+            restoreCacheIfNeeded()
         }
     }
 
-    private func rebuildDerived() {
+    // MARK: - 离线缓存
+
+    /// 节流写入：轮询间隔 250–1000 ms，没必要每拍都落盘；
+    /// 但一旦拿到新的端点（profile/features 等是每 4 拍才拉），要立刻补写。
+    private func persistCacheIfDue(force: Bool = false) {
+        let now = Date()
+        let entryCount = cacheEntryCount
+        let gainedEntries = entryCount > lastCachedEntryCount
+        if !force, !gainedEntries, let last = lastCacheWriteAt, now.timeIntervalSince(last) < 20 { return }
+        var entries: [String: P4JSON] = [:]
+        if !fastGroups.isEmpty { entries["fast"] = .object(fastGroups) }
+        if !slowGroups.isEmpty { entries["slow"] = .object(slowGroups) }
+        if let profileStatus { entries["profile"] = profileStatus }
+        if let featuresStatus { entries["features"] = featuresStatus }
+        if let systemStats { entries["system"] = systemStats }
+        if let dasStats { entries["das"] = dasStats }
+        if let s3xyStats { entries["s3xy"] = s3xyStats }
+        if let wifiStatus { entries["wifi"] = wifiStatus }
+        if let otaStatus { entries["ota"] = otaStatus }
+        if let nagConfig { entries["nag"] = nagConfig }
+        guard !entries.isEmpty else { return }
+        lastCacheWriteAt = now
+        lastCachedEntryCount = entries.count
+        OfflineCache.save(host: host, entries: entries, at: now)
+    }
+
+    /// 连不上且手上没有任何数据时，用上次成功的缓存顶上（不会覆盖实时数据）。
+    private func restoreCacheIfNeeded() {
+        guard !hasRenderableData, !isShowingCachedData else { return }
+        guard let cache = OfflineCache.load(host: host) else { return }
+        if let fast = cache.entries["fast"]?.objectValue { fastGroups = fast }
+        if let slow = cache.entries["slow"]?.objectValue { slowGroups = slow }
+        if let profile = cache.entries["profile"] { profileStatus = profile }
+        if let features = cache.entries["features"] { featuresStatus = features }
+        if let system = cache.entries["system"] { systemStats = system }
+        if let das = cache.entries["das"] { dasStats = das }
+        if let s3xy = cache.entries["s3xy"] { s3xyStats = s3xy }
+        if let wifi = cache.entries["wifi"] { wifiStatus = wifi }
+        if let ota = cache.entries["ota"] { otaStatus = ota }
+        if let nag = cache.entries["nag"] { nagConfig = nag }
+        guard hasRenderableData else { return }
+        isShowingCachedData = true
+        cachedAt = cache.savedAt
+        lastUpdated = cache.savedAt
+        // 缓存数据不写趋势采样，也避免冷启动时拉起实时活动。
+        rebuildDerived(appendSample: false, pushLiveActivity: false)
+    }
+
+    private func rebuildDerived(appendSample: Bool = true, pushLiveActivity: Bool = true) {
         var merged: [String: P4JSON] = [:]
         for group in Array(fastGroups.values) + Array(slowGroups.values) {
             if let object = group.objectValue {
@@ -309,8 +398,8 @@ final class AppEnvironment: ObservableObject {
             traffic: fastGroups["cantraffic"]?.objectValue ?? [:],
             profile: profileStatus?.objectValue ?? [:]
         )
-        appendTrendSample()
-        refreshLiveActivity()
+        if appendSample { appendTrendSample() }
+        if pushLiveActivity { refreshLiveActivity() }
     }
 
     /// 追加扭矩采样（最多 120 点）。

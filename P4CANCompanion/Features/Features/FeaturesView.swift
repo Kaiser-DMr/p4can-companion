@@ -310,6 +310,14 @@ struct FeaturesView: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
                 .background(Color.primary.opacity(0.07), in: Capsule())
+            if environment.isShowingCachedData {
+                Text(L10n.t("缓存", "Cached"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.p4Warn)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Color.p4Warn.opacity(0.14), in: Capsule())
+            }
             Spacer(minLength: 0)
         }
         .textCase(nil)
@@ -339,13 +347,30 @@ struct FeaturesView: View {
 
     // MARK: - 读写
 
+    /// ISA / DMS 的状态不在 snapshot 里，单独拉；成功即写入离线缓存，失败时回退到上次的值。
     private func loadConfigToggles() async {
+        var fresh: [String: P4JSON] = [:]
         if let isa = try? await environment.api.get(P4Route.isaSuppressionConfig),
            let value = isa.objectValue?["enabled"]?.boolValue {
             isaEnabled = value
+            fresh["isa"] = isa
         }
         if let dms = try? await environment.api.get(P4Route.dmsConfig),
            let value = dms.objectValue?["enabled"]?.boolValue {
+            dmsEnabled = value
+            fresh["dms"] = dms
+        }
+        if !fresh.isEmpty {
+            OfflineCache.save(host: environment.host, entries: fresh)
+            return
+        }
+        // 两个都没拿到（离线）：只补缺失的那一项，避免把已有状态清空。
+        guard isaEnabled == nil || dmsEnabled == nil,
+              let cache = OfflineCache.load(host: environment.host)?.entries else { return }
+        if isaEnabled == nil, let value = cache["isa"]?.objectValue?["enabled"]?.boolValue {
+            isaEnabled = value
+        }
+        if dmsEnabled == nil, let value = cache["dms"]?.objectValue?["enabled"]?.boolValue {
             dmsEnabled = value
         }
     }

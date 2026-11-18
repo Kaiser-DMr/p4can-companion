@@ -28,7 +28,9 @@ struct DashboardView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: Theme.spacing(2)) {
-                        if environment.isOnline || environment.phase == .connecting {
+                        // 断了但手上有数据（内存里的上次数值或磁盘缓存）时，仍然展示真实内容，
+                        // 只在顶部提示「离线预览」，避免整页变成空白。
+                        if environment.isOnline || environment.phase == .connecting || environment.hasRenderableData {
                             content
                         } else {
                             offlineContent
@@ -66,6 +68,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var content: some View {
+        staleBanner
         heroCard
         setupModeBanner
         kpiGrid
@@ -83,6 +86,38 @@ struct DashboardView: View {
     }
 
     // MARK: - 1. 设备与连接
+
+    /// 离线 / 使用缓存时的提示条；在线时为 nil，不占布局。
+    @ViewBuilder
+    private var staleBanner: some View {
+        if !environment.isOnline {
+            HStack(alignment: .top, spacing: Theme.spacing(1)) {
+                Image(systemName: environment.isShowingCachedData ? "clock.arrow.circlepath" : "wifi.slash")
+                    .font(.footnote.weight(.semibold))
+                    .padding(.top, 1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(environment.isShowingCachedData
+                         ? "离线预览 · 显示上次缓存的数据"
+                         : "连接已断开 · 显示断开前的数据")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.primary)
+                    if let date = environment.cachedAt ?? environment.lastUpdated {
+                        Text("数据时间 \(date.formatted(date: .abbreviated, time: .standard)) · 恢复连接后自动刷新")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Theme.spacing(1.5))
+            .padding(.vertical, Theme.spacing(1))
+            .background(
+                Color.p4Warn.opacity(0.12),
+                in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
+            )
+            .accessibilityElement(children: .combine)
+        }
+    }
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
