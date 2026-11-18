@@ -110,6 +110,14 @@ final class RootTabBarController: UITabBarController {
         if changed { viewControllers = target }
 
         #if DEBUG
+        // 本地联调：离线截图时强制初始标签（不等 featuresStatus）。
+        if !debugTabApplied,
+           let raw = ProcessInfo.processInfo.environment["P4CAN_TAB_FORCE"],
+           let index = Int(raw), target.indices.contains(index) {
+            debugTabApplied = true
+            selectedIndex = index
+            return
+        }
         // 本地联调：标签页要等 LAB 闸门读取后才齐，这里在首次达到目标数量时应用初始标签。
         if !debugTabApplied, environment.featuresStatus != nil {
             let requested = ProcessInfo.processInfo.environment["P4CAN_TAB"]
