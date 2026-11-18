@@ -443,10 +443,21 @@ struct FeaturesView: View {
     }
 
     /// 列表分组头：emoji + 标题 + 数量胶囊，和卡片左边缘对齐。
+    /// 分组标题（本地化后的字符串）→ 色板。emoji 取消后用它给标题加一个色调圆点。
+    private func sectionTint(for title: String) -> Color {
+        if title == L10n.t("灯光", "Lighting") { return .p4Warn }
+        if title == L10n.t("驾驶辅助", "Driving") { return .p4Info }
+        if title == L10n.t("车身与舒适", "Body") { return .p4OK }
+        if title == L10n.t("实验室功能", "Lab") { return .purple }
+        return .secondary
+    }
+
     private func sectionHeader(emoji: String, title: String, count: Int) -> some View {
         HStack(spacing: Theme.spacing(0.75)) {
-            Text(emoji)
-                .font(.caption)
+            // 分组标题用色调圆点替代 emoji：更克制，也和图标瓦片的色板一致。
+            Circle()
+                .fill(sectionTint(for: title))
+                .frame(width: 6, height: 6)
                 .accessibilityHidden(true)
             Text(title)
                 .font(.footnote.weight(.semibold))
