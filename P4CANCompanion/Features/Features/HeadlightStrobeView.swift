@@ -133,24 +133,19 @@ struct HeadlightStrobeView: View {
                     Button {
                         confirms = true
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             if busy {
                                 ProgressView()
                                     .controlSize(.small)
-                                    .tint(.white)
+                                    .tint(Color.p4OnAccent)
                             } else {
                                 Image(systemName: "light.beacon.max.fill")
-                                    .font(.footnote.weight(.semibold))
                             }
                             Text(active ? L10n.t("爆闪进行中…", "Strobe active…")
                                         : L10n.t("立即爆闪", "Flash now"))
-                                .font(.subheadline.weight(.semibold))
                         }
-                        .padding(.horizontal, 18)
-                        .frame(minHeight: 44)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(active ? Color.p4Warn : Color.accentColor)
+                    .buttonStyle(.dsPrimary(compact: true))
                     .disabled(!canTrigger)
                     .accessibilityLabel(L10n.t("立即开始前大灯爆闪", "Start headlight strobe now"))
                     .accessibilityHint(L10n.t("会实际控制远光灯，需确认后执行",
@@ -160,21 +155,16 @@ struct HeadlightStrobeView: View {
                         Button(role: .destructive) {
                             Task { await stop() }
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 8) {
                                 if busy {
                                     ProgressView().controlSize(.small)
                                 } else {
                                     Image(systemName: "stop.circle.fill")
-                                        .font(.footnote.weight(.semibold))
                                 }
                                 Text(L10n.t("停止并恢复", "Stop and restore"))
-                                    .font(.subheadline.weight(.semibold))
                             }
-                            .padding(.horizontal, 18)
-                            .frame(minHeight: 40)
                         }
-                        .buttonStyle(.bordered)
-                        .tint(Color.p4Err)
+                        .buttonStyle(.dsDestructive)
                         .disabled(busy)
                         .accessibilityLabel(L10n.t("停止爆闪并恢复灯光", "Stop the strobe and restore lights"))
                     }
@@ -247,11 +237,9 @@ struct HeadlightStrobeView: View {
                                 .font(.body.weight(.semibold))
                         }
                         Text(L10n.t("保存参数", "Save settings"))
-                            .font(.headline)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 50)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.dsPrimary)
                 .disabled(busy || !dirty || active)
                 .accessibilityHint(L10n.t("保存次数与触发入口；间隔会即时生效",
                                           "Saves count and trigger source; interval applies immediately"))
@@ -260,10 +248,8 @@ struct HeadlightStrobeView: View {
                     resetToSaved()
                 } label: {
                     Text(L10n.t("撤销未保存修改", "Revert unsaved changes"))
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.dsSecondary(compact: true))
                 .disabled(busy || !dirty)
             }
 
