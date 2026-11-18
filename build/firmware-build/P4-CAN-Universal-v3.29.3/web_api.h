@@ -5726,7 +5726,12 @@ static String headlightStrobeJson() {
 
 static void httpHeadlightStrobeConfig() {
   headlightStrobeLoadPrefs();
-  if (headlightStrobeState.active) {
+  // 同一个处理函数同时挂 GET / POST：只有 POST 才算写配置。
+  // 以前 GET（Web UI 每 1.5 s 轮询一次）也会走到结尾的 SavePrefs，
+  // 等于每 1.5 s 往 NVS 写 8 个键 —— flash 提交会把 HTTP 卡住，
+  // 写失败时开关还会「点了没反应」，并伴随右上角 Disconnected。
+  const bool isWrite = (server.method() == HTTP_POST);
+  if (isWrite && headlightStrobeState.active) {
     server.send(409, "application/json", "{\"ok\":false,\"error\":\"ALREADY_ACTIVE\"}");
     return;
   }
@@ -5801,7 +5806,7 @@ static void httpHeadlightStrobeConfig() {
     }
     headlightStrobeConfig.holdEnabled = (uint8_t)value;
   }
-  headlightStrobeSavePrefs();
+  if (isWrite && server.args() > 0) headlightStrobeSavePrefs();
   server.send(200, "application/json", headlightStrobeJson());
 }
 
