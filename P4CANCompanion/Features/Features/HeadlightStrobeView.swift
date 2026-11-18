@@ -245,15 +245,24 @@ struct HeadlightStrobeView: View {
     }
 
     private func loadConfig() async {
-        guard let value = try? await environment.api.get(P4Route.headlightStrobeConfig),
-              let object = value.objectValue else { return }
-        if let c = object["count"]?.intValue { count = Int(c) }
-        if let i = object["intervalMs"]?.intValue { intervalMs = Int(i) }
-        if let t = object["trigger"]?.intValue { triggerSource = Int(t) }
-        supported = object["supported"]?.boolValue ?? true
-        stalkVariant = object["stalkVariant"]?.stringValue ?? stalkVariant
-        saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource)
-        stats = value
+        do {
+            let value = try await environment.api.get(P4Route.headlightStrobeConfig)
+            guard let object = value.objectValue else {
+                throw P4APIError(message: L10n.t("固件返回了无效配置", "Invalid config response"))
+            }
+            if let c = object["count"]?.intValue { count = Int(c) }
+            if let i = object["intervalMs"]?.intValue { intervalMs = Int(i) }
+            if let t = object["trigger"]?.intValue { triggerSource = Int(t) }
+            supported = object["supported"]?.boolValue ?? true
+            stalkVariant = object["stalkVariant"]?.stringValue ?? stalkVariant
+            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource)
+            stats = value
+            errorText = nil
+        } catch {
+            supported = false
+            errorText = L10n.t("固件没有提供爆闪接口（需集成 headlight_strobe 补丁）：\(AppEnvironment.friendly(error))",
+                               "Firmware does not expose the strobe API (headlight_strobe patch required): \(AppEnvironment.friendly(error))")
+        }
     }
 
     private func resetToSaved() {

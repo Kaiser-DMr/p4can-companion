@@ -3,16 +3,16 @@
 P4-CAN Universal（ESP32-P4 车载 CAN 控制器）的原生 iOS 控制台。UIKit + SwiftUI + SnapKit 混合实现，不是网页套壳。
 
 ![平台](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![版本](https://img.shields.io/badge/version-3.10%20(31)-green)
+![版本](https://img.shields.io/badge/version-3.11%20(32)-green)
 
-**下载：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) —— `P4CAN-Companion-v3.10-adhoc.ipa`（iPhone，需自签）/ `P4CAN-Companion-mac-v3.10.zip`（Mac 解压即用）
+**下载：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) —— `P4CAN-Companion-v3.11-adhoc.ipa`（iPhone，需自签）/ `P4CAN-Companion-mac-v3.11.zip`（Mac 解压即用）
 
 ## 功能
 
 | 模块 | 内容 |
 |---|---|
 | **状态** | 设备在线/固件/内存、三路 CAN（BODY / CHASSIS / PARTY）收发与 Bus-Off、扭矩趋势、电池（固件提供才显示）、锁屏与灵动岛实时活动 |
-| **功能** | 固件功能总入口，顺序同网页：NAG、ISA、驾驶员监控、视觉限速、自动转向灯、召唤状态、R79、地区/地图、TLSSC、无确认变道、踏板映射、常驻 AP、AP 加速/回收、S3XY、LAB Menu；无分类，保留搜索 |
+| **功能** | 固件功能总入口，顺序同网页：NAG、ISA、驾驶员监控、视觉限速、自动转向灯、前大灯爆闪、召唤状态、R79、地区/地图、TLSSC、无确认变道、踏板映射、常驻 AP、AP 加速/回收、S3XY、LAB Menu；无分类，保留搜索 |
 | **蓝牙** | 由「功能 → S3XY」开关控制标签显隐；S3XY 设备扫描/配对/连接、单击-双击-长按动作绑定、自动重连、日志导出 |
 | **设置** | 车型卡片与**更改车型**（保存后设备重启）、无线、外观、刷新间隔、诊断/恢复、OTA、三级重置、封禁车辆、App 语言与设备地址 |
 | **实验室** | LAB Menu 打开后出现：R79 AP 控制 / R79 状态 / 召唤心跳 / ALC / 主驾车窗 / CAN 研究捕获 / 驾驶员监控捕获 / Mode H 调参（含实时引擎） |
