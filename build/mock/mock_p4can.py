@@ -285,6 +285,8 @@ SYSTEM = {
     "batterySoc": 68,
     "rangeKm": 312,
     "fwVersion": "v3.29.3 (mock)",
+    "canHarness": "X179",
+    "canPins": "4/5, 2/3, 26/27",
     "freeHeap": 184320,
     "minFreeHeap": 151200,
     "largestHeapBlock": 98304,

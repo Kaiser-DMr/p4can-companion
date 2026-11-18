@@ -1194,6 +1194,20 @@ static String systemStatsToJson() {
   const bool canBRecordCurrent =
       canBusOffPersistenceBoot[1] == CAN_BUS_OFF_BOOT_CURRENT;
   jw.string("fwVersion", FW_VERSION);
+  // 线束/引脚映射：刷错板型时 BODY/CHASSIS 会完全收不到帧，这里让 App 能直接核对。
+  jw.string("canHarness",
+#if defined(P4CAN_BOARD_X179)
+            "X179"
+#else
+            "DEFAULT"
+#endif
+  );
+  char canPinsText[40];
+  snprintf(canPinsText, sizeof(canPinsText), "%u/%u, %u/%u, %u/%u",
+           (unsigned)CAN_BODY_TX, (unsigned)CAN_BODY_RX,
+           (unsigned)CAN_CHASSIS_TX, (unsigned)CAN_CHASSIS_RX,
+           (unsigned)CAN_PARTY_TX, (unsigned)CAN_PARTY_RX);
+  jw.string("canPins", canPinsText);
   jw.string("networkState", p4NetworkPhaseName());
   char hostedVersion[32];
   snprintf(hostedVersion, sizeof(hostedVersion), "%lu.%lu.%lu",

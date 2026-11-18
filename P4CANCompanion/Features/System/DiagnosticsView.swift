@@ -16,7 +16,8 @@ struct DiagnosticsView: View {
     private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
 
     private static let systemKeys = [
-        "fwVersion", "uptimeS", "freeHeap", "minFreeHeap", "largestHeapBlock",
+        "fwVersion", "canHarness", "canPins",
+        "uptimeS", "freeHeap", "minFreeHeap", "largestHeapBlock",
         "networkState", "hostedWifiStarted",
     ]
 
