@@ -3,7 +3,7 @@ import SwiftUI
 /// 前大灯爆闪：远光灯 PULL/IDLE 交替 `count` 次，结束后恢复触发前的高灯状态。
 ///
 /// 固件契约（`/api/headlight-strobe/*`）：
-/// - `config`：count 1–30、intervalMs 50–1000、trigger 0=App / 1=S3XY；
+/// - `config`：count 1–30、intervalMs 50–1000、trigger 0=App / 1=S3XY、holdEnabled 按住拨杆开关；
 /// - `trigger`：仅当 trigger 与入口匹配且无转向灯注入时启动；
 /// - `stop`：立即中断并恢复；
 /// - `stats`：active / state / flashesDone / flashesTotal / blockReason。
@@ -14,12 +14,15 @@ struct HeadlightStrobeView: View {
         var count: Int
         var intervalMs: Int
         var trigger: Int
+        var hold: Bool
     }
 
     @State private var count = 10
-    @State private var intervalMs = 200
+    @State private var intervalMs = 100
     @State private var triggerSource = 0
-    @State private var saved = Config(count: 10, intervalMs: 200, trigger: 0)
+    @State private var holdEnabled = false
+    @State private var holdDelayMs = 2500
+    @State private var saved = Config(count: 10, intervalMs: 100, trigger: 0, hold: false)
 
     @State private var stats: P4JSON?
     @State private var supported = true
@@ -38,7 +41,7 @@ struct HeadlightStrobeView: View {
     }
 
     private var dirty: Bool {
-        Config(count: count, intervalMs: intervalMs, trigger: triggerSource) != saved
+        Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled) != saved
     }
 
     private var canTrigger: Bool {
@@ -68,18 +71,45 @@ struct HeadlightStrobeView: View {
             }
 
             Section {
+                Toggle(isOn: Binding(
+                    get: { holdEnabled },
+                    set: { on in
+                        holdEnabled = on
+                        Haptics.impact()
+                        Task { await applyHold(on) }
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("按住拨杆爆闪", "Hold-stalk strobe"))
+                        Text(L10n.t("拉住远光拨杆 2.5 秒后开始爆闪，松开即停", "Hold the stalk for 2.5 s to start; release to stop"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Stepper(value: $intervalMs, in: 50...500, step: 10) {
+                    HStack {
+                        Text(L10n.t("间隔", "Interval"))
+                        Spacer()
+                        Text("\(intervalMs) ms").monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+                .onChange(of: intervalMs) { _, newValue in
+                    Task { await applyInterval(newValue) }
+                }
+            } header: {
+                Label(L10n.t("按住拨杆", "Hold to strobe"), systemImage: "hand.point.up.left")
+            } footer: {
+                Text(L10n.t("开关与间隔立即写入设备，无需保存；间隔同时作用于手动爆闪。默认 100 ms，长按 2.5 秒触发。",
+                            "The switch and interval are written immediately. The interval also applies to manual strobe. Default 100 ms; hold 2.5 s to start."))
+            }
+
+            Section {
                 Stepper(value: $count, in: 1...30) {
                     HStack {
                         Text(L10n.t("闪烁次数", "Flashes"))
                         Spacer()
                         Text("\(count)").monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                Stepper(value: $intervalMs, in: 50...1000, step: 10) {
-                    HStack {
-                        Text(L10n.t("间隔", "Interval"))
-                        Spacer()
-                        Text("\(intervalMs) ms").monospacedDigit().foregroundStyle(.secondary)
                     }
                 }
                 Picker(selection: $triggerSource) {
@@ -186,6 +216,14 @@ struct HeadlightStrobeView: View {
             }
             .font(.subheadline)
 
+            HStack {
+                Text(L10n.t("长按触发", "Hold delay"))
+                Spacer()
+                Text(String(format: "%.1f s", Double(holdDelayMs) / 1000))
+                    .monospacedDigit().foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+
             if let blockReason {
                 Text(reasonText(blockReason))
                     .font(.footnote)
@@ -254,9 +292,11 @@ struct HeadlightStrobeView: View {
             if let c = object["count"]?.intValue { count = Int(c) }
             if let i = object["intervalMs"]?.intValue { intervalMs = Int(i) }
             if let t = object["trigger"]?.intValue { triggerSource = Int(t) }
+            holdEnabled = object["holdEnabled"]?.boolValue ?? false
+            if let d = object["holdDelayMs"]?.intValue { holdDelayMs = Int(d) }
             supported = object["supported"]?.boolValue ?? true
             stalkVariant = object["stalkVariant"]?.stringValue ?? stalkVariant
-            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource)
+            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled)
             stats = value
             errorText = nil
         } catch {
@@ -270,6 +310,7 @@ struct HeadlightStrobeView: View {
         count = saved.count
         intervalMs = saved.intervalMs
         triggerSource = saved.trigger
+        holdEnabled = saved.hold
     }
 
     private func saveConfig() async {
@@ -281,9 +322,10 @@ struct HeadlightStrobeView: View {
                 P4Param("count", String(count)),
                 P4Param("intervalMs", String(intervalMs)),
                 P4Param("trigger", String(triggerSource)),
+                P4Param("holdEnabled", holdEnabled ? "1" : "0"),
             ])
             stats = value
-            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource)
+            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled)
             Haptics.success()
             environment.toast = P4Toast(message: L10n.t("爆闪参数已保存", "Strobe settings saved"), style: .success)
         } catch {
@@ -291,6 +333,44 @@ struct HeadlightStrobeView: View {
             Haptics.error()
         }
         busy = false
+    }
+
+    /// 开关即时写入：失败则回滚 UI 状态。
+    private func applyHold(_ on: Bool) async {
+        do {
+            let value = try await environment.api.post(P4Route.headlightStrobeConfig, query: [
+                P4Param("holdEnabled", on ? "1" : "0"),
+            ])
+            stats = value
+            saved = Config(count: saved.count, intervalMs: saved.intervalMs,
+                           trigger: saved.trigger, hold: on)
+            environment.toast = P4Toast(
+                message: on ? L10n.t("按住拨杆爆闪已开启", "Hold-stalk strobe on")
+                            : L10n.t("按住拨杆爆闪已关闭", "Hold-stalk strobe off"),
+                style: .info
+            )
+        } catch {
+            holdEnabled = !on
+            errorText = AppEnvironment.friendly(error)
+            Haptics.error()
+        }
+    }
+
+    /// 间隔即时写入：连续拖动时只提交最后一次。
+    private func applyInterval(_ value: Int) async {
+        let clamped = min(max(value, 50), 500)
+        try? await Task.sleep(for: .milliseconds(350))
+        guard clamped == intervalMs else { return }
+        do {
+            let json = try await environment.api.post(P4Route.headlightStrobeConfig, query: [
+                P4Param("intervalMs", String(clamped)),
+            ])
+            stats = json
+            saved = Config(count: saved.count, intervalMs: clamped,
+                           trigger: saved.trigger, hold: saved.hold)
+        } catch {
+            errorText = AppEnvironment.friendly(error)
+        }
     }
 
     private func trigger() async {

@@ -481,7 +481,7 @@ DMS = STATS["/api/driver-monitoring/config"]
 ISA = STATS["/api/isa-suppression/config"]
 
 HEADLIGHT = {
-    "count": 10, "intervalMs": 200, "trigger": 0,
+    "count": 10, "intervalMs": 100, "trigger": 0, "holdEnabled": True, "holdDelayMs": 2500,
     "active": False, "started": 0.0, "state": "IDLE", "blockReason": "",
     "txOk": 0, "txFail": 0,
 }
@@ -505,6 +505,8 @@ def headlight_json():
     return {
         "ok": True, "count": hl["count"], "intervalMs": hl["intervalMs"],
         "trigger": hl["trigger"], "triggerName": "S3XY" if hl["trigger"] == 1 else "APP",
+        "holdEnabled": bool(hl.get("holdEnabled", True)),
+        "holdDelayMs": int(hl.get("holdDelayMs", 2500)),
         "supported": True, "stalkVariant": "STALK",
         "active": hl["active"], "state": hl["state"],
         "flashesDone": done, "flashesTotal": hl["count"],
@@ -771,8 +773,11 @@ def apply_post(path, qs):
             return "intervalMs must be 50..1000"
         if trigger not in (0, 1):
             return "trigger must be 0 or 1"
+        hold = HEADLIGHT.get("holdEnabled", True)
+        if has("holdEnabled"):
+            hold = val("holdEnabled") == "1"
         HEADLIGHT.update(count=count, intervalMs=interval, trigger=trigger,
-                         state="IDLE", blockReason="", txOk=0, txFail=0)
+                         holdEnabled=hold, state="IDLE", blockReason="", txOk=0, txFail=0)
         return None
 
     if path == "/api/headlight-strobe/trigger":
@@ -829,7 +834,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):
-        pass
+        print(f"[{self.command}] {self.path}", flush=True)
 
     def send_json(self, obj, status=200):
         body = j(obj).encode()

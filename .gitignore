@@ -23,3 +23,11 @@ build/*.zip
 
 # 本地调试截图（不随源码提交）
 build/screenshots/v3*.png
+
+# 固件构建工作区（只保留源码与说明，不提交编译产物）
+build/firmware-build/stock/
+build/firmware-build/out*/
+build/firmware-build/P4-CAN-Universal-v3.29.3/build/
+build/firmware-build/P4-CAN-Universal-v3.29.3/out*/
+build/firmware-build/**/*.elf
+build/firmware-build/**/*.merged.bin
