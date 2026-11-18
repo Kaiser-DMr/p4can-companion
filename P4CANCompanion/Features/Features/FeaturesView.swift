@@ -20,10 +20,28 @@ struct FeaturesView: View {
     @State private var gateOverrides: [String: Bool] = [:]
     /// 灯光类模块的运行态（爆闪中）。读不到该端点时不显示，不伪造。
     @State private var strobeActive: [String: Bool] = [:]
+    /// 灯光爆闪的详细状态：一级入口要直接展示「爆闪中 / 可触发 / 不支持」。
+    @State private var strobeInfo: [String: StrobeInfo] = [:]
+    /// 前大灯爆闪是强光操作，一级入口同样要二次确认。
+    @State private var confirmsHeadlightTrigger = false
     /// 置顶到「常用」的 entry id（顺序即展示顺序，最多 6 个）。
     @State private var pinnedIDs: [String] = FeaturePinStore.load()
 
     // MARK: - 行模型
+
+    /// 一路爆闪的实时状态（缺端点时保留默认值，UI 显示为「待机」）。
+    private struct StrobeInfo {
+        var active = false
+        var supported = true
+        var appTrigger = true
+        var holdEnabled = false
+        var holdDelayMs = 2500
+        var flashesDone = 0
+        var flashesTotal = 10
+        var intervalMs = 100
+        var remainingMs = 0
+        var setupMode = false
+    }
 
     private struct Entry: Identifiable {
         enum Kind {
@@ -133,6 +151,20 @@ struct FeaturesView: View {
                 }
             }
             .overlay(alignment: .bottom) { ToastOverlay() }
+            .alert(
+                L10n.t("开始远光灯爆闪？", "Start high-beam strobe?"),
+                isPresented: $confirmsHeadlightTrigger
+            ) {
+                Button(L10n.t("取消", "Cancel"), role: .cancel) {}
+                Button(L10n.t("开始爆闪", "Start"), role: .destructive) {
+                    if let module = FeatureCatalog.modules.first(where: { $0.id == "headlight" }) {
+                        startStrobe(module)
+                    }
+                }
+            } message: {
+                Text(L10n.t("将按已保存的次数与间隔闪烁，结束后恢复原灯光状态。",
+                            "Flashes using the saved count and interval, then restores the previous light state."))
+            }
         }
         .task {
             await loadConfigToggles()
@@ -334,6 +366,10 @@ struct FeaturesView: View {
                     submitInline(module.id, label: L10n.t("禁用驾驶员监控", "Driver Monitoring"),
                                  path: P4Route.dmsConfig, enabled: newValue)
                 }
+            } else if module.id == "headlight" || module.id == "rearFog" {
+                // 灯光爆闪：不再只做「进入详情再操作」，在功能页就能直接触发/停止，
+                // 参数与完整状态仍通过行内「参数」进入原详情页。
+                strobeQuickRow(module)
             } else {
                 NavigationLink {
                     FeatureDetailView(module: module)
@@ -372,6 +408,159 @@ struct FeaturesView: View {
                 setFeaturesGate("lab", label: "LAB Menu", path: P4Route.featuresLab, enabled: newValue)
             }
         }
+    }
+
+    // MARK: - 灯光一级入口
+
+    /// 灯光爆闪行：左侧沿用标准行样式，右侧是「开始/停止」主操作 + 「参数」入口。
+    ///
+    /// 说明：这里只复用原有接口与状态字段，没有新增/改变任何固件行为；
+    /// 主按钮的可用性与失败文案和详情页保持一致（强光操作仍走二次确认）。
+    @ViewBuilder
+    private func strobeQuickRow(_ module: FeatureModule) -> some View {
+        let isHeadlight = module.id == "headlight"
+        let info = strobeInfo[module.id]
+        let active = info?.active ?? strobeActive[module.id] ?? false
+        let busy = busyID == module.id
+
+        FeatureRowShell(
+            icon: module.icon,
+            title: module.localizedTitle,
+            subtitle: strobeSubtitle(module, info: info, active: active),
+            combinesAccessibility: false
+        ) {
+            VStack(alignment: .trailing, spacing: 6) {
+                Button {
+                    if isHeadlight {
+                        if active {
+                            stopStrobe(module)
+                        } else {
+                            confirmsHeadlightTrigger = true
+                        }
+                    } else if active {
+                        stopStrobe(module)
+                    } else {
+                        startStrobe(module)
+                    }
+                } label: {
+                    if busy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(active
+                             ? L10n.t("停止", "Stop")
+                             : (isHeadlight ? L10n.t("立即爆闪", "Flash") : L10n.t("开始", "Start")))
+                            .font(.caption.weight(.semibold))
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(active ? Color.p4Err : Color.p4Warn)
+                .disabled(busyID != nil || info.map { !$0.supported } ?? false)
+                .accessibilityLabel(active
+                                    ? L10n.t("停止\(module.localizedTitle)", "Stop \(module.localizedTitle)")
+                                    : L10n.t("开始\(module.localizedTitle)", "Start \(module.localizedTitle)"))
+
+                // 用编程式跳转而不是 NavigationLink：后者在 List 行内会被系统
+                // 额外补一个披露箭头，和「参数 ›」重复。
+                Button {
+                    path.append(module.id)
+                } label: {
+                    HStack(spacing: 2) {
+                        Text(L10n.t("参数", "Settings"))
+                            .font(.caption2)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(L10n.t("打开\(module.localizedTitle)参数",
+                                           "Open \(module.localizedTitle) settings"))
+                .frame(alignment: .trailing)
+            }
+            // 不加固定尺寸时，NavigationLink 会把整列拉满整行，标题被挤成 0 宽。
+            .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
+    private func strobeSubtitle(_ module: FeatureModule, info: StrobeInfo?, active: Bool) -> String {
+        let isHeadlight = module.id == "headlight"
+        guard let info else { return module.localizedSummary }
+        if isHeadlight {
+            if !info.supported {
+                return L10n.t("本车不支持拨杆触发；仍可在此立即爆闪", "Stalk trigger unsupported; Flash still works")
+            }
+            if active {
+                return L10n.t("爆闪中 · 已闪 \(info.flashesDone)/\(info.flashesTotal) 次",
+                              "Flashing \(info.flashesDone)/\(info.flashesTotal)")
+            }
+            if !info.appTrigger {
+                return L10n.t("触发入口已设为 S3XY 按键", "Trigger set to S3XY button")
+            }
+            let delay = String(format: "%.1f", Double(info.holdDelayMs) / 1000)
+            return info.holdEnabled
+                ? L10n.t("按住拨杆 \(delay) 秒，或点右侧立即爆闪", "Hold the stalk \(delay)s, or tap Flash")
+                : L10n.t("按住拨杆已关闭，可点右侧立即爆闪", "Hold-stalk off; tap Flash")
+        }
+        if active {
+            let seconds = max(0, info.remainingMs / 1000)
+            return L10n.t("爆闪中 · 约 \(seconds) 秒后自动停", "Flashing · stops in ~\(seconds)s")
+        }
+        if info.setupMode {
+            return L10n.t("Setup 模式下不可用", "Unavailable in setup mode")
+        }
+        return L10n.t("单次最长 30 秒 · 需车身总线在线", "Up to 30 s · requires the body bus")
+    }
+
+    private func startStrobe(_ module: FeatureModule) {
+        strobeCommand(module, path: module.id == "headlight"
+                      ? P4Route.headlightStrobeTrigger
+                      : P4Route.rearFogStrobeStart)
+    }
+
+    private func stopStrobe(_ module: FeatureModule) {
+        strobeCommand(module, path: module.id == "headlight"
+                      ? P4Route.headlightStrobeStop
+                      : P4Route.rearFogStrobeStop)
+    }
+
+    private func strobeCommand(_ module: FeatureModule, path: String) {
+        guard busyID == nil else { return }
+        busyID = module.id
+        Task {
+            do {
+                _ = try await environment.api.post(path)
+                environment.toast = P4Toast(
+                    message: L10n.t("已执行「\(module.localizedTitle)」", "\(module.localizedTitle) sent"),
+                    style: .success
+                )
+                Haptics.success()
+            } catch {
+                environment.toast = P4Toast(message: strobeErrorText(error), style: .failure)
+                Haptics.error()
+            }
+            await loadStrobeStates()
+            busyID = nil
+        }
+    }
+
+    /// 把固件返回的原始错误翻成能照做的提示（与详情页同源，只是更短）。
+    private func strobeErrorText(_ error: Error) -> String {
+        let raw = (error as? P4APIError)?.message ?? AppEnvironment.friendly(error)
+        if raw.contains("NO_FRAME") {
+            return L10n.t("还没收到整车 0x273：先上电（踩刹车）再试",
+                          "No 0x273 frame yet — power on the car and retry")
+        }
+        if raw.contains("TURN_SIGNAL_ACTIVE") {
+            return L10n.t("转向灯正在工作，等它结束再试", "Turn signal active; retry after it finishes")
+        }
+        if raw.contains("NO_STOCK_TEMPLATE") {
+            return L10n.t("还没收到 0x249 模板：先拨一下拨杆", "No 0x249 template yet — move the stalk once")
+        }
+        if raw.contains("ALREADY_ACTIVE") {
+            return L10n.t("正在爆闪中，先停止再试", "Already flashing; stop it first")
+        }
+        return L10n.t("操作失败：\(raw)", "Failed: \(raw)")
     }
 
     /// 长按菜单：置顶 / 取消置顶。
@@ -498,16 +687,36 @@ struct FeaturesView: View {
 
     /// 灯光类模块的运行态：只读，失败即视为「未知」，不显示徽章。
     private func loadStrobeStates() async {
-        var fresh: [String: Bool] = [:]
+        var freshActive: [String: Bool] = [:]
+        var freshInfo: [String: StrobeInfo] = [:]
+
         if let json = try? await environment.api.get(P4Route.headlightStrobeStats),
-           let active = json.objectValue?["active"]?.boolValue {
-            fresh["headlight"] = active
+           let object = json.objectValue {
+            var info = StrobeInfo()
+            info.active = object["active"]?.boolValue ?? false
+            info.supported = object["supported"]?.boolValue ?? true
+            info.appTrigger = (object["trigger"]?.intValue ?? 0) == 0
+            info.holdEnabled = object["holdEnabled"]?.boolValue ?? false
+            info.holdDelayMs = Int(object["holdDelayMs"]?.intValue ?? 2500)
+            info.flashesDone = Int(object["flashesDone"]?.intValue ?? 0)
+            info.flashesTotal = Int(object["flashesTotal"]?.intValue ?? 10)
+            info.intervalMs = Int(object["intervalMs"]?.intValue ?? 100)
+            freshActive["headlight"] = info.active
+            freshInfo["headlight"] = info
         }
         if let json = try? await environment.api.get(P4Route.rearFogStrobeStats),
-           let active = json.objectValue?["active"]?.boolValue {
-            fresh["rearFog"] = active
+           let object = json.objectValue {
+            var info = StrobeInfo()
+            info.active = object["active"]?.boolValue ?? false
+            info.remainingMs = Int(object["remainingMs"]?.intValue ?? 0)
+            info.intervalMs = Int(object["intervalMs"]?.intValue ?? 100)
+            info.setupMode = object["setupMode"]?.boolValue ?? false
+            info.supported = !info.setupMode
+            freshActive["rearFog"] = info.active
+            freshInfo["rearFog"] = info
         }
-        strobeActive = fresh
+        strobeActive = freshActive
+        strobeInfo = freshInfo
     }
 
     private func submitInline(_ id: String, label: String, path: String, enabled: Bool) {
