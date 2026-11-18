@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
@@ -30,6 +31,7 @@ struct SystemView: View {
                     AppSection()
                     DataBrowseSection()
                     LogsSection()
+                    ShortcutsSection()
                     AboutSection().id("about")
                 }
                 .listStyle(.insetGrouped)
@@ -788,6 +790,44 @@ private struct ActivityShareSheet: UIViewControllerRepresentable {
 }
 
 // MARK: - 关于
+
+/// 快捷指令：两个动作由 App Intent 提供，系统「快捷指令」会自动收录；
+/// 这里给出动作说明与系统自带的添加入口，避免用户去猜名称。
+private struct ShortcutsSection: View {
+    var body: some View {
+        Section {
+            LabeledContent {
+                Text(L10n.t("立即爆闪", "Flash now"))
+                    .foregroundStyle(.secondary)
+            } label: {
+                Label(L10n.t("前大灯爆闪", "Headlight strobe"),
+                      systemImage: "light.beacon.max.fill")
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(L10n.t("前大灯爆闪，立即爆闪", "Headlight strobe, flash now"))
+
+            LabeledContent {
+                Text(L10n.t("开始爆闪", "Start"))
+                    .foregroundStyle(.secondary)
+            } label: {
+                Label(L10n.t("后雾灯爆闪", "Rear fog strobe"),
+                      systemImage: "cloud.fog.fill")
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(L10n.t("后雾灯爆闪，开始爆闪", "Rear fog strobe, start"))
+
+            // 系统提供的「添加到快捷指令」按钮，点击进入本 App 的动作列表。
+            ShortcutsLink()
+        } header: {
+            Label(L10n.t("快捷指令", "Shortcuts"), systemImage: "square.stack.3d.up.fill")
+        } footer: {
+            Text(L10n.t(
+                "动作在后台执行，使用 App 内已保存的次数与间隔；运行前请确认手机已连上 P4-CAN 的 Wi-Fi。",
+                "Actions run in the background with the settings saved in the app. Make sure this iPhone is on the P4-CAN Wi-Fi first."
+            ))
+        }
+    }
+}
 
 private struct AboutSection: View {
     @EnvironmentObject private var environment: AppEnvironment
