@@ -24,6 +24,7 @@ struct FeatureDetailView: View {
     @State private var showsAdvanced = false
     @State private var showsResearchLabels = false
     @State private var showsHeadlightStrobe = false
+    @State private var showsRearFog = false
 
     private let pollInterval: Duration = .milliseconds(1200)
 
@@ -106,6 +107,31 @@ struct FeatureDetailView: View {
                 }
             }
 
+            if module.id == "rearFog" {
+                Section {
+                    NavigationLink {
+                        RearFogStrobeView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "light.beacon.max")
+                                .foregroundStyle(.tint)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("开始 / 停止爆闪", "Start / stop strobe"))
+                                    .font(.body)
+                                Text(L10n.t("单次最长 30 秒 · 显示剩余时间", "Up to 30 s · live countdown"))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } footer: {
+                    Text(L10n.t("通过 0x273 的后雾灯位实现；需要车辆上电且能收到整车 0x273。",
+                                "Driven by the rear-fog bit in 0x273; the car must be powered and sending 0x273."))
+                }
+            }
+
             if module.id == "research" {
                 Section {
                     NavigationLink {
@@ -166,6 +192,7 @@ struct FeatureDetailView: View {
         .navigationDestination(isPresented: $showsAdvanced) { NagAdvancedView() }
         .navigationDestination(isPresented: $showsResearchLabels) { ResearchLabelsView() }
         .navigationDestination(isPresented: $showsHeadlightStrobe) { HeadlightStrobeView() }
+        .navigationDestination(isPresented: $showsRearFog) { RearFogStrobeView() }
         .overlay(alignment: .bottom) { ToastOverlay() }
         .refreshable { await load() }
         .task { await poll() }
@@ -186,6 +213,11 @@ struct FeatureDetailView: View {
                ProcessInfo.processInfo.environment["P4CAN_HEADLIGHT_STROBE"] == "1" {
                 try? await Task.sleep(for: .milliseconds(500))
                 showsHeadlightStrobe = true
+            }
+            if module.id == "rearFog",
+               ProcessInfo.processInfo.environment["P4CAN_REAR_FOG"] == "1" {
+                try? await Task.sleep(for: .milliseconds(500))
+                showsRearFog = true
             }
             #endif
         }

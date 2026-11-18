@@ -488,6 +488,31 @@ HEADLIGHT = {
     "txOk": 0, "txFail": 0,
 }
 
+REAR_FOG = {"active": False, "started": 0.0, "templateValid": True, "stockFogOn": False,
+            "txOk": 0, "txFail": 0, "pulses": 0, "stopReason": "NONE"}
+
+def rear_fog_json():
+    rf = REAR_FOG
+    now = time.time()
+    if rf["active"]:
+        elapsed_ms = int((now - rf["started"]) * 1000)
+        if elapsed_ms >= 30000:
+            rf["active"] = False
+            rf["stopReason"] = "TIMEOUT"
+        else:
+            rf["pulses"] = max(1, elapsed_ms // 100)
+            rf["txOk"] = rf["pulses"] * 2
+    remaining = 0
+    if rf["active"]:
+        remaining = max(0, 30000 - int((now - rf["started"]) * 1000))
+    return {
+        "ok": True, "active": rf["active"], "remainingMs": remaining, "totalMs": 30000,
+        "intervalMs": HEADLIGHT["intervalMs"], "phaseOn": bool(rf["pulses"] % 2),
+        "pulses": rf["pulses"], "txOk": rf["txOk"], "txFail": rf["txFail"],
+        "stockFogOn": rf["stockFogOn"], "templateValid": rf["templateValid"],
+        "frameAgeMs": 12, "setupMode": False, "stopReason": rf["stopReason"],
+    }
+
 def headlight_json():
     hl = HEADLIGHT
     if hl["active"]:
@@ -796,6 +821,20 @@ def apply_post(path, qs):
             HEADLIGHT.update(active=False, state="STOPPED", blockReason="USER_STOP")
         return None
 
+    if path == "/api/rear-fog-strobe/start":
+        if REAR_FOG["active"]:
+            return "ALREADY_ACTIVE"
+        if not REAR_FOG["templateValid"]:
+            return "NO_FRAME"
+        REAR_FOG.update(active=True, started=time.time(), pulses=1, txOk=0, txFail=0,
+                        stopReason="NONE", stockFogOn=False)
+        return None
+
+    if path == "/api/rear-fog-strobe/stop":
+        if REAR_FOG["active"]:
+            REAR_FOG.update(active=False, stopReason="USER_STOP")
+        return None
+
     if path == "/api/profile/select":
         names = {1: "Model Y L", 2: "Model Y Juniper", 3: "Model Y Legacy",
                  4: "Model 3 Highland", 5: "Model 3 Legacy"}
@@ -853,6 +892,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path in ("/api/headlight-strobe/config", "/api/headlight-strobe/stats"):
             return self.send_json(headlight_json())
+        if path == "/api/rear-fog-strobe/stats":
+            return self.send_json(rear_fog_json())
 
         if path == "/api/snapshot":
             groups = qs.get("groups", ["home"])[0]
@@ -897,6 +938,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": False, "error": error}, status=400)
         if path.startswith("/api/headlight-strobe/"):
             return self.send_json(headlight_json())
+        if path.startswith("/api/rear-fog-strobe/"):
+            return self.send_json(rear_fog_json())
         return self.send_json({"ok": True})
 
 

@@ -485,6 +485,8 @@ static void canTaskNativeA(void* arg) {
       canTxMarkFresh(CAN_TX_FRESH_PARTY); // physical CAN A fresh in this recovery epoch
       bootCaptureObservePartyFrame(partyId, rxf.can_dlc, rxf.data);
       researchCaptureObserveParty(partyId, rxf.can_dlc, rxf.data);
+      // 后雾灯爆闪：0x273(UI_vehicleControl) 的模板与注入口。
+      if (partyId == 0x273 && rxf.can_dlc >= 8) rearFogStrobeObserve(0, rxf.data, rxf.can_dlc);
       driverMonitorCaptureObserve(DRIVER_MONITOR_BUS_A, partyId, rxf.can_dlc, rxf.data);
       if (partyId == UI_CHASSIS_CONTROL_ID && rxf.can_dlc >= 8)
         uiAutoLaneChangeObserveAndInjectCanA(rxf);
@@ -688,6 +690,10 @@ static void canTaskTwai(void* arg) {
         case 0x7FF:
           countryOverrideObserve7ffCanB(f, countryRxEpoch);
           break;
+        // 后雾灯爆闪（Model Y L 的 Vehicle 总线在 CAN B 时走这里）。
+        case 0x273:
+          if (f.data_length_code >= 8) rearFogStrobeObserve(1, f.data, f.data_length_code);
+          break;
 
         // 1016 (SPR) is read on CAN B for both models.
         case DRIVER_ASSIST_ID:
@@ -743,6 +749,7 @@ static void canTaskTwai(void* arg) {
     }
     blinkATxTick();
     headlightStrobeTick();
+    rearFogStrobeTick();
 
     // Read alerts again after RX/tick work. BUS_OFF snapshot behavior is
     // preserved; d3 additionally consumes TX_IDLE/TX_SUCCESS for diagnostics.

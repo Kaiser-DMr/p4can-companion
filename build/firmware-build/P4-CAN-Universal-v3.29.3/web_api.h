@@ -5803,6 +5803,65 @@ static void httpHeadlightStrobeStats() {
   server.send(200, "application/json", headlightStrobeJson());
 }
 
+// ==== 后雾灯爆闪：HTTP 接口 ====
+static String rearFogStrobeJson() {
+  const bool active = rearFogStrobeState.active;
+  const uint32_t now = (uint32_t)millis();
+  const uint32_t remaining =
+      active ? ((uint32_t)(now - rearFogStrobeState.startedAtMs) >= REAR_FOG_MAX_MS
+                    ? 0
+                    : (REAR_FOG_MAX_MS - (uint32_t)(now - rearFogStrobeState.startedAtMs)))
+             : 0;
+  const uint32_t frameAge = rearFogStrobeState.templateValid
+                                ? (uint32_t)(now - rearFogStrobeState.templateMs)
+                                : 0xFFFFFFFFu;
+  String json;
+  JsonWriterArduino jw(json);
+  jw.boolean("ok", true);
+  jw.boolean("active", active);
+  jw.u32("remainingMs", remaining);
+  jw.u32("totalMs", (uint32_t)REAR_FOG_MAX_MS);
+  jw.u32("intervalMs", (uint32_t)rearFogStrobeHalfPeriodMs());
+  jw.boolean("phaseOn", rearFogStrobeState.phaseOn);
+  jw.u32("pulses", rearFogStrobeState.pulses);
+  jw.u32("txOk", rearFogStrobeState.txOk);
+  jw.u32("txFail", rearFogStrobeState.txFail);
+  jw.boolean("stockFogOn", rearFogStrobeState.stockFogOn);
+  jw.boolean("templateValid", rearFogStrobeState.templateValid &&
+                                  frameAge <= REAR_FOG_TEMPLATE_TTL_MS);
+  jw.u32("frameAgeMs", frameAge == 0xFFFFFFFFu ? 0xFFFFFFFFu : frameAge);
+  jw.boolean("setupMode", vehicleProfileSetupMode);
+  const char *reason = "NONE";
+  switch (rearFogStrobeState.stopReason) {
+    case REAR_FOG_STOP_USER: reason = "USER_STOP"; break;
+    case REAR_FOG_STOP_TIMEOUT: reason = "TIMEOUT"; break;
+    case REAR_FOG_STOP_NO_FRAME: reason = "NO_FRAME"; break;
+    default: break;
+  }
+  jw.string("stopReason", reason);
+  jw.finish();
+  return json;
+}
+
+static void httpRearFogStrobeStats() {
+  server.send(200, "application/json", rearFogStrobeJson());
+}
+
+static void httpRearFogStrobeStart() {
+  if (rearFogStrobeStart()) {
+    server.send(200, "application/json", rearFogStrobeJson());
+    return;
+  }
+  const char *error = rearFogStrobeState.active ? "ALREADY_ACTIVE" : "NO_FRAME";
+  server.send(409, "application/json",
+              String("{\"ok\":false,\"error\":\"") + error + "\"}");
+}
+
+static void httpRearFogStrobeStop() {
+  rearFogStrobeStop(REAR_FOG_STOP_USER);
+  server.send(200, "application/json", rearFogStrobeJson());
+}
+
 static void webTask(void *arg) {
   P4CAN_SERIAL_PRINTLN("WiFi: Starting AP...");
   while (!p4NetworkAllowsBle()) {
@@ -5924,6 +5983,9 @@ static void webTask(void *arg) {
     server.on("/api/headlight-strobe/trigger", HTTP_POST, httpHeadlightStrobeTrigger);
     server.on("/api/headlight-strobe/stop", HTTP_POST, httpHeadlightStrobeStop);
     server.on("/api/headlight-strobe/stats", HTTP_GET, httpHeadlightStrobeStats);
+    server.on("/api/rear-fog-strobe/stats", HTTP_GET, httpRearFogStrobeStats);
+    server.on("/api/rear-fog-strobe/start", HTTP_POST, httpRearFogStrobeStart);
+    server.on("/api/rear-fog-strobe/stop", HTTP_POST, httpRearFogStrobeStop);
     server.on("/api/s3xy/stats", HTTP_GET, httpS3xyStats);
     server.on("/api/s3xy/bluetooth-enable", HTTP_POST, httpS3xyBluetoothEnable);
     server.on("/api/s3xy/bluetooth-disable", HTTP_POST, httpS3xyBluetoothDisable);

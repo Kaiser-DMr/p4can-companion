@@ -392,6 +392,19 @@ enum FeatureCatalog {
         ),
 
         FeatureModule(
+            id: "rearFog",
+            title: "后雾灯爆闪",
+            summary: "注入 0x273 的后雾灯位：开始后连续闪烁，单次最长 30 秒，结束自动恢复。",
+            titleEN: "Rear Fog Strobe",
+            summaryEN: "Pulse the rear fog lamp via 0x273 for up to 30 seconds, then restore automatically.",
+            icon: "emoji:🌫️",
+            section: .driving,
+            statsPath: P4Route.rearFogStrobeStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
             id: "summon",
             title: "召唤状态",
             summary: "查看召唤会话、确认挡位、信号新鲜度与发送队列（只读）。",

@@ -2218,6 +2218,7 @@ static void sendStalkFrameCanA(uint8_t turn, uint32_t txEpoch, bool directUser) 
 
 
 #include "headlight_strobe.h"
+#include "rear_fog_strobe.h"
 
 static void handle3C2OnCanA(const struct CanFrame &incoming) {
   if (incoming.can_dlc < 8 || vcleftMuxPure(incoming.data) != VCLEFT_SWITCH_MUX1) return;

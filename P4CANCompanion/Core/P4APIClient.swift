@@ -116,6 +116,10 @@ enum P4Route {
     static let headlightStrobeStats = "/api/headlight-strobe/stats"
     static let headlightStrobeTrigger = "/api/headlight-strobe/trigger"
     static let headlightStrobeStop = "/api/headlight-strobe/stop"
+    // 后雾灯爆闪（固件 rear_fog_strobe.h）
+    static let rearFogStrobeStats = "/api/rear-fog-strobe/stats"
+    static let rearFogStrobeStart = "/api/rear-fog-strobe/start"
+    static let rearFogStrobeStop = "/api/rear-fog-strobe/stop"
 
     static let researchCaptureStats = "/api/researchcapture/stats"
     static let researchCaptureStart = "/api/researchcapture/start"

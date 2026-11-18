@@ -596,6 +596,7 @@ body.p4-2027 .panel{scroll-padding-bottom:calc(100px + env(safe-area-inset-botto
 <div class="sectionhead"><div class="sectiontitle">Lighting</div><div class="sectionnote">Strobe</div></div>
 <section class="card">
 <div class="listrow clickable" data-panel="panelStrobe"><div><div class="listkey">前大灯爆闪</div><div class="listdesc" id="strobeRowDesc">按住远光拨杆持续爆闪</div></div><span class="chev">›</span></div>
+<div class="listrow clickable" data-panel="panelRearFog"><div><div class="listkey">后雾灯爆闪</div><div class="listdesc" id="rearFogRowDesc">注入 0x273 · 单次最长 30 秒</div></div><span class="chev">›</span></div>
 </section>
 <div class="sectionhead"><div class="sectiontitle">System</div><div class="sectionnote">P4-CAN</div></div>
 <section class="card">
@@ -2040,8 +2041,35 @@ setInterval(()=>{if(universalBootReady){pollTick(false);renderHeartbeatSnapshot(
 })();// ── 前大灯爆闪（按住拨杆）──
 async function loadStrobeCfg(){try{const r=await fetch('/api/headlight-strobe/config');const j=await r.json();const on=!!j.holdEnabled;const t=document.getElementById('strobeHoldToggle');if(t)t.checked=on;const rg=document.getElementById('strobeIntervalRange');if(rg)rg.value=String(j.intervalMs||100);const rv=document.getElementById('strobeIntervalVal');if(rv)rv.textContent=(j.intervalMs||100)+' ms';const st=document.getElementById('strobeStateText');if(st)st.textContent=j.active?('运行中 · '+(j.flashesDone||0)+' 次'):(j.supported?'待机':'不支持（无拨杆）');const pt=document.getElementById('strobeParamsText');if(pt)pt.textContent=(j.intervalMs||0)+' ms / '+(j.maxRunMs||0)+' ms';const dt=document.getElementById('strobeDelayText');if(dt)dt.textContent=((j.holdDelayMs||2500)/1000).toFixed(1)+' s';const rd=document.getElementById('strobeRowDesc');if(rd)rd.textContent=on?('已开启 · 按住拨杆爆闪 · '+(j.intervalMs||0)+' ms'):'已关闭';}catch(e){}}
 (function(){const t=document.getElementById('strobeHoldToggle');if(t)t.onchange=async e=>{const on=e.target.checked;try{await featurePostJson('/api/headlight-strobe/config?holdEnabled='+(on?1:0));}catch(err){e.target.checked=!on;}loadStrobeCfg();};const rg=document.getElementById('strobeIntervalRange');if(rg){rg.oninput=()=>{const v=document.getElementById('strobeIntervalVal');if(v)v.textContent=rg.value+' ms';};rg.onchange=async()=>{try{await featurePostJson('/api/headlight-strobe/config?intervalMs='+rg.value);}catch(err){}loadStrobeCfg();};}loadStrobeCfg();setInterval(()=>{const p=document.getElementById('panelStrobe');if(p&&p.classList.contains('show'))loadStrobeCfg();},1500);})();
+// ── 后雾灯爆闪 ──
+(function(){
+  const $=id=>document.getElementById(id);
+  async function loadRearFog(){
+    try{
+      const r=await fetch('/api/rear-fog-strobe/stats');const j=await r.json();
+      const active=!!j.active;
+      const st=$('rearFogState');
+      if(st)st.textContent=active?('运行中 · 第 '+(j.pulses||0)+' 次'):(j.templateValid?'待机':'等待 0x273 帧');
+      const rm=$('rearFogRemain');
+      if(rm)rm.textContent=active?((j.remainingMs||0)/1000).toFixed(1)+' s / '+((j.totalMs||30000)/1000).toFixed(0)+' s':'—';
+      const iv=$('rearFogInterval');if(iv)iv.textContent=(j.intervalMs||100)+' ms';
+      const tx=$('rearFogTx');if(tx)tx.textContent=(j.txOk||0)+' / '+(j.txFail||0);
+      const sk=$('rearFogStock');if(sk)sk.textContent=j.stockFogOn?'开':'关';
+      const rd=$('rearFogRowDesc');if(rd)rd.textContent=active?('运行中 · 剩余 '+((j.remainingMs||0)/1000).toFixed(1)+' s'):'注入 0x273 · 单次最长 30 秒';
+      const sb=$('rearFogStartBtn');if(sb){sb.disabled=active;sb.style.opacity=active?'.45':'1';sb.textContent=active?'爆闪中…':'开始爆闪';}
+      const tb=$('rearFogStopBtn');if(tb){tb.disabled=!active;tb.style.opacity=active?'1':'.45';}
+    }catch(e){}
+  }
+  const sb=$('rearFogStartBtn');
+  if(sb)sb.onclick=async()=>{sb.disabled=true;try{await featurePostJson('/api/rear-fog-strobe/start');}catch(e){alert('无法开始：需要先收到整车 0x273 帧');}loadRearFog();};
+  const tb=$('rearFogStopBtn');
+  if(tb)tb.onclick=async()=>{tb.disabled=true;try{await featurePostJson('/api/rear-fog-strobe/stop');}catch(e){}loadRearFog();};
+  loadRearFog();
+  setInterval(()=>{const p=$('panelRearFog');if(p&&p.classList.contains('show'))loadRearFog();},500);
+})();
 </script>
 
 
 <section class="panel" id="panelStrobe"><div class="panelin"><div class="paneltop"><button aria-label="Back" class="backbtn"><svg aria-hidden="true" class="backIcon" viewbox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">SETTINGS</div></div><div class="panelHero">前大灯爆闪</div><div class="panelSub">按住远光拨杆 2.5 秒后开始爆闪 · 松开立即停止</div><section class="card"><div class="listrow"><div><div class="listkey">前爆闪开关</div><div class="listdesc">关闭后拉住拨杆不再触发（需按住 2.5 秒）</div></div><label class="toggle"><input id="strobeHoldToggle" type="checkbox"/><span class="track"></span></label></div></section><section class="card"><div class="listrow"><div><div class="listkey">间隔</div><div class="listdesc">50–500 ms · 一次开/关的半周期</div></div><span class="value" id="strobeIntervalVal">100 ms</span></div><div style="padding:0 16px 14px"><input id="strobeIntervalRange" type="range" min="50" max="500" step="10" value="100" style="width:100%"/></div></section><section class="card"><div class="body"><div class="r"><span class="rk2">状态</span><span id="strobeStateText">—</span></div><div class="r"><span class="rk2">间隔 / 上限</span><span id="strobeParamsText">—</span></div><div class="r"><span class="rk2">长按触发</span><span id="strobeDelayText">2.5 s</span></div></div></section><div class="softNote">需要车型支持拨杆（0x249）。需连续按住 2.5 秒才开始，松开立即停止并回到近光；按住超过上限会自动停止。</div></div></section>
+<section class="panel" id="panelRearFog"><div class="panelin"><div class="paneltop"><button aria-label="Back" class="backbtn"><svg aria-hidden="true" class="backIcon" viewbox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button><div class="paneltitle">SETTINGS</div></div><div class="panelHero">后雾灯爆闪</div><div class="panelSub">注入 0x273 的后雾灯位 · 单次最长 30 秒 · 到时自动恢复</div><section class="card"><div class="body"><div class="r"><span class="rk2">状态</span><span id="rearFogState">—</span></div><div class="r"><span class="rk2">剩余时间</span><span id="rearFogRemain">—</span></div><div class="r"><span class="rk2">间隔</span><span id="rearFogInterval">—</span></div><div class="r"><span class="rk2">发送 / 失败</span><span id="rearFogTx">—</span></div><div class="r"><span class="rk2">触发前后雾灯</span><span id="rearFogStock">—</span></div></div></section><div style="display:flex;gap:10px;padding:0 16px 14px"><button class="btn primary full" id="rearFogStartBtn" style="flex:1">开始爆闪</button><button class="btn full" id="rearFogStopBtn" style="flex:1">停止</button></div><div class="softNote">需要先收到整车 0x273 帧（车辆上电、车身总线在线）。爆闪期间持续回发修改后的 0x273，停止后整车下一帧即恢复原状态。</div></div></section>
 </body></html>
