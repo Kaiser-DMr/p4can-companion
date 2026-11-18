@@ -71,6 +71,61 @@ struct HeadlightStrobeView: View {
             }
 
             Section {
+                // 第一屏就是可操作区：状态一行 + 触发按钮，参数统一挪到下方。
+                HStack(spacing: Theme.spacing(1)) {
+                    Text(L10n.t("状态", "State"))
+                        .font(.subheadline)
+                    Spacer(minLength: Theme.spacing(1))
+                    Text(stateText)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(active ? Color.p4Warn : Color.secondary)
+                }
+                if dirty {
+                    Label(L10n.t("参数有未保存修改，保存后才能触发",
+                                 "Unsaved parameter changes — save before flashing"),
+                          systemImage: "exclamationmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.p4Warn)
+                }
+
+                Button {
+                    confirms = true
+                } label: {
+                    HStack(spacing: Theme.spacing(1)) {
+                        if busy { ProgressView().controlSize(.small) }
+                        Label(active ? L10n.t("爆闪进行中…", "Strobe active…")
+                                     : L10n.t("立即爆闪", "Flash now"),
+                              systemImage: "light.beacon.max.fill")
+                    }
+                }
+                .disabled(!canTrigger)
+
+                if active {
+                    Button(role: .destructive) {
+                        Task { await stop() }
+                    } label: {
+                        HStack(spacing: Theme.spacing(1)) {
+                            if busy { ProgressView().controlSize(.small) }
+                            Label(L10n.t("停止并恢复", "Stop and restore"), systemImage: "stop.circle")
+                        }
+                    }
+                    .disabled(busy)
+                }
+            } header: {
+                Label(L10n.t("触发", "Trigger"), systemImage: "bolt.fill")
+            } footer: {
+                if triggerSource == 1 {
+                    Text(L10n.t("已选择 S3XY 入口：请到「蓝牙」页把某个按键动作设为「前大灯爆闪」，App 内按钮不可用。",
+                                "S3XY is selected. Assign the “Headlight Strobe” action to a button in the Bluetooth tab."))
+                } else {
+                    Text(L10n.t("参数改动需先保存；爆闪期间不能重复触发，可随时停止。参数在下方。",
+                                "Save parameter changes first. Re-trigger is blocked while active; parameters are below."))
+                }
+            }
+
+            statusSection
+
+            Section {
                 Toggle(isOn: Binding(
                     get: { holdEnabled },
                     set: { on in
@@ -139,44 +194,6 @@ struct HeadlightStrobeView: View {
                             "Interval is the half-period between on/off toggles. Total = count × 2 × interval. The App button is disabled when S3XY is selected."))
             }
 
-            Section {
-                Button {
-                    confirms = true
-                } label: {
-                    HStack(spacing: Theme.spacing(1)) {
-                        if busy { ProgressView().controlSize(.small) }
-                        Label(active ? L10n.t("爆闪进行中…", "Strobe active…")
-                                     : L10n.t("立即爆闪", "Flash now"),
-                              systemImage: "light.beacon.max.fill")
-                    }
-                }
-                .disabled(!canTrigger)
-
-                if active {
-                    Button(role: .destructive) {
-                        Task { await stop() }
-                    } label: {
-                        HStack(spacing: Theme.spacing(1)) {
-                            if busy { ProgressView().controlSize(.small) }
-                            Label(L10n.t("停止并恢复", "Stop and restore"), systemImage: "stop.circle")
-                        }
-                    }
-                    .disabled(busy)
-                }
-            } header: {
-                Label(L10n.t("触发", "Trigger"), systemImage: "bolt.fill")
-            } footer: {
-                if triggerSource == 1 {
-                    Text(L10n.t("已选择 S3XY 入口：请到「蓝牙」页把某个按键动作设为「前大灯爆闪」，App 内按钮不可用。",
-                                "S3XY is selected. Assign the “Headlight Strobe” action to a button in the Bluetooth tab."))
-                } else {
-                    Text(L10n.t("触发前需保存参数；爆闪期间不能重复触发，可随时停止。",
-                                "Save settings before triggering. Re-trigger is blocked while active; you can stop at any time."))
-                }
-            }
-
-            statusSection
-
             if let errorText {
                 Section {
                     Label(errorText, systemImage: "exclamationmark.triangle")
@@ -208,13 +225,6 @@ struct HeadlightStrobeView: View {
     @ViewBuilder
     private var statusSection: some View {
         Section {
-            HStack {
-                Text(L10n.t("状态", "State"))
-                Spacer()
-                Text(stateText).foregroundStyle(active ? Color.p4Warn : Color.secondary)
-            }
-            .font(.subheadline)
-
             HStack {
                 Text(L10n.t("进度", "Progress"))
                 Spacer()

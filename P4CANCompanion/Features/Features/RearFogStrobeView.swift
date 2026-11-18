@@ -94,7 +94,7 @@ struct RearFogStrobeView: View {
             }
 
             Section {
-                LabeledContent(L10n.t("状态", "State"), value: stateText)
+                // 顶部圆环下方已有「待机 / 爆闪中」胶囊，这里不再重复状态行。
                 LabeledContent(L10n.t("间隔", "Interval"), value: "\(intervalMs) ms")
                 LabeledContent(L10n.t("发送 / 失败", "TX / fail"),
                                value: "\(object["txOk"]?.intValue ?? 0) / \(object["txFail"]?.intValue ?? 0)")
