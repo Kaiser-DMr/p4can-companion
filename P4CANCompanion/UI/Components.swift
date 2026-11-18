@@ -138,9 +138,15 @@ struct ToastOverlay: View {
                 .padding(.horizontal, Theme.spacing(2))
                 .padding(.bottom, Theme.spacing(2))
                 .accessibilityElement(children: .combine)
-                .transition(reduceMotion ? .opacity : .scale(scale: 0.96).combined(with: .opacity))
+                // 进入「材质化」（缩放 + 淡入），离场只淡出且更快：
+                // 离场是系统在响应，不该和进入一样慢。
+                .transition(reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .scale(scale: 0.96).combined(with: .opacity),
+                                removal: .opacity))
             }
-            .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 1.0), value: environment.toast?.id)
+            .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1.0), value: environment.toast?.id)
             .task(id: toast.id) {
                 try? await Task.sleep(for: .seconds(4))
                 if environment.toast?.id == toast.id {
@@ -379,7 +385,6 @@ struct MetricTile: View {
     var footnote: String? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 只有警告/错误才给数值上色；正常状态用主文字色，保持版面安静。
     private var valueColor: Color {
@@ -418,7 +423,8 @@ struct MetricTile: View {
                     Text(unit).font(.caption2).foregroundStyle(.secondary)
                 }
             }
-            .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 1.0), value: value)
+            // 设备每 500ms 刷新一次，逐值动画等于让数字一直处于运动中（高频交互不动画）。
+            // 等宽数字已经保证不抖动，这里只保留内容过渡给「模式切换」这类低频变化用。
             if let footnote {
                 Text(footnote)
                     .font(.caption2)

@@ -98,16 +98,6 @@ struct HeadlightStrobeView: View {
                             "The switch is written to the device immediately; no save needed."))
             }
 
-            Section {
-                Label {
-                    Text(L10n.t("爆闪会实际控制远光灯。请只在安全环境使用，并确认周围没有对向车辆或行人。",
-                                "The strobe actually controls the high beams. Use it only in a safe environment."))
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.p4Warn)
-                }
-                .font(.footnote)
-            }
-
             if !supported {
                 Section {
                     Label(L10n.t("当前车型不支持 0x249 拨杆注入（无拨杆版本暂不支持）。",

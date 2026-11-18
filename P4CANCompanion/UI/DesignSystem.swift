@@ -151,10 +151,11 @@ enum DS {
                     isEnabled ? ((isPressed ? pressedFill : nil) ?? fill) : disabledFill,
                     in: shape
                 )
-                .opacity(isPressed ? 0.85 : 1)
-                .scaleEffect(isPressed && !reduceMotion ? 0.98 : 1)
+                .opacity(isPressed ? 0.9 : 1)
+                .scaleEffect(isPressed && !reduceMotion ? 0.97 : 1)
+                // 按压反馈控制在 160ms 内：再慢就不像「听到了手指」，而像在播放动画。
                 .animation(
-                    reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 1.0),
+                    reduceMotion ? nil : .spring(response: 0.15, dampingFraction: 1.0),
                     value: isPressed
                 )
                 .contentShape(shape)

@@ -46,7 +46,7 @@ struct RulerSlider: View {
 
     /// 用户可感知的吸附动画：临界阻尼弹簧，不过冲（不是 momentum 交互，不该弹）。
     private var snapAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 1.0)
+        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 1.0)
     }
 
     var body: some View {
