@@ -1,8 +1,8 @@
-# P4-CAN 工具箱 · Mac 版运行说明（v3.19 / build 40）
+# P4-CAN 工具箱 · Mac 版运行说明（v3.20 / build 41）
 
 ## 产物
 
-- `P4CAN-Companion-mac-v3.19.zip`（约 3.5 MB）
+- `P4CAN-Companion-mac-v3.20.zip`（约 3.5 MB）
 - 解压即得 `P4CAN-Companion.app`：**macOS 原生应用**（Mac Catalyst）
 - 架构：universal（Apple Silicon arm64 + Intel x86_64）
 - 系统要求：macOS 14.0 或更高
