@@ -63,6 +63,29 @@ struct HeadlightStrobeView: View {
         ScrollViewReader { proxy in
         List {
             Section {
+                Toggle(isOn: Binding(
+                    get: { holdEnabled },
+                    set: { on in
+                        holdEnabled = on
+                        Haptics.impact()
+                        Task { await applyHold(on) }
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("按住拨杆爆闪", "Hold-stalk strobe"))
+                        Text(L10n.t("拉住远光拨杆 \(holdDelayText) 后开始爆闪，松开即停",
+                                    "Hold the stalk for \(holdDelayText) to start; release to stop"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(.accentColor)
+            } footer: {
+                Text(L10n.t("开关立即写入设备，无需保存。",
+                            "The switch is written to the device immediately; no save needed."))
+            }
+
+            Section {
                 Label {
                     Text(L10n.t("爆闪会实际控制远光灯。请只在安全环境使用，并确认周围没有对向车辆或行人。",
                                 "The strobe actually controls the high beams. Use it only in a safe environment."))
@@ -159,31 +182,6 @@ struct HeadlightStrobeView: View {
             }
 
             statusSection
-
-            Section {
-                Toggle(isOn: Binding(
-                    get: { holdEnabled },
-                    set: { on in
-                        holdEnabled = on
-                        Haptics.impact()
-                        Task { await applyHold(on) }
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("按住拨杆爆闪", "Hold-stalk strobe"))
-                        Text(L10n.t("拉住远光拨杆 \(holdDelayText) 后开始爆闪，松开即停",
-                                    "Hold the stalk for \(holdDelayText) to start; release to stop"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .tint(.accentColor)
-            } header: {
-                Label(L10n.t("按住拨杆", "Hold to strobe"), systemImage: "hand.point.up.left")
-            } footer: {
-                Text(L10n.t("开关立即写入设备，无需保存。",
-                            "The switch is written to the device immediately; no save needed."))
-            }
 
             Section {
                 RulerSlider(
