@@ -55,6 +55,7 @@ struct HeadlightStrobeState {
   uint8_t trigger;
   uint32_t startedAtMs;
   uint32_t lastToggleMs;
+  uint32_t epochAtStart;
   uint16_t flashesDone;
   bool onPhase;
   uint8_t preHighBeam;
@@ -67,7 +68,7 @@ struct HeadlightStrobeState {
 static HeadlightStrobeConfig headlightStrobeConfig = {10, 200, HS_TRIGGER_APP};
 
 static HeadlightStrobeState headlightStrobeState = {
-    false, 10, 200, HS_TRIGGER_APP, 0, 0, 0, false, HS_BEAM_IDLE,
+    false, 10, 200, HS_TRIGGER_APP, 0, 0, 0, 0, false, HS_BEAM_IDLE,
     HS_STATE_IDLE, "", 0, 0};
 
 static portMUX_TYPE headlightStrobeMux = portMUX_INITIALIZER_UNLOCKED;
@@ -167,6 +168,7 @@ static bool headlightStrobeBegin(uint8_t source) {
   headlightStrobeState.trigger = headlightStrobeConfig.trigger;
   headlightStrobeState.startedAtMs = now;
   headlightStrobeState.lastToggleMs = now;
+  headlightStrobeState.epochAtStart = canTxEpochSnapshot();
   headlightStrobeState.flashesDone = 0;
   headlightStrobeState.onPhase = false;
   headlightStrobeState.preHighBeam = (uint8_t)((stock[1] >> 4) & 0x03u);
@@ -200,6 +202,11 @@ static void headlightStrobeStop(const char *reason, bool restore) {
 
 static void headlightStrobeTick() {
   if (!headlightStrobeState.active) return;
+
+  if (canTxEpochSnapshot() != headlightStrobeState.epochAtStart) {
+    headlightStrobeStop("CAN_EPOCH_CHANGED", true);
+    return;
+  }
 
   const uint32_t now = (uint32_t)millis();
   const uint32_t half = headlightStrobeState.intervalMs;

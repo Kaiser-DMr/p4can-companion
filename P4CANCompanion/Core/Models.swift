@@ -179,6 +179,7 @@ enum S3XYActionCatalog {
         ("performance_mode", "性能模式"),
         ("tlssc_toggle", "TLSSC 开关"),
         ("auto_blinker_toggle", "自动转向灯开关"),
+        ("high_beam_strobe", "前大灯爆闪"),
         ("research_capture_a", "研究捕获 A"),
         ("research_capture_b", "研究捕获 B"),
         ("research_capture_c", "研究捕获 C"),

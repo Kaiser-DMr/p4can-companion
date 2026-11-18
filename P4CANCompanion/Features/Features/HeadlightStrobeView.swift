@@ -226,6 +226,7 @@ struct HeadlightStrobeView: View {
         case "TURN_SIGNAL_ACTIVE": return L10n.t("转向灯注入进行中，请稍后再试", "Turn-signal injection is active")
         case "SOURCE_MISMATCH": return L10n.t("触发入口与配置不一致", "Trigger source mismatch")
         case "SEND_FAILED": return L10n.t("CAN 发送失败，已停止并恢复", "CAN send failed; stopped and restored")
+        case "CAN_EPOCH_CHANGED": return L10n.t("CAN 总线已恢复/重启，爆闪已停止", "CAN bus epoch changed; strobe stopped")
         case "USER_STOP": return L10n.t("已手动停止", "Stopped by user")
         case "COMPLETE": return L10n.t("已完成并恢复", "Completed and restored")
         default: return raw

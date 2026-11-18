@@ -90,7 +90,7 @@ headlightStrobeTick();   // 新增
 ```
 
 `state`: `IDLE / ACTIVE / COMPLETE / STOPPED / BLOCKED`
-`blockReason`: `ALREADY_ACTIVE / NO_STOCK_TEMPLATE / STALKLESS_UNSUPPORTED / TURN_SIGNAL_ACTIVE / SOURCE_MISMATCH / SEND_FAILED / USER_STOP / COMPLETE`
+`blockReason`: `ALREADY_ACTIVE / NO_STOCK_TEMPLATE / STALKLESS_UNSUPPORTED / TURN_SIGNAL_ACTIVE / SOURCE_MISMATCH / SEND_FAILED / CAN_EPOCH_CHANGED / USER_STOP / COMPLETE`
 
 ### 4.2 NVS 与 JSON（放在 `web_api.h` 路由注册之前）
 
@@ -236,7 +236,7 @@ App 的 S3XY 动作下拉里新增 `high_beam_strobe` / `High Beam Strobe`。
 1. **0x249 独占**：爆闪 active 时 `sendStalkFrameCanB/A` 直接返回，转向灯/ALC/one-shot 的注入暂停；`headlightStrobe` 自己的帧保留模板里的转向 nibble，物理拨杆不受影响。
 2. **启动前置条件**：必须已有真实 0x249 模板；当前不是 STALK 变体（无拨杆）直接拒绝；转向灯注入正在进行时拒绝。
 3. **防重入**：`active` 时再次 trigger 返回 409 `ALREADY_ACTIVE`；App 按钮同时禁用。
-4. **中断**：stop 立即发触发前高灯状态并释放 0x249；发送失败累计 5 次自动停止并恢复。
+4. **中断**：stop 立即发触发前高灯状态并释放 0x249；发送失败累计 5 次、CAN epoch 变化（总线恢复/重启）时自动停止并恢复。
 5. **恢复语义**：触发前 PUSH（远光常开）会恢复 PUSH；触发前 IDLE 恢复 IDLE；爆闪期间驾驶员改高灯不会被记录为“触发前状态”。
 
 ## 7. 验证方式
