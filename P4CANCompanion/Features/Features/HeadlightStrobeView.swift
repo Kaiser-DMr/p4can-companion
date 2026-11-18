@@ -70,6 +70,19 @@ struct HeadlightStrobeView: View {
 
     private var intervalStepText: String { "10" }
 
+    /// 撤销按钮的弹性样式：中性玻璃底 + 主文字色，弱于主操作但仍是可点实体；
+    /// 尺寸与保存按钮完全一致（50pt / 12pt 圆角 / 同内边距），保证两行边缘对齐。
+    private var revertButtonStyle: ElasticButton.Style {
+        ElasticButton.Style(
+            fill: Color(uiColor: .secondarySystemFill),
+            ink: .primary,
+            radius: Theme.Radius.button,
+            height: 50,
+            padding: 20,
+            depth: false
+        )
+    }
+
     /// 保存按钮的弹性样式：沿用主操作蓝（白字）、12pt 连续圆角、50pt 高。
     /// 禁用时组件自动改为透明玻璃 + 弱化文字，不必再叠一层 opacity。
     private var saveButtonStyle: ElasticButton.Style {
@@ -93,7 +106,7 @@ struct HeadlightStrobeView: View {
             errorFill: .p4Err,
             disabledFill: Color(uiColor: .tertiarySystemFill),
             disabledInk: Color(uiColor: .secondaryLabel),
-            height: 44,
+            height: 50,
             font: .subheadline.weight(.semibold)
         )
     }
@@ -174,9 +187,7 @@ struct HeadlightStrobeView: View {
                     ) {
                         confirms = true
                     }
-                    // 组件默认铺满整行；这里限宽成胶囊，避免再次变成压住版面的大色块，
-                    // 同时给失败态（标签 + 重试气泡）留出足够宽度。
-                    .frame(maxWidth: 220)
+                    // 与下方「保存参数」同宽同高（整行、50pt），两处主操作对齐。
                     .accessibilityLabel(L10n.t("立即开始前大灯爆闪", "Start headlight strobe now"))
                     .accessibilityHint(L10n.t("会实际控制远光灯，需确认后执行",
                                               "Controls the real high beams; asks for confirmation"))
@@ -256,33 +267,40 @@ struct HeadlightStrobeView: View {
             .id("params")
 
             Section {
-                Button {
-                    Task { await saveConfig() }
-                } label: {
-                    HStack(spacing: 8) {
-                        if busy {
-                            ProgressView().controlSize(.small).tint(.white)
-                        } else {
-                            Image(systemName: "checkmark.circle.fill")
+                // 两个动作同宽、同高、同圆角，放进一个 VStack：
+                // 既保证左右边缘对齐，也避免系统行分隔线切在两颗玻璃按钮中间。
+                VStack(spacing: 12) {
+                    Button {
+                        Task { await saveConfig() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if busy {
+                                ProgressView().controlSize(.small).tint(.white)
+                            } else {
+                                Image(systemName: "checkmark.circle.fill")
+                            }
+                            Text(L10n.t("保存参数", "Save settings"))
                         }
-                        Text(L10n.t("保存参数", "Save settings"))
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
-                }
-                // SwiftPieces ElasticButton：按下向触点挤压缩放、拖拽有橡皮筋阻力，
-                // 抬起带一点回弹；表面是同款液体玻璃，与上方触发按钮同一套材质语言。
-                .buttonStyle(.elastic(saveButtonStyle))
-                .disabled(busy || !dirty || active)
-                .accessibilityHint(L10n.t("保存次数与触发入口；间隔会即时生效",
-                                          "Saves count and trigger source; interval applies immediately"))
+                    // SwiftPieces ElasticButton：按下向触点挤压缩放、拖拽有橡皮筋阻力，
+                    // 抬起带一点回弹；表面是同款液体玻璃，与上方触发按钮同一套材质语言。
+                    .buttonStyle(.elastic(saveButtonStyle))
+                    .disabled(busy || !dirty || active)
+                    .accessibilityHint(L10n.t("保存次数与触发入口；间隔会即时生效",
+                                              "Saves count and trigger source; interval applies immediately"))
 
-                Button {
-                    resetToSaved()
-                } label: {
-                    Text(L10n.t("撤销未保存修改", "Revert unsaved changes"))
+                    Button {
+                        resetToSaved()
+                    } label: {
+                        Text(L10n.t("撤销未保存修改", "Revert unsaved changes"))
+                            .frame(maxWidth: .infinity)
+                    }
+                    // 同为 ElasticButton，中性玻璃底，尺寸与保存按钮完全一致。
+                    .buttonStyle(.elastic(revertButtonStyle))
+                    .disabled(busy || !dirty)
                 }
-                .buttonStyle(.dsSecondary(compact: true))
-                .disabled(busy || !dirty)
+                .padding(.vertical, 2)
             }
 
             if let errorText {
