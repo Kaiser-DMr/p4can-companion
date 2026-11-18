@@ -125,9 +125,12 @@ static inline bool headlightStrobeIsActive() {
 
 static inline void headlightStrobeSetBlocked(const char *reason) {
   portENTER_CRITICAL(&headlightStrobeMux);
-  headlightStrobeState.active = false;
-  headlightStrobeState.state = HS_STATE_BLOCKED;
-  headlightStrobeState.blockReason = reason ? reason : "";
+  // 运行中不清 active：以前这里会把正在跑的爆闪直接掐掉，
+  // 表现就是「按住起爆瞬间被自己判成 ALREADY_ACTIVE 并停止」。
+  if (!headlightStrobeState.active) {
+    headlightStrobeState.state = HS_STATE_BLOCKED;
+    headlightStrobeState.blockReason = reason ? reason : "";
+  }
   portEXIT_CRITICAL(&headlightStrobeMux);
 }
 
@@ -219,7 +222,10 @@ static bool headlightStrobeBegin(uint8_t source) {
   portENTER_CRITICAL(&headlightStrobeMux);
   headlightStrobeState.count = cfgCount;
   headlightStrobeState.intervalMs = cfgInterval;
-  headlightStrobeState.trigger = headlightStrobeConfig.trigger;
+  // 记录「本次是谁触发的」：holdTick 靠它判断 holdActive。
+  // 以前写的是配置项（APP/S3XY），按住起爆后会被判成非 HOLD，
+  // 下一拍重复调用 begin() → ALREADY_ACTIVE → 爆闪被掐掉。
+  headlightStrobeState.trigger = (uint8_t)source;
   headlightStrobeState.totalMs = runTotal;
   headlightStrobeState.durationMs = cfgDuration;
   headlightStrobeState.stopMode = cfgStopMode;
