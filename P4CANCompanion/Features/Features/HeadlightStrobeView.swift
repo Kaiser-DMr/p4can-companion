@@ -44,6 +44,19 @@ struct HeadlightStrobeView: View {
         Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled) != saved
     }
 
+    /// 按钮下方的提醒：优先说明为什么点不了，其次说明操作限制。
+    private var triggerHintText: String {
+        if triggerSource == 1 {
+            return L10n.t("触发入口已设为 S3XY 按键，请到「蓝牙」页配置；App 内按钮不可用。",
+                          "Trigger source is the S3XY button — configure it in the Bluetooth tab.")
+        }
+        if dirty {
+            return L10n.t("参数有未保存修改，保存后才能触发。", "Save parameter changes before flashing.")
+        }
+        return L10n.t("参数改动需先保存；爆闪期间不能重复触发，可随时停止。",
+                      "Save changes first. Re-trigger is blocked while active; you can stop at any time.")
+    }
+
     private var holdDelayText: String {
         String(format: "%.1f s", Double(holdDelayMs) / 1000)
     }
@@ -106,7 +119,7 @@ struct HeadlightStrobeView: View {
             }
 
             Section {
-                // 第一屏就是可操作区：状态一行 + 触发按钮，参数统一挪到下方。
+                // 第一屏就是可操作区：状态一行 + 触发按钮 + 按钮下方的提醒。
                 HStack(spacing: Theme.spacing(1)) {
                     Text(L10n.t("状态", "State"))
                         .font(.subheadline)
@@ -115,70 +128,68 @@ struct HeadlightStrobeView: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(active ? Color.p4Warn : Color.secondary)
                 }
-                if dirty {
-                    Label(L10n.t("参数有未保存修改，保存后才能触发",
-                                 "Unsaved parameter changes — save before flashing"),
-                          systemImage: "exclamationmark.circle")
-                        .font(.caption)
-                        .foregroundStyle(.p4Warn)
-                }
 
-                Button {
-                    confirms = true
-                } label: {
-                    HStack(spacing: 8) {
-                        if busy {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "light.beacon.max.fill")
-                                .font(.body.weight(.semibold))
-                        }
-                        Text(active ? L10n.t("爆闪进行中…", "Strobe active…")
-                                    : L10n.t("立即爆闪", "Flash now"))
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(active ? Color.p4Warn : Color.accentColor)
-                .disabled(!canTrigger)
-                .accessibilityLabel(L10n.t("立即开始前大灯爆闪", "Start headlight strobe now"))
-                .accessibilityHint(L10n.t("会实际控制远光灯，需确认后执行",
-                                          "Controls the real high beams; asks for confirmation"))
-
-                if active {
-                    Button(role: .destructive) {
-                        Task { await stop() }
+                VStack(spacing: 8) {
+                    Button {
+                        confirms = true
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 6) {
                             if busy {
-                                ProgressView().controlSize(.small)
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(.white)
                             } else {
-                                Image(systemName: "stop.circle.fill")
-                                    .font(.body.weight(.semibold))
+                                Image(systemName: "light.beacon.max.fill")
+                                    .font(.footnote.weight(.semibold))
                             }
-                            Text(L10n.t("停止并恢复", "Stop and restore"))
-                                .font(.headline)
+                            Text(active ? L10n.t("爆闪进行中…", "Strobe active…")
+                                        : L10n.t("立即爆闪", "Flash now"))
+                                .font(.subheadline.weight(.semibold))
                         }
-                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(Color.p4Err)
-                    .disabled(busy)
-                    .accessibilityLabel(L10n.t("停止爆闪并恢复灯光", "Stop the strobe and restore lights"))
+                    .buttonStyle(.borderedProminent)
+                    .tint(active ? Color.p4Warn : Color.accentColor)
+                    .disabled(!canTrigger)
+                    .accessibilityLabel(L10n.t("立即开始前大灯爆闪", "Start headlight strobe now"))
+                    .accessibilityHint(L10n.t("会实际控制远光灯，需确认后执行",
+                                              "Controls the real high beams; asks for confirmation"))
+
+                    if active {
+                        Button(role: .destructive) {
+                            Task { await stop() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                if busy {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "stop.circle.fill")
+                                        .font(.footnote.weight(.semibold))
+                                }
+                                Text(L10n.t("停止并恢复", "Stop and restore"))
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .padding(.horizontal, 18)
+                            .frame(minHeight: 40)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(Color.p4Err)
+                        .disabled(busy)
+                        .accessibilityLabel(L10n.t("停止爆闪并恢复灯光", "Stop the strobe and restore lights"))
+                    }
+
+                    // 提醒紧跟按钮，不再作为整段 footer 漂在卡片外。
+                    Text(triggerHintText)
+                        .font(.caption)
+                        .foregroundStyle(dirty ? Color.p4Warn : Color.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
                 }
+                .frame(maxWidth: .infinity)
             } header: {
                 Label(L10n.t("触发", "Trigger"), systemImage: "bolt.fill")
-            } footer: {
-                if triggerSource == 1 {
-                    Text(L10n.t("已选择 S3XY 入口：请到「蓝牙」页把某个按键动作设为「前大灯爆闪」，App 内按钮不可用。",
-                                "S3XY is selected. Assign the “Headlight Strobe” action to a button in the Bluetooth tab."))
-                } else {
-                    Text(L10n.t("参数改动需先保存；爆闪期间不能重复触发，可随时停止。参数在下方。",
-                                "Save parameter changes first. Re-trigger is blocked while active; parameters are below."))
-                }
             }
 
             statusSection
