@@ -147,6 +147,28 @@ struct StatusChip: View {
     }
 }
 
+
+// MARK: - 模块图标
+
+/// 模块图标：优先按 Assets 资源名查找（如 TLSSC 的红绿灯），否则回退 SF Symbol。
+struct ModuleIcon: View {
+    let name: String
+
+    var body: some View {
+        if name == "trafficlight" {
+            Text("🚦").font(.system(size: 17))
+        } else if UIImage(named: name) != nil {
+            Image(name)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+        } else {
+            Image(systemName: name)
+        }
+    }
+}
+
 // MARK: - KPI 瓦片
 
 /// 关键指标瓦片：图标 + 名称 + 大数字（+ 单位）+ 备注。

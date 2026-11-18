@@ -374,7 +374,7 @@ private struct FeatureRow: View {
 
     var body: some View {
         HStack(spacing: Theme.spacing(1.5)) {
-            Image(systemName: module.icon)
+            ModuleIcon(name: module.icon)
                 .foregroundStyle(.tint)
                 .frame(width: 30, height: 30)
                 .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -424,7 +424,7 @@ private struct InlineFeatureRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
+            ModuleIcon(name: icon)
                 .font(.body)
                 .foregroundStyle(.tint)
                 .frame(width: 30, height: 30)
