@@ -44,11 +44,23 @@ struct HeadlightStrobeView: View {
         Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled) != saved
     }
 
+    private var holdDelayText: String {
+        String(format: "%.1f s", Double(holdDelayMs) / 1000)
+    }
+
+    private var totalDurationText: String {
+        let seconds = Double(count * 2 * intervalMs) / 1000
+        return String(format: "%.1f s", seconds)
+    }
+
+    private var intervalStepText: String { "10" }
+
     private var canTrigger: Bool {
         supported && !active && !busy && triggerSource == 0 && !dirty
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         List {
             Section {
                 Label {
@@ -91,25 +103,48 @@ struct HeadlightStrobeView: View {
                 Button {
                     confirms = true
                 } label: {
-                    HStack(spacing: Theme.spacing(1)) {
-                        if busy { ProgressView().controlSize(.small) }
-                        Label(active ? L10n.t("爆闪进行中…", "Strobe active…")
-                                     : L10n.t("立即爆闪", "Flash now"),
-                              systemImage: "light.beacon.max.fill")
+                    HStack(spacing: 8) {
+                        if busy {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "light.beacon.max.fill")
+                                .font(.body.weight(.semibold))
+                        }
+                        Text(active ? L10n.t("爆闪进行中…", "Strobe active…")
+                                    : L10n.t("立即爆闪", "Flash now"))
+                            .font(.headline)
                     }
+                    .frame(maxWidth: .infinity, minHeight: 50)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(active ? Color.p4Warn : Color.accentColor)
                 .disabled(!canTrigger)
+                .accessibilityLabel(L10n.t("立即开始前大灯爆闪", "Start headlight strobe now"))
+                .accessibilityHint(L10n.t("会实际控制远光灯，需确认后执行",
+                                          "Controls the real high beams; asks for confirmation"))
 
                 if active {
                     Button(role: .destructive) {
                         Task { await stop() }
                     } label: {
-                        HStack(spacing: Theme.spacing(1)) {
-                            if busy { ProgressView().controlSize(.small) }
-                            Label(L10n.t("停止并恢复", "Stop and restore"), systemImage: "stop.circle")
+                        HStack(spacing: 8) {
+                            if busy {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "stop.circle.fill")
+                                    .font(.body.weight(.semibold))
+                            }
+                            Text(L10n.t("停止并恢复", "Stop and restore"))
+                                .font(.headline)
                         }
+                        .frame(maxWidth: .infinity, minHeight: 50)
                     }
+                    .buttonStyle(.bordered)
+                    .tint(Color.p4Err)
                     .disabled(busy)
+                    .accessibilityLabel(L10n.t("停止爆闪并恢复灯光", "Stop the strobe and restore lights"))
                 }
             } header: {
                 Label(L10n.t("触发", "Trigger"), systemImage: "bolt.fill")
@@ -136,62 +171,91 @@ struct HeadlightStrobeView: View {
                 )) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L10n.t("按住拨杆爆闪", "Hold-stalk strobe"))
-                        Text(L10n.t("拉住远光拨杆 2.5 秒后开始爆闪，松开即停", "Hold the stalk for 2.5 s to start; release to stop"))
-                            .font(.caption2)
+                        Text(L10n.t("拉住远光拨杆 \(holdDelayText) 后开始爆闪，松开即停",
+                                    "Hold the stalk for \(holdDelayText) to start; release to stop"))
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-
-                Stepper(value: $intervalMs, in: 50...500, step: 10) {
-                    HStack {
-                        Text(L10n.t("间隔", "Interval"))
-                        Spacer()
-                        Text("\(intervalMs) ms").monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-                .onChange(of: intervalMs) { _, newValue in
-                    Task { await applyInterval(newValue) }
-                }
+                .tint(.accentColor)
             } header: {
                 Label(L10n.t("按住拨杆", "Hold to strobe"), systemImage: "hand.point.up.left")
             } footer: {
-                Text(L10n.t("开关与间隔立即写入设备，无需保存；间隔同时作用于手动爆闪。默认 100 ms，长按 2.5 秒触发。",
-                            "The switch and interval are written immediately. The interval also applies to manual strobe. Default 100 ms; hold 2.5 s to start."))
+                Text(L10n.t("开关立即写入设备，无需保存。",
+                            "The switch is written to the device immediately; no save needed."))
             }
 
             Section {
-                Stepper(value: $count, in: 1...30) {
-                    HStack {
-                        Text(L10n.t("闪烁次数", "Flashes"))
-                        Spacer()
-                        Text("\(count)").monospacedDigit().foregroundStyle(.secondary)
-                    }
+                RulerSlider(
+                    title: L10n.t("闪烁次数", "Flashes"),
+                    unit: L10n.t("次", "×"),
+                    value: $count,
+                    range: 1...30,
+                    step: 1,
+                    majorEvery: 5,
+                    caption: L10n.t("总时长 = 次数 × 2 × 间隔 = \(totalDurationText)",
+                                     "Duration = count × 2 × interval = \(totalDurationText)")
+                )
+
+                RulerSlider(
+                    title: L10n.t("间隔", "Interval"),
+                    unit: "ms",
+                    value: $intervalMs,
+                    range: 50...500,
+                    step: 10,
+                    majorEvery: 5,
+                    caption: L10n.t("开/关之间的半周期，立即写入设备，同时作用于按住拨杆触发。",
+                                     "Half-period between on/off. Applied immediately and shared with hold-to-strobe.")
+                )
+                .onChange(of: intervalMs) { _, newValue in
+                    Task { await applyInterval(newValue) }
                 }
+
                 Picker(selection: $triggerSource) {
                     Text(L10n.t("App 按钮", "App button")).tag(0)
                     Text(L10n.t("S3XY 按键", "S3XY button")).tag(1)
                 } label: {
-                    Text(L10n.t("触发入口", "Trigger source"))
+                    Label(L10n.t("触发入口", "Trigger source"), systemImage: "switch.2")
                 }
+                .pickerStyle(.segmented)
+            } header: {
+                Label(L10n.t("参数", "Parameters"), systemImage: "slider.horizontal.3")
+            } footer: {
+                Text(L10n.t("刻度按 \(intervalStepText) ms 吸附；参数改动需保存后才会用于下一次触发。",
+                            "The ruler snaps every \(intervalStepText) ms. Save changes before the next run."))
+            }
+            .id("params")
 
+            Section {
                 Button {
                     Task { await saveConfig() }
                 } label: {
-                    Label(L10n.t("保存参数", "Save settings"), systemImage: "checkmark.circle")
+                    HStack(spacing: 8) {
+                        if busy {
+                            ProgressView().controlSize(.small).tint(.white)
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.body.weight(.semibold))
+                        }
+                        Text(L10n.t("保存参数", "Save settings"))
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 50)
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(busy || !dirty || active)
+                .accessibilityHint(L10n.t("保存次数与触发入口；间隔会即时生效",
+                                          "Saves count and trigger source; interval applies immediately"))
 
                 Button {
                     resetToSaved()
                 } label: {
-                    Label(L10n.t("撤销未保存修改", "Revert unsaved changes"), systemImage: "arrow.uturn.backward")
+                    Text(L10n.t("撤销未保存修改", "Revert unsaved changes"))
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .buttonStyle(.bordered)
                 .disabled(busy || !dirty)
-            } header: {
-                Label(L10n.t("参数", "Parameters"), systemImage: "slider.horizontal.3")
-            } footer: {
-                Text(L10n.t("间隔是每一次开/关之间的半周期；总时长 = 次数 × 2 × 间隔。触发入口选 S3XY 后，App 按钮会禁用。",
-                            "Interval is the half-period between on/off toggles. Total = count × 2 × interval. The App button is disabled when S3XY is selected."))
             }
 
             if let errorText {
@@ -203,6 +267,14 @@ struct HeadlightStrobeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        #if DEBUG
+        // 本地联调：SIMCTL_CHILD_P4CAN_SCROLL_TO=params 启动后直接滚到参数区
+        .task {
+            guard ProcessInfo.processInfo.environment["P4CAN_SCROLL_TO"] == "params" else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            withAnimation { proxy.scrollTo("params", anchor: .top) }
+        }
+        #endif
         .navigationTitle(L10n.t("前大灯爆闪", "Headlight Strobe"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
@@ -219,6 +291,7 @@ struct HeadlightStrobeView: View {
         } message: {
             Text(L10n.t("将闪烁 \(count) 次，间隔 \(intervalMs) ms，结束后恢复触发前的灯光状态。",
                         "\(count) flashes at \(intervalMs) ms, then restore the previous light state."))
+        }
         }
     }
 
