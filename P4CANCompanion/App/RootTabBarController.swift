@@ -159,6 +159,8 @@ final class RootTabBarController: UITabBarController {
         tag: Int
     ) -> UIViewController {
         let controller = UIHostingController(rootView: rootView.environmentObject(environment))
+        // 宿主默认背景是纯白；页面底色铺不满时（转场、安全区、键盘收起）会从顶部漏出白条。
+        controller.view.backgroundColor = .systemGroupedBackground
         let item = UITabBarItem(
             title: title,
             image: UIImage(systemName: image),

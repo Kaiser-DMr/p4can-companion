@@ -68,14 +68,6 @@ struct FeaturesView: View {
         }
     }
 
-    private var summaryText: String {
-        if isSearching {
-            return L10n.t("搜索「\(trimmedQuery)」· \(searchResults.count) 个结果",
-                          "Search “\(trimmedQuery)” · \(searchResults.count) result(s)")
-        }
-        return L10n.t("全部 · \(entries.count) 项", "All · \(entries.count) items")
-    }
-
     private var labEnabled: Bool {
         gateOverrides["lab"] ?? environment.featuresStatus?["lab"]?.boolValue ?? false
     }
@@ -90,11 +82,14 @@ struct FeaturesView: View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 header
-                Divider().opacity(0.5)
                 list
             }
-            .background(Color.p4Background)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 页面底色铺到状态栏 / 导航栏下方，避免系统默认的白色背景从上边缘透出来。
+            .background(Color.p4Background.ignoresSafeArea())
             .navigationTitle(L10n.t("功能", "Features"))
+            // 导航栏不再使用系统默认（浅色模式下为纯白）材质，与页面底色保持一致。
+            .toolbarBackground(Color.p4Background, for: .navigationBar)
             .navigationDestination(for: String.self) { moduleID in
                 if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
                     FeatureDetailView(module: module)
@@ -129,18 +124,10 @@ struct FeaturesView: View {
     // MARK: - 顶部：搜索
 
     private var header: some View {
-        VStack(spacing: Theme.spacing(1)) {
-            searchField
-            Text(summaryText)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Theme.spacing(2))
-                .accessibilityLabel(summaryText)
-        }
-        .padding(.top, Theme.spacing(1))
-        .padding(.bottom, Theme.spacing(1))
-        .background(Color.p4Background)
+        searchField
+            .padding(.top, Theme.spacing(0.5))
+            .padding(.bottom, Theme.spacing(1.5))
+            .background(Color.p4Background)
     }
 
     private var searchField: some View {
@@ -175,14 +162,43 @@ struct FeaturesView: View {
             }
         }
         .padding(.horizontal, Theme.spacing(1.5))
-        .padding(.vertical, 9)
-        .p4Glass(cornerRadius: Theme.Radius.tile)
+        .frame(height: 38)
+        // 用「轻微着色的底 + 细描边」代替玻璃白底：既贴合页面底色，也不会在顶部形成一条白条。
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+        .onTapGesture { searchFocused = true }
         .padding(.horizontal, Theme.spacing(2))
     }
 
     // MARK: - 列表
 
     private var list: some View {
+        ScrollViewReader { proxy in
+            listRows
+                .listStyle(.insetGrouped)
+                .contentMargins(.top, Theme.spacing(0.5), for: .scrollContent)
+                .scrollContentBackground(.hidden)
+                .scrollDismissesKeyboard(.immediately)
+                #if DEBUG
+                // 本地联调：SIMCTL_CHILD_P4CAN_FEATURES_SCROLL=bottom 启动后滚到底部（核对滚动后的顶栏配色）
+                .task {
+                    guard ProcessInfo.processInfo.environment["P4CAN_FEATURES_SCROLL"] == "bottom",
+                          let last = entries.last?.id else { return }
+                    try? await Task.sleep(for: .seconds(2))
+                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(last, anchor: .bottom) }
+                }
+                #endif
+        }
+    }
+
+    private var listRows: some View {
         List {
             if isSearching {
                 if searchResults.isEmpty {
@@ -193,23 +209,28 @@ struct FeaturesView: View {
                             row(entry)
                         }
                     } header: {
-                        searchHeader
+                        sectionHeader(
+                            title: L10n.t("搜索结果", "Results"),
+                            count: searchResults.count
+                        )
                     }
                 }
             } else {
                 Section {
                     ForEach(entries) { entry in
-                        row(entry)
+                        row(entry).id(entry.id)
                     }
+                } header: {
+                    sectionHeader(
+                        title: L10n.t("全部功能", "All features"),
+                        count: entries.count
+                    )
                 } footer: {
                     Text(L10n.t("开关状态全部读取自设备；LAB Menu 打开后底部才出现「实验室」标签。",
                                 "All switch states come from the device. The Lab tab appears only after LAB Menu is turned on."))
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .scrollDismissesKeyboard(.immediately)
     }
 
     @ViewBuilder
@@ -276,18 +297,24 @@ struct FeaturesView: View {
         }
     }
 
-    private var searchHeader: some View {
-        HStack(spacing: 6) {
-            Label(L10n.t("搜索结果", "Results"), systemImage: "magnifyingglass")
-                .font(.subheadline.weight(.semibold))
-            Text("\(searchResults.count)")
+    /// 列表分组头：标题 + 数量胶囊，和卡片左边缘对齐，信息与原来的「全部 · N 项」一致。
+    private func sectionHeader(title: String, count: Int) -> some View {
+        HStack(spacing: Theme.spacing(1)) {
+            Text(title)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text("\(count)")
                 .font(.caption2.weight(.semibold))
                 .monospacedDigit()
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1)
-                .background(Color.primary.opacity(0.08), in: Capsule())
-            Spacer()
+                .background(Color.primary.opacity(0.07), in: Capsule())
+            Spacer(minLength: 0)
         }
+        .textCase(nil)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(L10n.t("\(title)，共 \(count) 项", "\(title), \(count) items"))
     }
 
     private var emptySearchSection: some View {
@@ -373,19 +400,21 @@ private struct FeatureRow: View {
     }
 
     var body: some View {
-        HStack(spacing: Theme.spacing(1.5)) {
+        HStack(alignment: .center, spacing: Theme.spacing(1.5)) {
             ModuleIcon(name: module.icon)
                 .foregroundStyle(.tint)
-                .frame(width: 30, height: 30)
-                .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .frame(width: 32, height: 32)
+                .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(module.localizedTitle)
-                    .font(.body.weight(.medium))
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
                 Text(module.localizedSummary)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
             Spacer(minLength: Theme.spacing(1))
             if let support = supportState {
@@ -394,9 +423,10 @@ private struct FeatureRow: View {
                     systemImage: support.ok ? "checkmark" : "minus",
                     tone: support.ok ? .ok : .warn
                 )
+                .layoutPriority(1)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.spacing(0.5))
         .accessibilityElement(children: .combine)
     }
 }
@@ -423,22 +453,24 @@ private struct InlineFeatureRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .center, spacing: Theme.spacing(1.5)) {
             ModuleIcon(name: icon)
                 .font(.body)
                 .foregroundStyle(.tint)
-                .frame(width: 30, height: 30)
-                .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .frame(width: 32, height: 32)
+                .background(Color.p4Tile, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.body.weight(.medium))
+                    .font(.body.weight(.semibold))
+                    .lineLimit(1)
                 Text(subtitle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.spacing(1))
             if busy || isOn == nil {
                 ProgressView()
                     .accessibilityLabel(L10n.t("正在与设备同步", "Syncing with device"))
@@ -449,7 +481,7 @@ private struct InlineFeatureRow: View {
                     .accessibilityLabel(title)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, Theme.spacing(0.5))
         .accessibilityElement(children: .combine)
     }
 }

@@ -159,6 +159,10 @@ struct FeatureDetailView: View {
         }
         .navigationTitle(module.localizedTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.p4Background, for: .navigationBar)
+        .scrollContentBackground(.hidden)
+        .background(Color.p4Background.ignoresSafeArea())
+        .contentMargins(.top, Theme.spacing(0.5), for: .scrollContent)
         .navigationDestination(isPresented: $showsAdvanced) { NagAdvancedView() }
         .navigationDestination(isPresented: $showsResearchLabels) { ResearchLabelsView() }
         .navigationDestination(isPresented: $showsHeadlightStrobe) { HeadlightStrobeView() }

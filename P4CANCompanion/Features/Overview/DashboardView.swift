@@ -56,6 +56,7 @@ struct DashboardView: View {
                 .overlay(alignment: .bottom) { ToastOverlay() }
                 .navigationTitle("设备状态")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(Color.p4Background, for: .navigationBar)
                 .sheet(isPresented: $showsGuide) { ConnectionGuideView() }
             }
         }
