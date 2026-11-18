@@ -1197,9 +1197,9 @@ static String systemStatsToJson() {
   // 线束/引脚映射：刷错板型时 BODY/CHASSIS 会完全收不到帧，这里让 App 能直接核对。
   jw.string("canHarness",
 #if defined(P4CAN_BOARD_X179)
-            "X179"
+            "X179 (2/3,4/5)"
 #else
-            "DEFAULT"
+            "默认 (20-23)"
 #endif
   );
   char canPinsText[40];
