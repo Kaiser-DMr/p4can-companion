@@ -1,12 +1,12 @@
-# P4管家 v3.8 · 安装说明（iPhone + Mac）
+# P4管家 v3.9 · 安装说明（iPhone + Mac）
 
 ## 一、iPhone / iPad（IPA）
 
-- 产物：`P4CAN-Companion-v3.8-adhoc.ipa`（3.0 MB）
+- 产物：`P4CAN-Companion-v3.9-adhoc.ipa`（3.0 MB）
 - 结构：`Payload/P4CANCompanion.app` + `PlugIns/P4CANWidgetExtension.appex`
 - 平台：arm64，iOS 17.0+，iPhone + iPad（v1.5 起兼容 iPad 布局）
-- 签名：**ad-hoc**（App 与 Widget 扩展已分别签名），版本 **3.8 / build 29**
-- 备份：`~/Downloads/P4CAN-Companion-v3.8-adhoc.ipa`
+- 签名：**ad-hoc**（App 与 Widget 扩展已分别签名），版本 **3.9 / build 30**
+- 备份：`~/Downloads/P4CAN-Companion-v3.9-adhoc.ipa`
 
 ### 安装方式（本机无开发者证书，需现场重签）
 
@@ -29,13 +29,20 @@
 - 解压得到 `P4CAN-Companion.app`：Mac Catalyst 原生应用，universal（arm64 + x86_64），macOS 14.0+
 - 运行步骤与差异详见同目录 **`Mac-运行说明.md`**
 
-## 三、v3.8 变更摘要（TLSSC 图标）
+## 三、v3.9 变更摘要（彩色 emoji 图标）
+
+1. 全部功能模块图标改为彩色 emoji：🛞 🚫 🙈 👁️ 💡 🕹️ 🔓 🌍 🚦 ↔️ 🦶 ♾️ 🚘 ⚡ 🚧 📡 💓 🛣️ 🪟 🔬 🎥 🎛️；
+2. S3XY / LAB 内联行使用 🎮 / 🧪；
+3. `ModuleIcon` 支持 `emoji:` 前缀，保留 Assets 与 SF Symbol 回退；
+4. 截图：`v38-17-emoji-icons.png`。
+
+## 四、v3.8 变更摘要（TLSSC 图标）
 
 1. TLSSC 模块补上红绿灯图标（🚦），功能列表、搜索结果与实验室列表统一走 `ModuleIcon`；
 2. `ModuleIcon` 优先支持 Assets 资源名，未找到时回退 SF Symbol；
 3. 截图：`v38-16-tlssc-final.png`。
 
-## 四、v3.7 变更摘要（全功能同步复核 + 灵动岛车型）
+## 五、v3.7 变更摘要（全功能同步复核 + 灵动岛车型）
 
 1. **灵动岛 / 锁屏**：展开区与锁屏标题显示当前车型，不再出现 `UNKNOWN`；有效挡位仍显示在右侧；
 2. **NAG 高级参数**：6 个报文级字段可编辑（十六进制 ID、HO 比例、Burst、Pause），AP 激活时禁止写入，写入后回读校验；
@@ -45,7 +52,7 @@
 6. **批量编辑防覆盖**：Mode H / NAG 高级参数检测设备端变更，应用前拒绝旧表单覆盖；
 7. 截图：`v38-07-nag-mode.png`、`v38-09-modeh-stale.png`、`v38-10-nag-stale.png`。
 
-## 五、v3.6 变更摘要（security-audit 复审后的加固）
+## 六、v3.6 变更摘要（security-audit 复审后的加固）
 
 按 Cloudflare `security-audit-skill` 做了一次针对本项目边界的审查，确认并修复：
 
@@ -63,7 +70,7 @@
 
 设备侧仍未解决（固件契约，App 无法单独修复）：API 无鉴权、仅 HTTP。建议修改默认 AP 密码并只在可信网络使用。
 
-## 六、v3.5 变更摘要（S3XY 开关统一控制蓝牙标签）
+## 七、v3.5 变更摘要（S3XY 开关统一控制蓝牙标签）
 
 1. 「功能 → S3XY」现在与网页一致：开关打开后底部出现「蓝牙」标签，关闭立即隐藏（若正停留在蓝牙页会回到状态页）；
 2. 删除设置页里重复的「在标签栏显示『蓝牙』」开关，只保留功能页的 S3XY 开关；
@@ -71,7 +78,7 @@
 4. 标签栏重建时保留当前页；删除的标签不存在时回到状态页；S3XY 开关带乐观态与结果提示；
 5. 截图：`v35-01-settings-no-bt-toggle.png`、`v35-02-s3xy-off.png`、`v35-03-s3xy-on.png`。
 
-## 七、v3.4 变更摘要（补齐「更改车型」）
+## 八、v3.4 变更摘要（补齐「更改车型」）
 
 1. 设置页车型卡片下新增 **更改车型**：5 个固件车型（Model Y L / Y Juniper / Y Legacy / 3 Highland /
    3 Legacy），拓扑按固件规则自动绑定（Y L → Party + VH，其余 → Body + Chassis + Party）；
@@ -81,7 +88,7 @@
 4. 若响应在重启时断开，不直接报失败，而是等待设备回来后比对车型，避免「其实已生效却提示失败」；
 5. 截图：`v34-04-change-profile.png`、`v34-05-change-highland.png`、`v34-07-profile-updated.png`。
 
-## 八、v3.3 变更摘要（功能入口合并到「功能」标签）
+## 九、v3.3 变更摘要（功能入口合并到「功能」标签）
 
 1. **「设置 → 功能」整段移动到「功能」标签**，顺序完全不变：NAG → ISA → 驾驶员监控 → 视觉限速 →
    自动转向灯 → 召唤状态 → R79 → 地区/地图 → TLSSC → 变道 → 踏板 → 常驻 AP → AP 加速/回收 →
@@ -92,7 +99,7 @@
 5. 设置页精简为：车型卡片 → 系统（固件/无线/外观/刷新间隔/诊断/OTA/重置）→ 封禁车辆 → App；
 6. 截图：`v33-02-features-late.png`、`v33-04-search-lab.png`、`v33-05-settings-without-features.png`。
 
-## 九、v3.2 变更摘要（设置页对齐网页 / 补齐固件功能 / LAB 开关可见）
+## 十、v3.2 变更摘要（设置页对齐网页 / 补齐固件功能 / LAB 开关可见）
 
 1. **设置页按网页 Settings 重排**：车型卡片 → 功能（NAG / ISA / DMS / 视觉限速 / 自动转向灯 / 召唤状态 /
    R79 / 地区 / TLSSC / 变道 / 踏板 / 常驻 AP / AP 加速回收 / S3XY / **LAB Menu**）→ 系统（固件 / 无线 /
@@ -109,7 +116,7 @@
 8. 截图：`v32-08-settings-top-zh.png`、`v32-14-settings-lab-en.png`、`v32-09-lab.png`、`v32-10-modeh.png`、
    `v32-11-wireless.png`、`v32-12-diagnostics.png`、`v32-20-apdrive-fixed.png`。
 
-## 十、v3.1 变更摘要（排序对齐网页 / 实验室独立标签 / 中英切换）
+## 十一、v3.1 变更摘要（排序对齐网页 / 实验室独立标签 / 中英切换）
 
 1. **功能排序按固件网页的设置列表**：NAG → ISA → DMS → 视觉限速 → 自动转向灯 → 灯光爆闪 → 开门取消 →
    召唤/TLSSC → R79 → 地区 → 无确认变道 → 踏板 → 常驻 AP → 车型配置（单层列表，不再按四个分区打散）；
@@ -121,7 +128,7 @@
    详情页标题与分区、系统页主要分区已双语；控件行内的说明仍为中文（下一版补齐）；
 5. 截图：`v31-01-features-en.png`、`v31-02-lab-en.png`、`v31-03-settings-en.png`。
 
-## 十一、v3.0 变更摘要（新增「灯光爆闪」模块）
+## 十二、v3.0 变更摘要（新增「灯光爆闪」模块）
 
 1. 「车身与舒适」新增模块 **灯光爆闪**：启动开关 + 频率 1–8 Hz + 持续时间 0.5–10 s + 模式（左右交替/仅左/仅右）；
 2. 走固件新端点 `/api/lights/strobe`（GET 状态 / POST 控制），控件仍是「设备值驱动」，未打固件补丁时显示「读取中…」；
@@ -129,14 +136,14 @@
 4. 同时交付固件参考补丁：`build/firmware-patch/light_strobe.h` + `build/固件补丁-灯光爆闪.md`（含插入位置、handler、验证顺序）；
 5. 详见 `build/灯光爆闪-方案.md`，截图 `screenshots/strobe-01.png`。
 
-## 十二、v2.9 变更摘要（分类胶囊收紧 + 玻璃表面）
+## 十三、v2.9 变更摘要（分类胶囊收紧 + 玻璃表面）
 
 1. FilterRail 胶囊间距 26pt → **18pt**（合并距离 20 → 12，保持"彼此独立、指示球穿过才合并"）；
 2. 新增 `P4CANCompanion/UI/GlassSurface.swift`：iOS 26 `glassEffect` + Material 回退 + 尊重「降低透明度」；
 3. 功能页搜索框、详情页说明卡改用玻璃表面；详情卡宽度与下方原生分组对齐；
 4. 详见 `build/SwiftPieces-接入.md` 4.1 / 4.2 节，截图 `sp-04-tighter-gap.png`、`sp-05-detail-glass.png`。
 
-## 十三、v2.8 变更摘要（接入 SwiftPieces，重做「功能」页分类条）
+## 十四、v2.8 变更摘要（接入 SwiftPieces，重做「功能」页分类条）
 
 1. 接入 MCP `https://swiftpieces.com/api/mcp`（streamable-http，7 个工具），配置写入 `~/.workbuddy/mcp.json`；
 2. 按它返回的 App Design 方法评审后，只替换「分类筛选」一处：改用 **FilterRail**（液态玻璃胶囊 + 计数 + 单选指示球）；
@@ -145,7 +152,7 @@
 5. 新增文件 `P4CANCompanion/SwiftPieces/Inputs/FilterRail.swift`（保留 MIT + Commons Clause 头）；
 6. 详见 `build/SwiftPieces-接入.md`，截图 `screenshots/sp-01..03`。
 
-## 十四、v2.7 变更摘要（改名 P4管家 + 换成 AO3 标志图标）
+## 十五、v2.7 变更摘要（改名 P4管家 + 换成 AO3 标志图标）
 
 1. **应用名改为「P4管家」**：主屏名称、Mac 菜单栏、窗口标题、应用内两处授权提示文案全部同步；
    Bundle ID 保持 `com.p4can.companion`，覆盖安装不会丢设置；
@@ -154,7 +161,7 @@
 3. 三套外观齐全（默认 / 深色 / 着色），字标占 72% 安全区，投影在带内边距画布上计算；
 4. 详细说明见 `build/图标设计.md`，展示图 `screenshots/icon-showcase.png`、主屏实拍 `icon-home.png`。
 
-## 十五、v2.6 变更摘要（LocatorJS 标志图标）
+## 十六、v2.6 变更摘要（LocatorJS 标志图标）
 
 1. 按用户提供的 `locatorjs.svg`（四角取景框 + `< / >`）重做 App 图标；
 2. 遵循 iOS 27 规范：1024²、无圆角、不透明、标志占 66% 安全区；
@@ -163,13 +170,13 @@
 5. 体积从 903 KB 变为 2.4 MB（三张 1024 图标进 `Assets.car`，其中已关闭噪点以控制体积）；
 6. 设计说明见 `build/图标设计.md`，展示图 `screenshots/icon-showcase.png`、主屏实拍 `icon-home.png`。
 
-## 十六、v2.4 变更摘要（补上 App 图标）
+## 十七、v2.4 变更摘要（补上 App 图标）
 
 1. 之前工程里**没有 AppIcon**，装到桌面是白图标；现已加入 1024×1024 图标（深蓝底 + P4 字标 + CAN 方波），
    资产目录 `P4CANCompanion/Assets.xcassets`，Info.plist 已生成 `CFBundleIcons`（含 iPad 尺寸）；
 2. 体积从 846 KB → 903 KB（图标压缩后约 57 KB），`.app` 3.6 MB。
 
-## 十七、v2.3 变更摘要（功能页搜索）
+## 十八、v2.3 变更摘要（功能页搜索）
 
 1. 功能页顶部新增**常驻搜索框**：按模块名 / 说明 / id / 分类名匹配，中英文均可（如「踏板」「tlscc」「限速」）；
 2. 搜索时自动收起分类条，摘要变为「搜索「x」· N 个结果」，列表分组头为「搜索结果」；
@@ -177,7 +184,7 @@
 4. 分类条与列表项完全保留，19 个模块一项没少；
 5. 设计说明更新至 `build/设计优化-功能页.md` 3.5 节，截图 `features-search.png` / `features-search-empty.png`。
 
-## 十八、v2.2 变更摘要（「功能」页分类导航）
+## 十九、v2.2 变更摘要（「功能」页分类导航）
 
 1. **顶部新增固定分类条**：全部 19 / 驾驶辅助 6 / 车身与舒适 3 / 实验室功能 6 / 高级与兼容 4；
 2. 点分类立即过滤列表（19 项长列表 → 最多 6 项），分类条不随列表滚动；
@@ -187,7 +194,7 @@
 6. 修复两个失效 SF Symbol：`window.vertical`、`square.and.line.vertical.square`；
 7. 设计说明见 `build/设计优化-功能页.md`，截图 `screenshots/features-all.png` / `features-lab.png` / `features-dark.png`。
 
-## 十九、v2.1 变更摘要
+## 二十、v2.1 变更摘要
 
 1. **预留电池卡（SOC）**：状态页在 KPI 与快捷开关之间新增「电池」卡（百分比 + 进度条 + 剩余续航）。
    仅当设备任意端点返回 `batterySoc` / `soc` / `batteryLevel` / `stateOfCharge`（以及可选 `rangeKm`）时才出现，
@@ -197,7 +204,7 @@
    - `build/tools/soc_probe.py`：扫描 `researchcapture/log.csv`，按"像 SOC 的程度"排出候选 (总线, CAN ID, 字节)。
 3. 演示截图 `screenshots/soc-demo.png`（mock 注入 `batterySoc=68, rangeKm=312`）。
 
-## 二十、v2.0 变更摘要
+## 二十一、v2.0 变更摘要
 
 1. **移除「状态」页顶部三个工具图标**（全部数据 / 立即同步 / 连接引导），导航栏只保留「设备状态」标题；
    这些能力仍可从别处进入：
@@ -205,7 +212,7 @@
    - 立即同步：下拉刷新（也与 1.5 秒自动轮询等效）；
    - 连接引导：系统 → 连接 → 「查看连接引导」，离线时首屏也有入口。
 
-## 二十一、v1.9 变更摘要（状态页设计优化 v2.0）
+## 二十二、v1.9 变更摘要（状态页设计优化 v2.0）
 
 状态页按设计稿重排信息层级，数据口径不变，只改呈现：
 
@@ -217,7 +224,7 @@
 6. 颜色/字号/圆角/间距收敛为 token，输出 `build/design-tokens.json`（可导入 Figma Variables）；
 7. 完整设计说明见 **`build/设计优化-状态页.md`**，截图 `screenshots/design-01-hero.png`、`design-02-can.png`、`design-03-dark.png`。
 
-## 二十二、v1.8 变更摘要（界面只显示板子的真实状态，不再有默认值）
+## 二十三、v1.8 变更摘要（界面只显示板子的真实状态，不再有默认值）
 
 原则：**App 不猜、不填默认**。连接后看到的就是设备当前值；设备没上报的字段，App 显示「读取中…」并禁用操作。
 
@@ -240,7 +247,7 @@
 **验证**：另外起了一个「只返回 `{"ok":true}`」的空设备做反向测试 —— ULC 五个控件、首页三个快捷开关全部显示「读取中…」，
 没有任何默认开关/默认数值；切回带完整字段的设备后，所有值立刻变成设备真实值。
 
-## 二十三、v1.7 变更摘要（修「开关打开没反应」）
+## 二十四、v1.7 变更摘要（修「开关打开没反应」）
 
 **根因**：写入用的 query 参数名 与 状态 JSON 的字段名 在固件里经常不一致，而 App 用同一个键既写又读，
 于是写成功了却回读到旧值 → 开关弹回，看起来「点了没反应」。
@@ -273,14 +280,14 @@
 - 补齐 `advancedEapSupported` / `apDriveProfile` / `stalkConfirmEnabled` 等中文标签，并修掉一处
   本地化表重复键导致的启动崩溃。
 
-## 二十四、v1.6 变更摘要
+## 二十五、v1.6 变更摘要
 
 1. **修复「状态」标签图标空白**：`gauge.with.dots.needle.bottom.50.percent` 不是合法 SF Symbol，改为 `gauge.with.dots.needle.50percent`（并全量校验了工程内 54 个符号名，仅此一处有误）；
 2. **「蓝牙」标签改为可隐藏**：系统 → 界面 → 「在标签栏显示「蓝牙」」，默认关闭（底部只有 状态/功能/系统）；
    开关切换时标签栏实时重建并保持当前页；正在看蓝牙时关闭会回到状态页；
 3. 清理编译警告（S3XY 分组头注册多余 `[weak self]`）。
 
-## 二十五、v1.5 变更摘要
+## 二十六、v1.5 变更摘要
 
 1. **新增 Mac 原生版**（Mac Catalyst）：侧边栏导航、可缩放窗口、全部功能与 iPhone 版一致；
 2. ActivityKit 在 Mac 不可用 → 属性模型与控制器做跨平台拆分，Mac 自动隐藏实时活动开关；
@@ -289,7 +296,7 @@
 5. 补本地化：`apDisplayState` / `r79TxState` / `r79TxCount` 等；
 6. 本地联调钩子：`P4CAN_TAB` 环境变量或 `p4can.debugTab` 偏好可指定启动标签页（DEBUG）。
 
-## 二十六、仍旧有效的历史变更
+## 二十七、仍旧有效的历史变更
 
 - v1.2：按开源固件源码重做接口契约（query 参数）、三路 `can1..can3`、S3XY 槽位与动作绑定、写入门禁；
 - v1.3：灵动岛/锁屏实时活动、Swift Charts 扭矩趋势、内置网络抓包、触觉反馈；

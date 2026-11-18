@@ -3,9 +3,9 @@
 P4-CAN Universal（ESP32-P4 车载 CAN 控制器）的原生 iOS 控制台。UIKit + SwiftUI + SnapKit 混合实现，不是网页套壳。
 
 ![平台](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![版本](https://img.shields.io/badge/version-3.8%20(29)-green)
+![版本](https://img.shields.io/badge/version-3.9%20(30)-green)
 
-**下载：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) —— `P4CAN-Companion-v3.8-adhoc.ipa`（iPhone，需自签）/ `P4CAN-Companion-mac-v3.8.zip`（Mac 解压即用）
+**下载：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) —— `P4CAN-Companion-v3.9-adhoc.ipa`（iPhone，需自签）/ `P4CAN-Companion-mac-v3.9.zip`（Mac 解压即用）
 
 ## 功能
 
