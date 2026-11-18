@@ -312,6 +312,10 @@ static uint32_t hsHoldPullSinceMs = 0;   // 本轮连续 PULL 的起点
 static uint32_t hsHoldLastRxMs = 0;
 static uint8_t hsHoldPullFrames = 0;
 static uint8_t hsHoldFreeFrames = 0;
+// 现场诊断：最长一次「连续 PULL」持续了多久、见过几帧 PULL、最近一次起爆被谁拦住。
+static uint32_t hsHoldPullMaxMs = 0;
+static uint32_t hsHoldPullTotal = 0;
+static uint8_t hsHoldLastBeam = 0;
 
 static void headlightStrobeHoldTick(uint32_t now) {
   const bool holdOn = headlightStrobeConfig.holdEnabled != 0;
@@ -334,47 +338,48 @@ static void headlightStrobeHoldTick(uint32_t now) {
   beam = (uint8_t)((realRaw249[1] >> 4) & 0x03u);
   ckOk = cksumSelfTest;
   portEXIT_CRITICAL(&blinkAMux);
+  (void)ckOk;   // 自检只用于展示：判定不再依赖它
 
-  if (rx == hsHoldSeenRx) {
-    // 没有新的 0x249：按住中超过 500 ms 收不到，认为信号丢失，停止并恢复。
-    if (holdActive && (uint32_t)(now - hsHoldLastRxMs) > 500u)
-      headlightStrobeStop("STALK_TIMEOUT", true);
-    // 空闲超过 500 ms 也把“连续按住”的计时清掉，避免断流后误判。
-    if (!holdActive && (uint32_t)(now - hsHoldLastRxMs) > 500u) hsHoldPullSinceMs = 0;
-    return;
+  const bool newFrame = (rx != hsHoldSeenRx);
+  if (newFrame) {
+    hsHoldSeenRx = rx;
+    hsHoldLastRxMs = now;
+    hsHoldLastBeam = beam;
+    if (beam == HS_BEAM_PULL) {
+      if (hsHoldPullFrames < 0xFF) hsHoldPullFrames++;
+      hsHoldPullTotal++;
+      hsHoldFreeFrames = 0;
+      if (hsHoldPullSinceMs == 0) hsHoldPullSinceMs = now;
+      const uint32_t held = (uint32_t)(now - hsHoldPullSinceMs);
+      if (held > hsHoldPullMaxMs) hsHoldPullMaxMs = held;
+    } else {
+      if (hsHoldFreeFrames < 0xFF) hsHoldFreeFrames++;
+      hsHoldPullFrames = 0;
+      hsHoldPullSinceMs = 0;
+    }
   }
-  hsHoldSeenRx = rx;
-  hsHoldLastRxMs = now;
-
-  // 起始判定不再要求 checksumSelfTest：该自检依赖车型的 0x249 校验算法，
-  // 自检失败时「立即爆闪」仍能用（我们重算校验），但按住拨杆会被永久拦住。
-  // 这里改成「连续 2 帧都是 PULL」去抖，既能挡住单帧坏数据，又不依赖车型校验。
-  (void)ckOk;
-  if (beam == HS_BEAM_PULL) {
-    if (hsHoldPullFrames < 0xFF) hsHoldPullFrames++;
-    hsHoldFreeFrames = 0;
-    if (hsHoldPullSinceMs == 0) hsHoldPullSinceMs = now;   // 开始计时
-  } else {
-    if (hsHoldFreeFrames < 0xFF) hsHoldFreeFrames++;
-    hsHoldPullFrames = 0;
-    hsHoldPullSinceMs = 0;                                 // 松开即清零
-  }
+  // 注意：这里不再因为「一段时间没有新帧」就把按住计时清零。
+  // 有些车型的 0x249 是事件型报文——按住期间根本不发新帧，
+  // 旧逻辑会在 500 ms 后清掉计时，导致「2.5 秒」永远攒不够。
 
   if (holdActive) {
-    // 连续 3 帧不是 PULL 才判定松开（≈75 ms），既不会单帧误判，体感仍然“松手即停”。
-    // 另加 150 ms 最短运行时间，避免拨杆只发一帧 PULL 时闪一下就断。
+    // 松开判定：连续 2 帧明确不是 PULL 才停（≈40 ms），保住「松手即停」体感。
+    // 不再用「无帧 500 ms」停 —— 事件型 SCCM 在按住期间同样没有新帧。
     const bool longEnough =
         (uint32_t)(now - headlightStrobeState.startedAtMs) >= 150u;
-    if (hsHoldFreeFrames >= 3u && longEnough)
+    if (newFrame && hsHoldFreeFrames >= 2u && longEnough)
       headlightStrobeStop("HOLD_RELEASE", true);
     return;
   }
 
-  // 必须连续按住 holdDelayMs（默认 2500 ms）才起爆，避免误触。
+  // 必须持续 holdDelayMs（默认 2500 ms）才起爆，避免误触。
   const uint32_t needMs = headlightStrobeClampHoldDelay(headlightStrobeConfig.holdDelayMs);
   const bool heldLongEnough =
       hsHoldPullSinceMs != 0 && (uint32_t)(now - hsHoldPullSinceMs) >= needMs;
-  if (hsHoldPullFrames >= 2u && heldLongEnough) {
+  // 允许按住期间完全没有新帧：只要最近一次收到的仍是 PULL 且在 4 s 内。
+  const bool stillPulled =
+      hsHoldPullFrames >= 1u && (uint32_t)(now - hsHoldLastRxMs) <= 4000u;
+  if (heldLongEnough && stillPulled) {
     if (!headlightStrobeBegin(HS_TRIGGER_HOLD)) {
       hsHoldPullFrames = 0;   // 被拦（无模板/转向中）时不要每帧重试
     }

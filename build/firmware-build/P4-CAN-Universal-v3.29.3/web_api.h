@@ -5702,15 +5702,23 @@ static String headlightStrobeJson() {
     uint8_t beam = 0;
     bool ck = false;
     uint32_t rx = 0;
+    uint8_t raw[4] = {0, 0, 0, 0};
     portENTER_CRITICAL(&blinkAMux);
     beam = (uint8_t)((realRaw249[1] >> 4) & 0x03u);
     ck = cksumSelfTest;
     rx = rx249;
+    memcpy(raw, realRaw249, 4);
     portEXIT_CRITICAL(&blinkAMux);
+    char rawHex[12];
+    snprintf(rawHex, sizeof(rawHex), "%02X%02X%02X%02X", raw[0], raw[1], raw[2], raw[3]);
+    jw.string("raw249Hex", rawHex);
     jw.u32("beamState", beam);
     jw.boolean("cksumSelfTest", ck);
     jw.u32("rx249", rx);
     jw.boolean("holdArmed", headlightStrobeConfig.holdEnabled != 0);
+    jw.u32("holdPullMaxMs", hsHoldPullMaxMs);
+    jw.u32("holdPullTotal", hsHoldPullTotal);
+    jw.u32("lastBeam", hsHoldLastBeam);
   }
   jw.finish();
   return json;
