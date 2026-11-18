@@ -70,6 +70,19 @@ struct HeadlightStrobeView: View {
 
     private var intervalStepText: String { "10" }
 
+    /// 保存按钮的弹性样式：沿用主操作蓝（白字）、12pt 连续圆角、50pt 高。
+    /// 禁用时组件自动改为透明玻璃 + 弱化文字，不必再叠一层 opacity。
+    private var saveButtonStyle: ElasticButton.Style {
+        ElasticButton.Style(
+            fill: Color.p4Accent,
+            ink: .white,
+            radius: Theme.Radius.button,
+            height: 50,
+            padding: 20,
+            depth: true
+        )
+    }
+
     /// CommitButton 的玻璃色板：沿用 App 的系统语义色
     /// （蓝=主操作、绿=完成、红=失败），尺寸与其它紧凑按钮一致（44pt）。
     private var commitStyle: CommitButton.Style {
@@ -251,12 +264,14 @@ struct HeadlightStrobeView: View {
                             ProgressView().controlSize(.small).tint(.white)
                         } else {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.body.weight(.semibold))
                         }
                         Text(L10n.t("保存参数", "Save settings"))
                     }
+                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.dsPrimary)
+                // SwiftPieces ElasticButton：按下向触点挤压缩放、拖拽有橡皮筋阻力，
+                // 抬起带一点回弹；表面是同款液体玻璃，与上方触发按钮同一套材质语言。
+                .buttonStyle(.elastic(saveButtonStyle))
                 .disabled(busy || !dirty || active)
                 .accessibilityHint(L10n.t("保存次数与触发入口；间隔会即时生效",
                                           "Saves count and trigger source; interval applies immediately"))
