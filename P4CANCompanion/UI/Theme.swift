@@ -12,9 +12,9 @@ enum Theme {
 
     /// 圆角规范：卡片 16 / 瓦片 12 / 胶囊由 Capsule 处理。
     enum Radius {
-        static let card: CGFloat = 18
-        static let tile: CGFloat = 11
-        static let button: CGFloat = 14
+        static let card: CGFloat = 12
+        static let tile: CGFloat = 9
+        static let button: CGFloat = 12
     }
 
     /// 图标规范：全 App 只允许这三种尺寸，避免同一列表里图标大小不一。
@@ -64,50 +64,31 @@ enum Theme {
     }
 }
 
-/// 双主题令牌：浅色是同一套层级的映射，不是第二套设计。
+/// Apple 风格令牌：全部走系统语义色与系统字体，浅色/深色/高对比度由系统接管。
 ///
-/// 深色（驾驶舱）：画布 #0B0D10 / 卡片 #14181F / 浮层 #1B2029；
-/// 浅色：画布 #F6F7F9 / 卡片 #FFFFFF / 浮层 #F1F3F5。
-/// 强调色在浅色下压深到 #B26A00，保证白底对比度 ≥ 4.5:1。
+/// 取舍：不使用自定义配色（上一版琥珀方案已废弃）；强调色回到系统蓝，
+/// 结果状态才用 systemGreen / systemOrange / systemRed，避免「到处都是颜色」。
 extension ShapeStyle where Self == Color {
-    /// 分组页背景。
-    static var p4Background: Color { p4Dynamic(light: 0xF6F7F9, dark: 0x0B0D10) }
-    /// 卡片背景。
-    static var p4Card: Color { p4Dynamic(light: 0xFFFFFF, dark: 0x14181F) }
-    /// 卡片内的次级底（瓦片、进度槽、浮层）。
-    static var p4Tile: Color { p4Dynamic(light: 0xF1F3F5, dark: 0x1B2029) }
-    /// 正常/在线（绿）。
-    static var p4OK: Color { p4Dynamic(light: 0x0E7A5F, dark: 0x3DDC97) }
-    /// 注意（橙）。
-    static var p4Warn: Color { p4Dynamic(light: 0xB45309, dark: 0xFFB020) }
-    /// 异常（红）。
-    static var p4Err: Color { p4Dynamic(light: 0xB3261E, dark: 0xFF6B6B) }
-    /// 信息（蓝）。
-    static var p4Info: Color { p4Dynamic(light: 0x1D5FD0, dark: 0x5AA9FF) }
-    /// 主操作强调色（全 App 唯一强调色）。
-    static var p4Accent: Color { p4Dynamic(light: 0xB26A00, dark: 0xFFB020) }
+    /// 分组页背景（浅 #F2F2F7 / 深 #000）。
+    static var p4Background: Color { Color(uiColor: .systemGroupedBackground) }
+    /// 卡片背景（浅 #FFF / 深 #1C1C1E）。
+    static var p4Card: Color { Color(uiColor: .secondarySystemGroupedBackground) }
+    /// 次级底（瓦片、槽、浮层）。
+    static var p4Tile: Color { Color(uiColor: .tertiarySystemFill) }
+    /// 正常/在线。
+    static var p4OK: Color { Color(uiColor: .systemGreen) }
+    /// 注意。
+    static var p4Warn: Color { Color(uiColor: .systemOrange) }
+    /// 异常。
+    static var p4Err: Color { Color(uiColor: .systemRed) }
+    /// 信息。
+    static var p4Info: Color { Color(uiColor: .systemBlue) }
+    /// 主操作强调色 = 系统蓝（跟随系统强调色语义）。
+    static var p4Accent: Color { Color(uiColor: .systemBlue) }
     /// 强调色上的文字。
-    static var p4OnAccent: Color { p4Dynamic(light: 0xFFFFFF, dark: 0x1A1200) }
-    /// 1px 分隔线 / 卡片描边。
-    static var p4Hairline: Color { p4Dynamic(light: 0xE5E7EB, dark: 0x232A34) }
-}
-
-/// 十六进制 → 动态色。内部用，避免散落的 `Color(red:)`。
-private func p4Dynamic(light: UInt32, dark: UInt32) -> Color {
-    Color(uiColor: UIColor { trait in
-        UIColor(hex: trait.userInterfaceStyle == .dark ? dark : light)
-    })
-}
-
-private extension UIColor {
-    convenience init(hex: UInt32) {
-        self.init(
-            red: CGFloat((hex >> 16) & 0xFF) / 255,
-            green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue: CGFloat(hex & 0xFF) / 255,
-            alpha: 1
-        )
-    }
+    static var p4OnAccent: Color { .white }
+    /// 分隔线 / 卡片描边（系统分隔色，深浅自动）。
+    static var p4Hairline: Color { Color(uiColor: .separator) }
 }
 
 /// 语义色调：颜色与默认图标一处定义，保证全 App 一致。

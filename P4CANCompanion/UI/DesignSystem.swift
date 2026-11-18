@@ -114,9 +114,11 @@ enum DS {
                 .padding(.horizontal, compact ? 16 : 20)
                 .frame(minWidth: compact ? 132 : nil, maxWidth: compact ? nil : .infinity)
                 .frame(height: compact ? 40 : 48)
-                .background(Color.p4Accent.opacity(configuration.isPressed ? 0.82 : 1),
+                .background(Color.p4Accent,
                             in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
-                .opacity(configuration.isPressed ? 0.95 : 1)
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .opacity(configuration.isPressed ? 0.9 : 1)
+                .animation(.spring(response: 0.28, dampingFraction: 1.0), value: configuration.isPressed)
         }
     }
 
@@ -130,8 +132,10 @@ enum DS {
                 .padding(.horizontal, compact ? 16 : 20)
                 .frame(minWidth: compact ? 132 : nil, maxWidth: compact ? nil : .infinity)
                 .frame(height: compact ? 40 : 48)
-                .background(Color.p4Tile.opacity(configuration.isPressed ? 0.75 : 1),
+                .background(Color(uiColor: .secondarySystemFill),
                             in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .animation(.spring(response: 0.28, dampingFraction: 1.0), value: configuration.isPressed)
                 .overlay {
                     RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
                         .strokeBorder(Color.p4Hairline, lineWidth: 0.5)
@@ -149,8 +153,10 @@ enum DS {
                 .padding(.horizontal, compact ? 16 : 20)
                 .frame(minWidth: compact ? 132 : nil, maxWidth: compact ? nil : .infinity)
                 .frame(height: compact ? 40 : 48)
-                .background(Color.p4Err.opacity(configuration.isPressed ? 0.2 : 0.12),
+                .background(Color.p4Err.opacity(0.12),
                             in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .animation(.spring(response: 0.28, dampingFraction: 1.0), value: configuration.isPressed)
                 .overlay {
                     RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous)
                         .strokeBorder(Color.p4Err.opacity(0.24), lineWidth: 0.5)
