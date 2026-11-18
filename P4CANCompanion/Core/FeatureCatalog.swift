@@ -379,6 +379,19 @@ enum FeatureCatalog {
         ),
 
         FeatureModule(
+            id: "headlight",
+            title: "前大灯爆闪",
+            summary: "远光灯按设定次数与间隔快速闪烁，结束后恢复触发前的灯光状态。",
+            titleEN: "Headlight Strobe",
+            summaryEN: "Flash the high beams a set number of times, then restore the previous light state.",
+            icon: "emoji:🔆",
+            section: .driving,
+            statsPath: P4Route.headlightStrobeStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
             id: "summon",
             title: "召唤状态",
             summary: "查看召唤会话、确认挡位、信号新鲜度与发送队列（只读）。",

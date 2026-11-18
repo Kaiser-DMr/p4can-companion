@@ -9,6 +9,7 @@
 import json
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -479,6 +480,37 @@ CAP = STATS["/api/continuous-ap/config"]
 DMS = STATS["/api/driver-monitoring/config"]
 ISA = STATS["/api/isa-suppression/config"]
 
+HEADLIGHT = {
+    "count": 10, "intervalMs": 200, "trigger": 0,
+    "active": False, "started": 0.0, "state": "IDLE", "blockReason": "",
+    "txOk": 0, "txFail": 0,
+}
+
+def headlight_json():
+    hl = HEADLIGHT
+    if hl["active"]:
+        half = max(0.05, hl["intervalMs"] / 1000.0)
+        total_s = hl["count"] * 2 * half
+        elapsed = max(0.0, time.time() - hl["started"])
+        if elapsed >= total_s:
+            hl["active"] = False
+            hl["state"] = "COMPLETE"
+            hl["blockReason"] = "COMPLETE"
+        else:
+            hl["state"] = "ACTIVE"
+    done = hl["count"] if hl["state"] == "COMPLETE" else (
+        min(hl["count"], int(max(0.0, time.time() - hl["started"]) / (2 * max(0.05, hl["intervalMs"] / 1000.0))))
+        if hl["active"] else 0
+    )
+    return {
+        "ok": True, "count": hl["count"], "intervalMs": hl["intervalMs"],
+        "trigger": hl["trigger"], "triggerName": "S3XY" if hl["trigger"] == 1 else "APP",
+        "supported": True, "stalkVariant": "STALK",
+        "active": hl["active"], "state": hl["state"],
+        "flashesDone": done, "flashesTotal": hl["count"],
+        "blockReason": hl["blockReason"], "txOk": hl["txOk"], "txFail": hl["txFail"],
+    }
+
 
 def _bool(raw):
     return raw in ("1", "true", "True")
@@ -724,6 +756,39 @@ def apply_post(path, qs):
         RESEARCH["labels"][slot] = label
         return None
 
+    if path == "/api/headlight-strobe/config":
+        if HEADLIGHT["active"]:
+            return "ALREADY_ACTIVE"
+        try:
+            count = int(val("count")) if has("count") else HEADLIGHT["count"]
+            interval = int(val("intervalMs")) if has("intervalMs") else HEADLIGHT["intervalMs"]
+            trigger = int(val("trigger")) if has("trigger") else HEADLIGHT["trigger"]
+        except ValueError:
+            return "invalid number"
+        if not (1 <= count <= 30):
+            return "count must be 1..30"
+        if not (50 <= interval <= 1000):
+            return "intervalMs must be 50..1000"
+        if trigger not in (0, 1):
+            return "trigger must be 0 or 1"
+        HEADLIGHT.update(count=count, intervalMs=interval, trigger=trigger,
+                         state="IDLE", blockReason="", txOk=0, txFail=0)
+        return None
+
+    if path == "/api/headlight-strobe/trigger":
+        if HEADLIGHT["active"]:
+            return "ALREADY_ACTIVE"
+        if HEADLIGHT["trigger"] != 0:
+            return "SOURCE_MISMATCH"
+        HEADLIGHT.update(active=True, started=time.time(), state="ACTIVE",
+                         blockReason="", txOk=0, txFail=0)
+        return None
+
+    if path == "/api/headlight-strobe/stop":
+        if HEADLIGHT["active"]:
+            HEADLIGHT.update(active=False, state="STOPPED", blockReason="USER_STOP")
+        return None
+
     if path == "/api/profile/select":
         names = {1: "Model Y L", 2: "Model Y Juniper", 3: "Model Y Legacy",
                  4: "Model 3 Highland", 5: "Model 3 Legacy"}
@@ -779,6 +844,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path, qs = parsed.path, parse_qs(parsed.query)
 
+        if path in ("/api/headlight-strobe/config", "/api/headlight-strobe/stats"):
+            return self.send_json(headlight_json())
+
         if path == "/api/snapshot":
             groups = qs.get("groups", ["home"])[0]
             if groups == "home-fast":
@@ -820,6 +888,8 @@ class Handler(BaseHTTPRequestHandler):
             error = apply_post(path, qs)
         if error:
             return self.send_json({"ok": False, "error": error}, status=400)
+        if path.startswith("/api/headlight-strobe/"):
+            return self.send_json(headlight_json())
         return self.send_json({"ok": True})
 
 

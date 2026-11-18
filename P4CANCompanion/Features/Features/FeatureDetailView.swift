@@ -23,6 +23,7 @@ struct FeatureDetailView: View {
     @State private var showsRawData = false
     @State private var showsAdvanced = false
     @State private var showsResearchLabels = false
+    @State private var showsHeadlightStrobe = false
 
     private let pollInterval: Duration = .milliseconds(1200)
 
@@ -77,6 +78,31 @@ struct FeatureDetailView: View {
                     ForEach(module.controls) { control in
                         controlRow(control)
                     }
+                }
+            }
+
+            if module.id == "headlight" {
+                Section {
+                    NavigationLink {
+                        HeadlightStrobeView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "light.beacon.max.fill")
+                                .foregroundStyle(.tint)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.t("爆闪设置与触发", "Strobe settings and trigger"))
+                                    .font(.body)
+                                Text(L10n.t("次数 / 间隔 / 触发入口", "Count / interval / trigger source"))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } footer: {
+                    Text(L10n.t("爆闪会实际控制远光灯；请只在安全环境使用，并确认周围没有对向车辆。",
+                                "The strobe actually controls the high beams. Use it only in a safe environment."))
                 }
             }
 
@@ -135,6 +161,7 @@ struct FeatureDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showsAdvanced) { NagAdvancedView() }
         .navigationDestination(isPresented: $showsResearchLabels) { ResearchLabelsView() }
+        .navigationDestination(isPresented: $showsHeadlightStrobe) { HeadlightStrobeView() }
         .overlay(alignment: .bottom) { ToastOverlay() }
         .refreshable { await load() }
         .task { await poll() }
@@ -150,6 +177,11 @@ struct FeatureDetailView: View {
                ProcessInfo.processInfo.environment["P4CAN_RESEARCH_LABELS"] == "1" {
                 try? await Task.sleep(for: .milliseconds(500))
                 showsResearchLabels = true
+            }
+            if module.id == "headlight",
+               ProcessInfo.processInfo.environment["P4CAN_HEADLIGHT_STROBE"] == "1" {
+                try? await Task.sleep(for: .milliseconds(500))
+                showsHeadlightStrobe = true
             }
             #endif
         }

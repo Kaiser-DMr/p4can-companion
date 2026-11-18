@@ -111,6 +111,12 @@ enum P4Route {
     static let s3xyDeviceRename = "/api/s3xy/device/rename"
 
     // 研究捕获
+    // 前大灯爆闪（固件补丁 headlight_strobe.h）
+    static let headlightStrobeConfig = "/api/headlight-strobe/config"
+    static let headlightStrobeStats = "/api/headlight-strobe/stats"
+    static let headlightStrobeTrigger = "/api/headlight-strobe/trigger"
+    static let headlightStrobeStop = "/api/headlight-strobe/stop"
+
     static let researchCaptureStats = "/api/researchcapture/stats"
     static let researchCaptureStart = "/api/researchcapture/start"
     static let researchCaptureMode = "/api/researchcapture/mode"
