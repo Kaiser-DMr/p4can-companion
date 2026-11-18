@@ -29,6 +29,8 @@ struct HeadlightStrobeView: View {
     @State private var stalkVariant = "STALK"
     @State private var busy = false
     @State private var confirms = false
+    /// 触发按钮的相位（SwiftPieces CommitButton）：空闲 / 进行中 / 成功 / 失败 / 不可用。
+    @State private var commitPhase: CommitButton.Phase = .idle
     @State private var errorText: String?
 
     private var active: Bool { stats?["active"]?.boolValue ?? false }
@@ -67,6 +69,34 @@ struct HeadlightStrobeView: View {
     }
 
     private var intervalStepText: String { "10" }
+
+    /// CommitButton 的玻璃色板：沿用 App 的系统语义色
+    /// （蓝=主操作、绿=完成、红=失败），尺寸与其它紧凑按钮一致（44pt）。
+    private var commitStyle: CommitButton.Style {
+        CommitButton.Style(
+            fill: .p4Accent,
+            ink: .white,
+            successFill: .p4OK,
+            errorFill: .p4Err,
+            disabledFill: Color(uiColor: .tertiarySystemFill),
+            disabledInk: Color(uiColor: .secondaryLabel),
+            height: 44,
+            font: .subheadline.weight(.semibold)
+        )
+    }
+
+    /// 触发条件变化时同步「可用 / 不可用」；
+    /// loading 与 success 由动作自己驱动，这里不覆盖。
+    private func syncCommitPhase() {
+        switch commitPhase {
+        case .idle:
+            if !canTrigger { commitPhase = .disabled }
+        case .disabled, .error:
+            if canTrigger { commitPhase = .idle }
+        case .loading, .success:
+            break
+        }
+    }
 
     private var canTrigger: Bool {
         supported && !active && !busy && triggerSource == 0 && !dirty
@@ -120,23 +150,20 @@ struct HeadlightStrobeView: View {
                 }
 
                 VStack(spacing: 8) {
-                    Button {
+                    // 触发按钮用 SwiftPieces 的 CommitButton：同一颗按钮承载
+                    // 空闲 / 加载 / 成功 / 失败（可重试）四态，失败时胶囊变红并带重试气泡。
+                    CommitButton(
+                        active ? L10n.t("爆闪进行中…", "Strobe active…")
+                               : L10n.t("立即爆闪", "Flash now"),
+                        phase: $commitPhase,
+                        successTitle: L10n.t("已开始", "Started"),
+                        style: commitStyle
+                    ) {
                         confirms = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            if busy {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(Color.p4OnAccent)
-                            } else {
-                                Image(systemName: "light.beacon.max.fill")
-                            }
-                            Text(active ? L10n.t("爆闪进行中…", "Strobe active…")
-                                        : L10n.t("立即爆闪", "Flash now"))
-                        }
                     }
-                    .buttonStyle(.dsPrimary(compact: true))
-                    .disabled(!canTrigger)
+                    // 组件默认铺满整行；这里限宽成胶囊，避免再次变成压住版面的大色块，
+                    // 同时给失败态（标签 + 重试气泡）留出足够宽度。
+                    .frame(maxWidth: 220)
                     .accessibilityLabel(L10n.t("立即开始前大灯爆闪", "Start headlight strobe now"))
                     .accessibilityHint(L10n.t("会实际控制远光灯，需确认后执行",
                                               "Controls the real high beams; asks for confirmation"))
@@ -264,6 +291,9 @@ struct HeadlightStrobeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
         .task { await poll() }
+        .onAppear { syncCommitPhase() }
+        .onChange(of: canTrigger) { _, _ in syncCommitPhase() }
+        .onChange(of: commitPhase) { _, _ in syncCommitPhase() }
         .confirmationDialog(
             L10n.t("开始远光灯爆闪？", "Start high-beam strobe?"),
             isPresented: $confirms,
@@ -465,14 +495,18 @@ struct HeadlightStrobeView: View {
     private func trigger() async {
         busy = true
         errorText = nil
+        commitPhase = .loading
         do {
             let value = try await environment.api.post(P4Route.headlightStrobeTrigger)
             stats = value
-            Haptics.success()
+            // 成功/失败的触感由 CommitButton 自己播放，这里不再重复触发。
+            commitPhase = .success
             environment.toast = P4Toast(message: L10n.t("爆闪已开始", "Strobe started"), style: .success)
         } catch {
-            errorText = AppEnvironment.friendly(error)
-            Haptics.error()
+            let message = AppEnvironment.friendly(error)
+            errorText = message
+            // 胶囊里只放短标签，完整原因留在下方错误行，避免胶囊被长文案撑爆。
+            commitPhase = .error(L10n.t("失败 · 点按重试", "Failed · tap to retry"))
         }
         busy = false
     }
