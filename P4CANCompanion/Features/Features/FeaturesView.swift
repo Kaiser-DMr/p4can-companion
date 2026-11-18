@@ -250,7 +250,7 @@ struct FeaturesView: View {
 
         case .s3xy:
             InlineFeatureRow(
-                icon: "dot.radiowaves.left.and.right",
+                icon: "emoji:🎮",
                 title: L10n.t("S3XY", "S3XY"),
                 subtitle: L10n.t("打开后底部出现「蓝牙」标签；用于 S3XY 配对与按键动作。",
                                  "Turns on S3XY buttons and shows the Bluetooth tab."),
@@ -263,7 +263,7 @@ struct FeaturesView: View {
 
         case .lab:
             InlineFeatureRow(
-                icon: "flask",
+                icon: "emoji:🧪",
                 title: L10n.t("实验室菜单 (LAB Menu)", "LAB Menu"),
                 subtitle: L10n.t("显示实验性控制与捕获工具；打开后底部出现「实验室」标签。",
                                  "Show experimental controls and capture tools."),

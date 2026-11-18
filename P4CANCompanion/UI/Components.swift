@@ -154,9 +154,12 @@ struct StatusChip: View {
 struct ModuleIcon: View {
     let name: String
 
+    private static let emojiPrefix = "emoji:"
+
     var body: some View {
-        if name == "trafficlight" {
-            Text("🚦").font(.system(size: 17))
+        if name.hasPrefix(Self.emojiPrefix) {
+            Text(String(name.dropFirst(Self.emojiPrefix.count)))
+                .font(.system(size: 17))
         } else if UIImage(named: name) != nil {
             Image(name)
                 .renderingMode(.template)
