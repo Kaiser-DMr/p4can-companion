@@ -534,19 +534,29 @@ struct FeatureDetailView: View {
 
     // MARK: - 提交
 
+    /// 拆分 `extra` 声明："statsKey" 或 "statsKey:submitKey"。
+    private func splitExtra(_ key: String) -> (read: String, write: String) {
+        let parts = key.split(separator: ":", maxSplits: 1).map(String.init)
+        return (parts[0], parts.count > 1 ? parts[1] : parts[0])
+    }
+
     /// 校验 extra 声明的兄弟参数是否都在设备状态里；缺了就明确报错，避免发出必然 400 的请求。
     private func missingSiblings(_ keys: [String]) -> [String] {
-        keys.filter { stats?[$0] == nil }
+        keys.compactMap { key in
+            let read = splitExtra(key).read
+            return stats?[read] == nil ? read : nil
+        }
     }
 
     private func siblingParams(_ keys: [String]) -> [P4Param] {
         keys.compactMap { key in
-            guard let value = stats?[key] else { return nil }
+            let (read, write) = splitExtra(key)
+            guard let value = stats?[read] else { return nil }
             switch value {
-            case .bool(let flag): return P4Param(key, flag ? "1" : "0")
-            case .int(let number): return P4Param(key, "\(number)")
-            case .double(let number): return P4Param(key, "\(Int(number))")
-            case .string(let text): return P4Param(key, text)
+            case .bool(let flag): return P4Param(write, flag ? "1" : "0")
+            case .int(let number): return P4Param(write, "\(number)")
+            case .double(let number): return P4Param(write, "\(Int(number))")
+            case .string(let text): return P4Param(write, text)
             default: return nil
             }
         }

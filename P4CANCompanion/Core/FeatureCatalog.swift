@@ -12,6 +12,9 @@ struct NumberSpec: Sendable {
 /// 与固件 web_api.h 的真实契约对齐：全部为 query 参数 POST。
 /// `extra` 表示该接口要求同时提交的兄弟参数（值从当前 stats 读取），
 /// 例如 /api/r79/ap-control/update 必须一次提交 4 个参数。
+/// 读取名与提交名不一致时用 `"statsKey:submitKey"`（如 `selectedValue:value`），
+/// 这类不一致会让固件返回 400，表现为「点了没反应」，可用
+/// `build/tools/check_api_contract.py` 批量核对。
 struct FeatureControl: Identifiable, Sendable {
     enum Kind: Sendable {
         /// POST `path?key=1|0[&extra...]`
@@ -833,7 +836,8 @@ enum FeatureCatalog {
                     id: "hb.enabled", title: "启用心跳覆盖", footnote: "需同时提交原始值",
                     kind: .toggle(
                         key: "enabled", path: P4Route.summonHeartbeatUpdate,
-                        extra: ["selectedValue"]
+                        // 固件读 value，stats 里叫 selectedValue → 用 "read:write" 别名提交
+                        extra: ["selectedValue:value"]
                     )
                 ),
                 FeatureControl(
