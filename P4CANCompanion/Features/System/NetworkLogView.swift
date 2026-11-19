@@ -12,21 +12,22 @@ struct NetworkLogView: View {
     var body: some View {
         List {
             Section {
-                Toggle("暂停刷新", isOn: $paused)
-                LabeledContent("记录条数", value: "\(entries.count)")
-                Button("清空日志") {
+                Toggle(L10n.t("暂停刷新", "Pause refresh"), isOn: $paused)
+                LabeledContent(L10n.t("记录条数", "Entries"), value: "\(entries.count)")
+                Button(L10n.t("清空日志", "Clear log")) {
                     NetworkLog.shared.clear()
                     entries = []
                 }
                 .foregroundStyle(.p4Err)
             } footer: {
-                Text("记录保存在内存中（最多 300 条），退出 App 后清空。")
+                Text(L10n.t("记录保存在内存中（最多 300 条），退出 App 后清空。",
+                            "Kept in memory (up to 300 entries) and cleared when the app quits."))
             }
 
-            Section("请求") {
+            Section(L10n.t("请求", "Requests")) {
                 let filtered = filteredEntries
                 if filtered.isEmpty {
-                    Text("暂无记录")
+                    Text(L10n.t("暂无记录", "No entries"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -36,15 +37,15 @@ struct NetworkLogView: View {
                             Button {
                                 UIPasteboard.general.string = fullURL(entry)
                             } label: {
-                                Label("复制 URL", systemImage: "doc.on.doc")
+                                Label(L10n.t("复制 URL", "Copy URL"), systemImage: "doc.on.doc")
                             }
                         }
                 }
             }
         }
-        .navigationTitle("网络日志")
+        .navigationTitle(L10n.t("网络日志", "Network log"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索路径或 query")
+        .searchable(text: $query, prompt: L10n.t("搜索路径或 query", "Search path or query"))
         .task { await poll() }
     }
 

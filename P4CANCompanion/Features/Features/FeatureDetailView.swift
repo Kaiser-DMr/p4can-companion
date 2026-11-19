@@ -87,19 +87,24 @@ struct FeatureDetailView: View {
 
             if !capabilitySupported {
                 Section {
-                    Label("当前车型/拓扑不支持该功能（固件能力位为否）。", systemImage: "nosign")
+                    Label(L10n.t("当前车型/拓扑不支持该功能（固件能力位为否）。",
+                             "This vehicle or topology does not support the feature (capability bit is off)."),
+                          systemImage: "nosign")
                         .font(.footnote)
                         .foregroundStyle(.p4Warn)
                 }
             } else if environment.isSetupMode {
                 Section {
-                    Label("设备处于 Setup 模式，CAN 注入与功能写入已禁用。", systemImage: "gear.badge.questionmark")
+                    Label(L10n.t("设备处于 Setup 模式，CAN 注入与功能写入已禁用。",
+                             "The device is in setup mode; CAN injection and writes are disabled."),
+                          systemImage: "gear.badge.questionmark")
                         .font(.footnote)
                         .foregroundStyle(.p4Warn)
                 }
             } else if module.section == .lab, !environment.isLabEnabled {
                 Section {
-                    Label("需要先在「实验室功能总开关」中启用 LAB。", systemImage: "flask")
+                    Label(L10n.t("需要先在「实验室功能总开关」中启用 LAB。",
+                             "Enable LAB from the lab master switch first."), systemImage: "flask")
                         .font(.footnote)
                         .foregroundStyle(.p4Warn)
                 }
@@ -216,23 +221,25 @@ struct FeatureDetailView: View {
             #endif
         }
         .confirmationDialog(
-            "确认执行「\(pendingTrigger?.title ?? "")」？",
+            L10n.t("确认执行「\(pendingTrigger?.localizedTitle ?? "")」？",
+                    "Run “\(pendingTrigger?.localizedTitle ?? "")”?"),
             isPresented: Binding(
                 get: { pendingTrigger != nil },
                 set: { if !$0 { pendingTrigger = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("确认执行", role: .destructive) {
+            Button(L10n.t("确认执行", "Confirm"), role: .destructive) {
                 Haptics.warning()
                 if let control = pendingTrigger {
                     Task { await fire(control) }
                 }
                 pendingTrigger = nil
             }
-            Button("取消", role: .cancel) { pendingTrigger = nil }
+            Button(L10n.t("取消", "Cancel"), role: .cancel) { pendingTrigger = nil }
         } message: {
-            Text("将向设备提交：\(module.title) / \(pendingTrigger?.title ?? "")")
+            Text(L10n.t("将向设备提交：\(module.localizedTitle) / \(pendingTrigger?.localizedTitle ?? "")",
+                        "Sends to the device: \(module.localizedTitle) / \(pendingTrigger?.localizedTitle ?? "")"))
         }
     }
 
@@ -358,7 +365,7 @@ struct FeatureDetailView: View {
 
         case .select(let key, let options, _, _), .selectRead(let key, _, let options, _, _):
             if let current = selectedOptions[key], options.contains(where: { $0.rawValue == current }) {
-                Picker(control.title, selection: Binding(
+                Picker(control.localizedTitle, selection: Binding(
                     get: { current },
                     set: { newValue in
                         selectedOptions[key] = newValue
@@ -369,12 +376,12 @@ struct FeatureDetailView: View {
                     }
                 )) {
                     ForEach(options) { option in
-                        Text(option.label).tag(option.rawValue)
+                        Text(option.localizedLabel).tag(option.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
                 .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
-                .accessibilityLabel("\(control.title)选择器")
+                .accessibilityLabel(L10n.t("\(control.localizedTitle)选择器", "\(control.localizedTitle) picker"))
             } else if let current = selectedOptions[key] {
                 // 设备返回了值，但不在 App 的选项域内（固件新增枚举等）→ 原样只读展示
                 HStack {
@@ -393,7 +400,7 @@ struct FeatureDetailView: View {
             if let value = numberValues[key] {
                 VStack(alignment: .leading, spacing: Theme.spacing(1)) {
                     HStack {
-                        Text(control.title)
+                        Text(control.localizedTitle)
                         Spacer()
                         Text("\(Int(value)) \(unit)")
                             .foregroundStyle(.secondary)
@@ -420,8 +427,8 @@ struct FeatureDetailView: View {
                         }
                     }
                     .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
-                    .accessibilityLabel("\(control.title)，单位\(unit)")
-                    if let footnote = control.footnote {
+                    .accessibilityLabel(L10n.t("\(control.localizedTitle)，单位\(unit)", "\(control.localizedTitle), unit \(unit)"))
+                    if let footnote = control.localizedFootnote {
                         Text(footnote).font(.caption2).foregroundStyle(.secondary)
                     }
                 }
@@ -433,16 +440,16 @@ struct FeatureDetailView: View {
         case .pairNumber(let first, let second, _):
             if numberValues[first.key] != nil, numberValues[second.key] != nil {
                 VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
-                    Text(control.title).font(.subheadline)
+                    Text(control.localizedTitle).font(.subheadline)
                     pairSlider(first, controlID: control.id)
                     pairSlider(second, controlID: control.id)
-                    if let footnote = control.footnote {
+                    if let footnote = control.localizedFootnote {
                         Text(footnote).font(.caption2).foregroundStyle(.secondary)
                     }
                     Button {
                         Task { await submitPair(control, first: first, second: second) }
                     } label: {
-                        Label("同时提交", systemImage: "arrow.up.circle")
+                        Label(L10n.t("同时提交", "Submit both"), systemImage: "arrow.up.circle")
                             .font(.footnote.weight(.medium))
                     }
                     .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
@@ -469,9 +476,9 @@ struct FeatureDetailView: View {
 
     private func pairSlider(_ spec: NumberSpec, controlID: String) -> some View {
         HStack {
-            Text(spec.key == "noaStabilizationSeconds" ? "NOA 稳定期" :
-                 spec.key == "cancelPauseSeconds" ? "取消暂停" :
-                 spec.key == "preMs" ? "前置窗口" : "后置窗口")
+            Text(spec.key == "noaStabilizationSeconds" ? L10n.t("NOA 稳定期", "NOA settle") :
+                 spec.key == "cancelPauseSeconds" ? L10n.t("取消暂停", "Cancel pause") :
+                 spec.key == "preMs" ? L10n.t("前置窗口", "Pre window") : L10n.t("后置窗口", "Post window"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if spec.key == "preMs" || spec.key == "postMs" {
@@ -490,7 +497,7 @@ struct FeatureDetailView: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
-                .accessibilityLabel("\(spec.key)，单位秒")
+                .accessibilityLabel(L10n.t("\(spec.key)，单位秒", "\(spec.key), seconds"))
             } else {
                 Slider(
                     value: Binding(
@@ -510,7 +517,7 @@ struct FeatureDetailView: View {
                         sliderEditing.remove(controlID)
                     }
                 }
-                .accessibilityLabel("\(spec.key)，单位\(spec.unit)")
+                .accessibilityLabel(L10n.t("\(spec.key)，单位\(spec.unit)", "\(spec.key), unit \(spec.unit)"))
                 Text("\(Int(numberValues[spec.key] ?? spec.range.lowerBound)) \(spec.unit)")
                     .font(.caption)
                     .monospacedDigit()
@@ -522,8 +529,8 @@ struct FeatureDetailView: View {
 
     private func controlLabel(_ control: FeatureControl) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(control.title).font(.subheadline)
-            if let footnote = control.footnote {
+            Text(control.localizedTitle).font(.subheadline)
+            if let footnote = control.localizedFootnote {
                 Text(footnote).font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -570,12 +577,12 @@ struct FeatureDetailView: View {
         HStack(alignment: .firstTextBaseline) {
             controlLabel(control)
             Spacer(minLength: Theme.spacing(1))
-            Text(loadFailed == nil ? "读取中…" : "未获取")
+            Text(loadFailed == nil ? L10n.t("读取中…", "Reading…") : L10n.t("未获取", "Unavailable"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(control.title)，设备未提供状态")
+        .accessibilityLabel(L10n.t("\(control.localizedTitle)，设备未提供状态", "\(control.localizedTitle), no state from device"))
     }
 
     // MARK: - 提交
@@ -618,11 +625,13 @@ struct FeatureDetailView: View {
         // 常驻 AP：固件要求 enabled + method 两个参数同时提交，且 method 不能是「未选择」。
         if path == P4Route.continuousAPConfig, newValue {
             guard let method = stats?["method"]?.intValue else {
-                environment.toast = P4Toast(message: "设备尚未上报「触发手势」，暂不能开启常驻 AP", style: .failure)
+                environment.toast = P4Toast(message: L10n.t("设备尚未上报「触发手势」，暂不能开启常驻 AP",
+                                     "The device has not reported a trigger gesture; continuous AP cannot be enabled yet"), style: .failure)
                 return
             }
             if method == 0 {
-                environment.toast = P4Toast(message: "请先选择「触发手势」，再开启常驻 AP", style: .failure)
+                environment.toast = P4Toast(message: L10n.t("请先选择「触发手势」，再开启常驻 AP",
+                                     "Choose a trigger gesture before enabling continuous AP"), style: .failure)
                 return
             }
         }
@@ -630,7 +639,8 @@ struct FeatureDetailView: View {
         let missing = missingSiblings(extra)
         if !missing.isEmpty {
             environment.toast = P4Toast(
-                message: "设备尚未上报「\(control.title)」所需的参数（\(missing.joined(separator: "、"))），请稍后重试",
+                message: L10n.t("设备尚未上报「\(control.localizedTitle)」所需的参数（\(missing.joined(separator: "、"))），请稍后重试",
+                                 "The device has not reported the parameters for “\(control.localizedTitle)” (\(missing.joined(separator: ", "))); try again shortly"),
                 style: .failure
             )
             return
@@ -639,14 +649,15 @@ struct FeatureDetailView: View {
         let before = boolState(control, writeKey: key)
         var query = [P4Param(key, newValue ? "1" : "0")]
         query.append(contentsOf: siblingParams(extra))
-        await environment.command("\(module.title) · \(control.title)", path: path ?? module.statsPath, query: query)
+        await environment.command("\(module.localizedTitle) · \(control.localizedTitle)", path: path ?? module.statsPath, query: query)
         await load()
 
         // 写成功但回读没变：说明固件没有回读该位或被闸门丢弃，明确告诉用户，避免「点了没反应」。
         let after = boolState(control, writeKey: key)
         if environment.toast?.style == .success, after != newValue, after == before {
             environment.toast = P4Toast(
-                message: "已提交「\(control.title)」，但设备未回读该状态（固件未暴露或未生效）",
+                message: L10n.t("已提交「\(control.localizedTitle)」，但设备未回读该状态（固件未暴露或未生效）",
+                                 "Sent “\(control.localizedTitle)”, but the device did not report the new state (not exposed or not applied)"),
                 style: .info
             )
         }
@@ -657,7 +668,7 @@ struct FeatureDetailView: View {
         pendingWrites.insert(control.id)
         defer { pendingWrites.remove(control.id) }
         await environment.command(
-            "\(module.title) · \(control.title)",
+            "\(module.localizedTitle) · \(control.localizedTitle)",
             path: newValue ? on : off
         )
         await load()
@@ -679,14 +690,15 @@ struct FeatureDetailView: View {
         let missing = missingSiblings(extra)
         if !missing.isEmpty {
             environment.toast = P4Toast(
-                message: "设备尚未上报「\(control.title)」所需的参数（\(missing.joined(separator: "、"))），请稍后重试",
+                message: L10n.t("设备尚未上报「\(control.localizedTitle)」所需的参数（\(missing.joined(separator: "、"))），请稍后重试",
+                                 "The device has not reported the parameters for “\(control.localizedTitle)” (\(missing.joined(separator: ", "))); try again shortly"),
                 style: .failure
             )
             return
         }
         var query = [P4Param(key, rawValue)]
         query.append(contentsOf: siblingParams(extra))
-        await environment.command("\(module.title) · \(control.title)", path: path ?? module.statsPath, query: query)
+        await environment.command("\(module.localizedTitle) · \(control.localizedTitle)", path: path ?? module.statsPath, query: query)
         await load()
     }
 
@@ -697,14 +709,15 @@ struct FeatureDetailView: View {
         let missing = missingSiblings(extra)
         if !missing.isEmpty {
             environment.toast = P4Toast(
-                message: "设备尚未上报「\(control.title)」所需的参数（\(missing.joined(separator: "、"))），请稍后重试",
+                message: L10n.t("设备尚未上报「\(control.localizedTitle)」所需的参数（\(missing.joined(separator: "、"))），请稍后重试",
+                                 "The device has not reported the parameters for “\(control.localizedTitle)” (\(missing.joined(separator: ", "))); try again shortly"),
                 style: .failure
             )
             return
         }
         var query = [P4Param(key, "\(Int(value))")]
         query.append(contentsOf: siblingParams(extra))
-        await environment.command("\(module.title) · \(control.title)", path: path ?? module.statsPath, query: query)
+        await environment.command("\(module.localizedTitle) · \(control.localizedTitle)", path: path ?? module.statsPath, query: query)
         await load()
     }
 
@@ -719,13 +732,13 @@ struct FeatureDetailView: View {
             P4Param(first.key, "\(Int(numberValues[first.key] ?? first.range.lowerBound))"),
             P4Param(second.key, "\(Int(numberValues[second.key] ?? second.range.lowerBound))"),
         ]
-        await environment.command("\(module.title) · \(control.title)", path: path, query: query)
+        await environment.command("\(module.localizedTitle) · \(control.localizedTitle)", path: path, query: query)
         await load()
     }
 
     private func fire(_ control: FeatureControl) async {
         guard case .trigger(let path, let query, _, _) = control.kind else { return }
-        await environment.command("\(module.title) · \(control.title)", path: path, query: query)
+        await environment.command("\(module.localizedTitle) · \(control.localizedTitle)", path: path, query: query)
         await load()
     }
 
@@ -835,7 +848,7 @@ struct FeatureDetailView: View {
                     return !text.trimmingCharacters(in: .whitespaces).isEmpty
                 }
                 if scalars.isEmpty {
-                    Text("该端点未返回可展示字段")
+                    Text(L10n.t("该端点未返回可展示字段", "This endpoint returned no displayable fields"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 } else {
@@ -849,7 +862,7 @@ struct FeatureDetailView: View {
                     default: return false
                     }
                 }) == true {
-                    DisclosureGroup("原始数据", isExpanded: $showsRawData) {
+                    DisclosureGroup(L10n.t("原始数据", "Raw data"), isExpanded: $showsRawData) {
                         Text(stats.prettyText())
                             .font(.system(.caption2, design: .monospaced))
                             .foregroundStyle(.secondary)

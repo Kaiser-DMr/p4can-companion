@@ -118,12 +118,13 @@ extension P4JSON {
 extension P4JSON {
 
     /// 单个值的可读文本（布尔本地化、字节量/时长按语义格式化）。
+    @MainActor
     var displayText: String {
         switch self {
         case .null:
             return "—"
         case .bool(let value):
-            return value ? "开启" : "关闭"
+            return L10n.t(value ? "开启" : "关闭", value ? "On" : "Off")
         case .int(let value):
             return P4Format.number(value)
         case .double(let value):
@@ -131,7 +132,7 @@ extension P4JSON {
         case .string(let value):
             return value
         case .array(let value):
-            return "[\(value.count) 项]"
+            return L10n.t("[\(value.count) 项]", "[\(value.count) items]")
         case .object(let value):
             return "{\(value.count) 个字段}"
         }
@@ -165,23 +166,27 @@ enum P4Format {
         ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
     }
 
+    @MainActor
     static func milliseconds(_ value: Int64) -> String {
-        if value < 1000 { return "\(value) 毫秒" }
+        if value < 1000 { return L10n.t("\(value) 毫秒", "\(value) ms") }
         let seconds = Double(value) / 1000.0
-        if seconds < 60 { return String(format: "%.1f 秒", seconds) }
+        if seconds < 60 { return L10n.t(String(format: "%.1f 秒", seconds), String(format: "%.1f s", seconds)) }
         let minutes = Int(seconds / 60)
-        if minutes < 60 { return "\(minutes) 分 \(Int(seconds) % 60) 秒" }
-        return "\(minutes / 60) 小时 \(minutes % 60) 分"
+        if minutes < 60 {
+            return L10n.t("\(minutes) 分 \(Int(seconds) % 60) 秒", "\(minutes) min \(Int(seconds) % 60) s")
+        }
+        return L10n.t("\(minutes / 60) 小时 \(minutes % 60) 分", "\(minutes / 60) h \(minutes % 60) min")
     }
 
     /// 依据键名语义选择格式化方式。
+    @MainActor
     static func value(for key: String, of json: P4JSON) -> String {
         let lower = key.lowercased()
         switch json {
         case .bool:
             // 诊断类布尔用「是/否」，开关类仍用「开启/关闭」
             if ["blocked", "supported", "valid", "ok"].contains(lower) {
-                return json.boolValue == true ? "是" : "否"
+                return json.boolValue == true ? L10n.t("是", "Yes") : L10n.t("否", "No")
             }
             return json.displayText
         case .int(let value):
@@ -464,7 +469,11 @@ enum P4KeyLocalization {
         "unknown": "未知",
     ]
 
+    @MainActor
     static func label(for key: String) -> String {
+        // 英文模式不套中文表：直接显示固件字段名，比半中半英更好读，
+        // 也避免为 200+ 个键维护第二张翻译表。
+        if L10n.isEnglish { return key }
         if let mapped = table[key] { return mapped }
         // can1*/can2*/can3* 统一映射
         for index in 1...3 {

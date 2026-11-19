@@ -44,7 +44,8 @@ struct MetricRow: View {
         }
         .font(.subheadline)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(P4KeyLocalization.label(for: key))，\(P4Format.value(for: key, of: value))")
+        .accessibilityLabel(L10n.t("\(P4KeyLocalization.label(for: key))，\(P4Format.value(for: key, of: value))",
+                                   "\(P4KeyLocalization.label(for: key)), \(P4Format.value(for: key, of: value))"))
     }
 }
 
