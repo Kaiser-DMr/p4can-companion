@@ -377,7 +377,7 @@ struct HeadlightStrobeView: View {
                 }
                 // SwiftPieces ElasticButton：按下向触点挤压缩放、拖拽有橡皮筋阻力，
                 // 抬起带一点回弹；表面是同款液体玻璃，与上方触发按钮同一套材质语言。
-                .buttonStyle(.elastic(saveButtonStyle))
+                .buttonStyle(.elastic(saveButtonStyle, tracksDrag: false))
                 .disabled(saveDisabled)
                 .listRowSeparator(.hidden)
                 // 玻璃材质会把底衬冲淡（实测红色只剩约 1/4），所以禁用感靠整体降低不透明度，
@@ -393,7 +393,7 @@ struct HeadlightStrobeView: View {
                         .frame(maxWidth: .infinity)
                 }
                 // 同为 ElasticButton，中性玻璃底，尺寸与保存按钮完全一致。
-                .buttonStyle(.elastic(revertButtonStyle))
+                .buttonStyle(.elastic(revertButtonStyle, tracksDrag: false))
                 .disabled(revertDisabled)
                 .opacity(revertDisabled ? 0.7 : 1)
 
@@ -413,6 +413,8 @@ struct HeadlightStrobeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // 自定义标签栏浮在底部：给最后两行留出空间，避免按钮贴着/压到栏上。
+        .contentMargins(.bottom, 28, for: .scrollContent)
         #if DEBUG
         // 本地联调：SIMCTL_CHILD_P4CAN_SCROLL_TO=params 启动后直接滚到参数区
         .task {

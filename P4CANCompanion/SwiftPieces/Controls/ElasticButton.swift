@@ -124,12 +124,17 @@ public struct ElasticButton: ButtonStyle {
     private let bounce: Double
     private let haptics: Bool
     private let style: Style
+    /// 是否附加「跟手拖拽」手势。默认开启；放进 List/ScrollView 且需要稳定点击时关掉：
+    /// `DragGesture(minimumDistance: 0)` 会和列表的滚动手势抢识别，表现为按下去有动画但 Button 不触发。
+    private let tracksDrag: Bool
 
-    public init(squash: CGFloat = 0.96, bounce: Double = 0.2, haptics: Bool = true, style: Style = .standard) {
+    public init(squash: CGFloat = 0.96, bounce: Double = 0.2, haptics: Bool = true,
+                style: Style = .standard, tracksDrag: Bool = true) {
         self.squash = squash
         self.bounce = bounce
         self.haptics = haptics
         self.style = style
+        self.tracksDrag = tracksDrag
     }
 
     public func makeBody(configuration: Configuration) -> some View {
@@ -149,7 +154,7 @@ public struct ElasticButton: ButtonStyle {
             .animation(pressed ? motion.press : release(motion), value: pressed)
             // The deepen is still part of the press, so it never bounces under the finger: unhurried, with no overshoot.
             .animation(motion.value, value: deep)
-            .simultaneousGesture(tracker)
+            .simultaneousGesture(tracker, including: tracksDrag ? .all : .none)
             .onChange(of: configuration.isPressed) { _, isPressed in
                 down = isPressed
                 holdTask?.cancel()
@@ -255,8 +260,8 @@ public extension ButtonStyle where Self == ElasticButton {
     }
 
     /// Elastic press with a drawn surface, for example `.elastic(.signal)` or `.elastic(.block(.sky))`.
-    static func elastic(_ style: ElasticButton.Style) -> ElasticButton {
-        ElasticButton(style: style)
+    static func elastic(_ style: ElasticButton.Style, tracksDrag: Bool = true) -> ElasticButton {
+        ElasticButton(style: style, tracksDrag: tracksDrag)
     }
 }
 
