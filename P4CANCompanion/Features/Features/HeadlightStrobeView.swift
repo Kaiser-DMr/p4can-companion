@@ -116,7 +116,9 @@ struct HeadlightStrobeView: View {
 
     private var intervalStepText: String { "10" }
 
-    private var saveDisabled: Bool { busy || !dirty || active }
+    // 爆闪中不再把保存按钮变灰（固件会 409，用户只会觉得「点不动」）：
+    // 保存时先停再写，见 saveConfig。
+    private var saveDisabled: Bool { busy || !dirty }
 
     private var revertDisabled: Bool { busy || !dirty }
 
@@ -395,6 +397,11 @@ struct HeadlightStrobeView: View {
                 .disabled(revertDisabled)
                 .opacity(revertDisabled ? 0.7 : 1)
 
+            } footer: {
+                if active {
+                    Text(L10n.t("爆闪进行中：保存会先停止并恢复，再写入参数。",
+                                "Strobe is running: saving stops it and restores first."))
+                }
             }
 
             if let errorText {
@@ -418,6 +425,16 @@ struct HeadlightStrobeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
         .task { await poll() }
+        #if DEBUG
+        // 本地联调：SIMCTL_CHILD_P4CAN_AUTOSAVE=1 自动改一个值并保存，
+        // 用来验证「保存失败/回读不一致」的提示链路，不需要点击。
+        .task {
+            guard ProcessInfo.processInfo.environment["P4CAN_AUTOSAVE"] == "1" else { return }
+            try? await Task.sleep(for: .milliseconds(1200))
+            count = 12
+            await saveConfig()
+        }
+        #endif
         .onAppear { syncCommitPhase() }
         .onChange(of: canTrigger) { _, _ in syncCommitPhase() }
         .onChange(of: commitPhase) { _, _ in syncCommitPhase() }
@@ -639,11 +656,43 @@ struct HeadlightStrobeView: View {
         Haptics.impact()
     }
 
+    /// 保存后回读比对：只比设备一定会回显的字段，老固件缺 mode 时跳过。
+    private func applied(_ object: [String: P4JSON]) -> Bool {
+        if let deviceCount = object["count"]?.intValue, Int(deviceCount) != count { return false }
+        let expectedMode = ending == .manual ? "MANUAL" : (ending == .duration ? "DURATION" : "COUNT")
+        if let deviceMode = object["mode"]?.stringValue, deviceMode != expectedMode { return false }
+        if let deviceMaxRun = object["maxRunMs"]?.intValue, Int(deviceMaxRun) != effectiveMaxRunMs { return false }
+        return true
+    }
+
     private func saveConfig() async {
         guard (1...30).contains(count), (50...1000).contains(intervalMs),
-              (1...30).contains(durationSec), (5...60).contains(maxRunSec) else { return }
+              (1...30).contains(durationSec), (5...60).contains(maxRunSec) else {
+            // 以前这里静默 return：按钮看起来能点，实际什么都没发生。
+            environment.toast = P4Toast(
+                message: L10n.t("参数超出范围：次数 \(count)、间隔 \(intervalMs) ms、时长 \(durationSec) s、上限 \(maxRunSec) s",
+                                "Out of range: \(count) flashes, \(intervalMs) ms, \(durationSec) s, cap \(maxRunSec) s"),
+                style: .failure
+            )
+            Haptics.error()
+            return
+        }
+        // 固件在爆闪进行中拒绝任何会改变本次运行的配置 POST（409）。
+        // 用户点保存就是想保存，这里先停再写，避免「按钮能点但永远失败」。
+        if active {
+            await stop()
+            if active {
+                environment.toast = P4Toast(
+                    message: L10n.t("爆闪未能停止，参数没有保存", "Could not stop the strobe; settings were not saved"),
+                    style: .failure
+                )
+                return
+            }
+        }
         busy = true
+        defer { busy = false }
         errorText = nil
+        let previousSaved = saved
         do {
             let value = try await environment.api.post(P4Route.headlightStrobeConfig, query: [
                 P4Param("count", String(count)),
@@ -655,6 +704,18 @@ struct HeadlightStrobeView: View {
                 P4Param("maxRunMs", String(effectiveMaxRunMs)),
             ])
             environment.storeEndpoint(P4Route.headlightStrobeStats, value)
+            // 回读校验：固件可能忽略不认识的参数，或 NVS 写入失败但仍回 200。
+            // 不比对就会出现「显示已保存，退出重进又变回去」。
+            if let object = value.objectValue, !applied(object) {
+                saved = previousSaved
+                let detail = L10n.t("设备未接受全部参数（回读：次数 \(object["count"]?.intValue ?? -1)，模式 \(object["mode"]?.stringValue ?? "—")）",
+                                    "The device did not accept all settings (read back: \(object["count"]?.intValue ?? -1) flashes, mode \(object["mode"]?.stringValue ?? "—"))")
+                errorText = detail
+                environment.toast = P4Toast(message: detail, style: .failure)
+                Haptics.error()
+                busy = false
+                return
+            }
             saved = drafted
             Haptics.success()
             withAnimation(.spring(response: 0.28, dampingFraction: 1.0)) { justSaved = true }
@@ -664,7 +725,9 @@ struct HeadlightStrobeView: View {
             }
             environment.toast = P4Toast(message: L10n.t("爆闪参数已保存", "Strobe settings saved"), style: .success)
         } catch {
-            errorText = AppEnvironment.friendly(error)
+            let message = AppEnvironment.friendly(error)
+            errorText = message
+            environment.toast = P4Toast(message: message, style: .failure)
             Haptics.error()
         }
         busy = false
