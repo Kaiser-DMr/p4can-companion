@@ -9,10 +9,9 @@ struct FeatureDetailView: View {
 
     let module: FeatureModule
 
-    @State private var stats: P4JSON?
-    /// 控件声明了 readPath 时（如 LAB 的踏板档位在 /api/pedalmap/stats）的附加状态。
-    @State private var statsByPath: [String: P4JSON] = [:]
-    @State private var loadFailed: String?
+    /// 端点数据统一放在 `AppEnvironment`：本页只读，不再自己存一份。
+    private var stats: P4JSON? { environment.endpointValue(module.statsPath) }
+    private var loadFailed: String? { environment.endpointError(module.statsPath) }
     @State private var numberValues: [String: Double] = [:]
     @State private var selectedOptions: [String: String] = [:]
     @State private var pendingTrigger: FeatureControl?
@@ -268,30 +267,20 @@ struct FeatureDetailView: View {
     }
 
     private func load() async {
-        do {
-            let main = try await environment.api.get(module.statsPath)
-            var byPath = [module.statsPath: main]
-            for path in Set(module.controls.compactMap(\.readPath)) where path != module.statsPath {
-                if let value = try? await environment.api.get(path) {
-                    byPath[path] = value
-                }
-            }
-            stats = main
-            statsByPath = byPath
-            loadFailed = nil
-            syncFromDevice()
-        } catch {
-            loadFailed = AppEnvironment.friendly(error)
+        // 主端点失败时保留上一次成功的数据（共享缓存不清空），
+        // 由 `loadFailed` 提示「数据可能过期」。
+        await environment.refreshEndpoint(module.statsPath)
+        for path in Set(module.controls.compactMap(\.readPath)) where path != module.statsPath {
+            await environment.refreshEndpoint(path)
         }
+        syncFromDevice()
     }
 
     // MARK: - 读取映射
 
     /// 控件状态所在的对象（可能是模块主端点，也可能是 readPath 指向的端点）。
     private func statsObject(for control: FeatureControl) -> [String: P4JSON]? {
-        let path = control.readPath ?? module.statsPath
-        if path == module.statsPath { return stats?.objectValue }
-        return statsByPath[path]?.objectValue
+        environment.endpointValue(control.readPath ?? module.statsPath)?.objectValue
     }
 
     /// 读取用键：固件里写入参数名与状态字段名常不一致（如 confirm → stalkConfirmEnabled）。
@@ -834,7 +823,7 @@ struct FeatureDetailView: View {
 
     @ViewBuilder
     private var statsSection: some View {
-        Section(L10n.t("实时状态", "Live status")) {
+        Section {
             if let failed = loadFailed {
                 Label(failed, systemImage: "exclamationmark.triangle")
                     .font(.footnote)
@@ -871,6 +860,26 @@ struct FeatureDetailView: View {
             } else if loadFailed == nil {
                 SkeletonRows(count: 5)
             }
+        } header: {
+            Text(L10n.t("实时状态", "Live status"))
+        } footer: {
+            // 新鲜度：端点级时间戳，读失败时明确「这是旧数据」，
+            // 不再出现「在线但数据不动」却看不出问题的状态。
+            if let age = environment.endpointAge(module.statsPath) {
+                Text(freshnessText(age))
+            } else if loadFailed != nil {
+                Text(L10n.t("显示的是上一次成功读取的数据。", "Showing the last successful reading."))
+            }
         }
+    }
+
+    private func freshnessText(_ age: TimeInterval) -> String {
+        if age < 2 {
+            return L10n.t("刚刚更新", "Updated just now")
+        }
+        if age < 60 {
+            return L10n.t("\(Int(age)) s 前更新", "Updated \(Int(age)) s ago")
+        }
+        return L10n.t("\(Int(age / 60)) 分钟前更新", "Updated \(Int(age / 60)) min ago")
     }
 }

@@ -7,7 +7,8 @@ import SwiftUI
 struct DiagnosticsView: View {
     @EnvironmentObject private var environment: AppEnvironment
 
-    @State private var stats: P4JSON?
+    /// 与首页 / 数据浏览共用同一份 system stats。
+    private var stats: P4JSON? { environment.endpointValue(P4Route.systemStats) }
     @State private var busy = false
     @State private var confirmsReinit = false
     @State private var exportURL: URL?
@@ -164,9 +165,7 @@ struct DiagnosticsView: View {
     }
 
     private func load() async {
-        if let value = try? await environment.api.get(P4Route.systemStats) {
-            stats = value
-        }
+        await environment.refreshEndpoint(P4Route.systemStats)
     }
 
     private func command(_ label: String, path: String) async {

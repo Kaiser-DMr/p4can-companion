@@ -128,6 +128,64 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var endpointsUpdatedAt: Date?
     @Published private(set) var isScanningEndpoints = false
 
+    // MARK: - 端点级共享快照
+
+    /// 页面共用的端点数据：同一路径只保留最新一次成功回包与时间戳。
+    ///
+    /// 以前详情页、灯光两页、功能列表各自持有 `stats` 并各自轮询同一端点，
+    /// 同一份数据有多个真相源：A 页写入成功后 B 页要等下一拍，离线时各页新旧不一。
+    /// 现在统一走这里，页面只读，不再自己存。
+    @Published private(set) var endpointValues: [String: P4JSON] = [:]
+    @Published private(set) var endpointFetchedAt: [String: Date] = [:]
+    /// 同一路径正在请求中：并发调用复用这次请求，避免多页同时挂载时重复打设备。
+    private var endpointInFlight: Set<String> = []
+
+    /// 端点最新一次成功回包（nil = 从未成功）。
+    func endpointValue(_ path: String) -> P4JSON? { endpointValues[path] }
+
+    /// 端点最近一次成功时间（用于新鲜度提示）。
+    func endpointUpdatedAt(_ path: String) -> Date? { endpointFetchedAt[path] }
+
+    /// 端点数据年龄（秒）；nil 表示从未成功。
+    func endpointAge(_ path: String) -> TimeInterval? {
+        guard let at = endpointFetchedAt[path] else { return nil }
+        return Date().timeIntervalSince(at)
+    }
+
+    /// 端点最近一次失败原因（成功后清除）。
+    func endpointError(_ path: String) -> String? { endpointErrors[path] }
+
+    /// 写入共享缓存（写接口的回包本身就是最新状态，直接落进来，
+    /// 其它页面下一拍就能看到，不必等各自轮询）。
+    func storeEndpoint(_ path: String, _ value: P4JSON) {
+        endpointValues[path] = value
+        endpointFetchedAt[path] = Date()
+        endpointErrors[path] = nil
+    }
+
+    /// 读取一个端点；`maxAge` 内的缓存直接复用。
+    ///
+    /// - `maxAge > 0`：节流（如功能列表 4 s 慢轮询，灯光页 800 ms 高频轮询共用一份数据）；
+    /// - 同一路径已有请求在飞：不重复发，直接返回当前缓存，等下一拍再取。
+    @discardableResult
+    func refreshEndpoint(_ path: String, maxAge: TimeInterval = 0) async -> P4JSON? {
+        if maxAge > 0, let at = endpointFetchedAt[path],
+           Date().timeIntervalSince(at) <= maxAge {
+            return endpointValues[path]
+        }
+        guard !endpointInFlight.contains(path) else { return endpointValues[path] }
+        endpointInFlight.insert(path)
+        defer { endpointInFlight.remove(path) }
+        do {
+            let value = try await api.get(path)
+            storeEndpoint(path, value)
+            return value
+        } catch {
+            endpointErrors[path] = AppEnvironment.friendly(error)
+            return nil
+        }
+    }
+
     /// 是否处于独占操作（OTA / 批量扫描）——页面级轮询应据此暂停。
     var isPollingPaused: Bool { exclusiveOperationDepth > 0 }
 
@@ -304,6 +362,9 @@ final class AppEnvironment: ObservableObject {
         trendSamples = []
         endpointPayloads = [:]
         endpointErrors = [:]
+        endpointValues = [:]
+        endpointFetchedAt = [:]
+        endpointInFlight = []
         endpointsUpdatedAt = nil
         isShowingCachedData = false
         cachedAt = nil
@@ -700,6 +761,12 @@ final class AppEnvironment: ObservableObject {
         endpointPayloads = payloads
         endpointErrors = errors
         endpointsUpdatedAt = Date()
+        // 扫描结果也是「刚读到的真相」：同步进共享缓存，页面切过去不用再等一轮。
+        let scannedAt = Date()
+        for (path, value) in payloads {
+            endpointValues[path] = value
+            endpointFetchedAt[path] = scannedAt
+        }
 
         if let snapshot = payloads["/api/snapshot?groups=home-fast&slow=1"] {
             if let fast = snapshot["fast"]?.objectValue { fastGroups = fast }

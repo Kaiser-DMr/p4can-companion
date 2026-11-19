@@ -10,7 +10,8 @@ import SwiftUI
 struct RearFogStrobeView: View {
     @EnvironmentObject private var environment: AppEnvironment
 
-    @State private var stats: P4JSON?
+    /// 与功能列表共用同一份端点缓存。
+    private var stats: P4JSON? { environment.endpointValue(P4Route.rearFogStrobeStats) }
     @State private var busy = false
     @State private var errorText: String?
 
@@ -107,6 +108,10 @@ struct RearFogStrobeView: View {
                 if !isActive {
                     LabeledContent(L10n.t("上次结束", "Last stop"), value: stopReasonText)
                 }
+                if let age = environment.endpointAge(P4Route.rearFogStrobeStats) {
+                    LabeledContent(L10n.t("数据", "Data"), value: freshnessText(age))
+                        .foregroundStyle(age > 5 ? Color.p4Warn : Color.primary)
+                }
             } header: {
                 Label(L10n.t("运行状态", "Status"), systemImage: "gauge.with.dots.needle.33percent")
             }
@@ -176,14 +181,19 @@ struct RearFogStrobeView: View {
 
     private func poll() async {
         while !Task.isCancelled {
-            if let value = try? await environment.api.get(P4Route.rearFogStrobeStats) {
-                stats = value
+            if let value = await environment.refreshEndpoint(P4Route.rearFogStrobeStats) {
                 if errorText != nil, value.objectValue?["ok"]?.boolValue == true {
                     errorText = nil
                 }
             }
             try? await Task.sleep(for: pollInterval)
         }
+    }
+
+    private func freshnessText(_ age: TimeInterval) -> String {
+        if age < 2 { return L10n.t("刚刚", "now") }
+        if age < 60 { return L10n.t("\(Int(age)) s 前", "\(Int(age)) s ago") }
+        return L10n.t("\(Int(age / 60)) 分钟前", "\(Int(age / 60)) min ago")
     }
 
     private func start() async {
@@ -193,7 +203,7 @@ struct RearFogStrobeView: View {
         Haptics.impact()
         do {
             let value = try await environment.api.post(P4Route.rearFogStrobeStart)
-            stats = value
+            environment.storeEndpoint(P4Route.rearFogStrobeStats, value)
             Haptics.success()
         } catch {
             // 409 的 body 就是原因（ALREADY_ACTIVE / NO_FRAME），不要再按 templateValid 猜：
@@ -220,7 +230,7 @@ struct RearFogStrobeView: View {
         busy = true
         Haptics.impact()
         if let value = try? await environment.api.post(P4Route.rearFogStrobeStop) {
-            stats = value
+            environment.storeEndpoint(P4Route.rearFogStrobeStats, value)
             Haptics.success()
         } else {
             errorText = L10n.t("停止请求发送失败，请重试。", "Failed to send the stop request.")

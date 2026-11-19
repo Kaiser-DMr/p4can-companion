@@ -513,13 +513,14 @@ struct FeaturesView: View {
     }
 
     /// 灯光类模块的运行态：只读，失败即视为「未知」，不显示徽章。
+    /// 走共享端点缓存：灯光页在 800/500 ms 轮询时，这里直接复用，不再重复打设备。
     private func loadStrobeStates() async {
         var fresh: [String: Bool] = [:]
-        if let json = try? await environment.api.get(P4Route.headlightStrobeStats),
+        if let json = await environment.refreshEndpoint(P4Route.headlightStrobeStats, maxAge: 3),
            let active = json.objectValue?["active"]?.boolValue {
             fresh["headlight"] = active
         }
-        if let json = try? await environment.api.get(P4Route.rearFogStrobeStats),
+        if let json = await environment.refreshEndpoint(P4Route.rearFogStrobeStats, maxAge: 3),
            let active = json.objectValue?["active"]?.boolValue {
             fresh["rearFog"] = active
         }

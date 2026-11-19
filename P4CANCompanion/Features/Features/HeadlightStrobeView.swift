@@ -43,7 +43,8 @@ struct HeadlightStrobeView: View {
     @State private var saved = Config(count: 10, intervalMs: 100, trigger: 0, hold: false,
                                       durationMs: 0, stopMode: 0, maxRunMs: 30_000)
 
-    @State private var stats: P4JSON?
+    /// 运行状态放在共享端点缓存里：功能列表、本页、诊断包读的是同一份。
+    private var stats: P4JSON? { environment.endpointValue(P4Route.headlightStrobeStats) }
     @State private var supported = true
     @State private var stalkVariant = "STALK"
     @State private var busy = false
@@ -466,6 +467,17 @@ struct HeadlightStrobeView: View {
             }
             .font(.subheadline)
 
+            if let age = environment.endpointAge(P4Route.headlightStrobeStats) {
+                HStack {
+                    Text(L10n.t("数据", "Data"))
+                    Spacer()
+                    Text(freshnessText(age))
+                        .monospacedDigit()
+                        .foregroundStyle(age > 5 ? Color.p4Warn : Color.secondary)
+                }
+                .font(.caption)
+            }
+
             HStack {
                 Text(L10n.t("长按触发", "Hold delay"))
                 Spacer()
@@ -515,6 +527,12 @@ struct HeadlightStrobeView: View {
         return String(format: "%.1f / %.1f s", Double(elapsed) / 1000, Double(totalMs) / 1000)
     }
 
+    private func freshnessText(_ age: TimeInterval) -> String {
+        if age < 2 { return L10n.t("刚刚", "now") }
+        if age < 60 { return L10n.t("\(Int(age)) s 前", "\(Int(age)) s ago") }
+        return L10n.t("\(Int(age / 60)) 分钟前", "\(Int(age / 60)) min ago")
+    }
+
     private var stateText: String {
         switch state {
         case "ACTIVE": return L10n.t("爆闪中", "Active")
@@ -557,8 +575,7 @@ struct HeadlightStrobeView: View {
     private func poll() async {
         await loadConfig()
         while !Task.isCancelled {
-            if let value = try? await environment.api.get(P4Route.headlightStrobeStats) {
-                stats = value
+            if let value = await environment.refreshEndpoint(P4Route.headlightStrobeStats) {
                 supported = value.objectValue?["supported"]?.boolValue ?? supported
                 stalkVariant = value.objectValue?["stalkVariant"]?.stringValue ?? stalkVariant
             }
@@ -593,12 +610,20 @@ struct HeadlightStrobeView: View {
                            durationMs: ending == .duration ? durationSec * 1000 : 0,
                            stopMode: stopMode == 1 ? 1 : 0,
                            maxRunMs: maxRunSec * 1000)
-            stats = value
+            environment.storeEndpoint(P4Route.headlightStrobeStats, value)
             errorText = nil
         } catch {
-            supported = false
-            errorText = L10n.t("固件没有提供爆闪接口（需集成 headlight_strobe 补丁）：\(AppEnvironment.friendly(error))",
-                               "Firmware does not expose the strobe API (headlight_strobe patch required): \(AppEnvironment.friendly(error))")
+            // 有缓存就先用缓存渲染：一次 config 读失败不等于「车型不支持」。
+            if let cached = stats?.objectValue {
+                supported = cached["supported"]?.boolValue ?? supported
+                stalkVariant = cached["stalkVariant"]?.stringValue ?? stalkVariant
+                errorText = L10n.t("参数读取失败，显示上一次的值：\(AppEnvironment.friendly(error))",
+                                   "Could not read settings; showing the last values: \(AppEnvironment.friendly(error))")
+            } else {
+                supported = false
+                errorText = L10n.t("固件没有提供爆闪接口（需集成 headlight_strobe 补丁）：\(AppEnvironment.friendly(error))",
+                                   "Firmware does not expose the strobe API (headlight_strobe patch required): \(AppEnvironment.friendly(error))")
+            }
         }
     }
 
@@ -629,7 +654,7 @@ struct HeadlightStrobeView: View {
                 P4Param("stopMode", String(effectiveStopMode)),
                 P4Param("maxRunMs", String(effectiveMaxRunMs)),
             ])
-            stats = value
+            environment.storeEndpoint(P4Route.headlightStrobeStats, value)
             saved = drafted
             Haptics.success()
             withAnimation(.spring(response: 0.28, dampingFraction: 1.0)) { justSaved = true }
@@ -651,7 +676,7 @@ struct HeadlightStrobeView: View {
             let value = try await environment.api.post(P4Route.headlightStrobeConfig, query: [
                 P4Param("holdEnabled", on ? "1" : "0"),
             ])
-            stats = value
+            environment.storeEndpoint(P4Route.headlightStrobeStats, value)
             saved = Config(count: saved.count, intervalMs: saved.intervalMs,
                            trigger: saved.trigger, hold: on,
                            durationMs: saved.durationMs, stopMode: saved.stopMode,
@@ -674,7 +699,7 @@ struct HeadlightStrobeView: View {
         commitPhase = .loading
         do {
             let value = try await environment.api.post(P4Route.headlightStrobeTrigger)
-            stats = value
+            environment.storeEndpoint(P4Route.headlightStrobeStats, value)
             // 成功/失败的触感由 CommitButton 自己播放，这里不再重复触发。
             commitPhase = .success
             environment.toast = P4Toast(message: L10n.t("爆闪已开始", "Strobe started"), style: .success)
@@ -695,7 +720,7 @@ struct HeadlightStrobeView: View {
         errorText = nil
         do {
             let value = try await environment.api.post(P4Route.headlightStrobeStop)
-            stats = value
+            environment.storeEndpoint(P4Route.headlightStrobeStats, value)
             environment.toast = P4Toast(message: L10n.t("已停止并恢复", "Stopped and restored"), style: .info)
         } catch {
             errorText = AppEnvironment.friendly(error)
