@@ -67,7 +67,7 @@
 #include "text_format_arduino.h"
 #include "json_writer_arduino.h"
 
-#define FW_VERSION "v3.29.3-fix3"
+#define FW_VERSION "v3.29.3-fix4"
 
 #include "continuous_ap_fsm_pure.h"
 #include "p4can_core_state.h"
@@ -217,6 +217,9 @@ void setup() {
   s3xyAutoLoadConfig();
   nvsSchemaFinalize();
   canBusOffPersistenceLoad();
+  // 灯光配置开机即加载：否则重启后 holdEnabled 回到 0，
+  // 在有人打开网页/App 拉一次 /config 之前，按住拨杆完全不触发。
+  headlightStrobeLoadPrefs();
   if (labMenuEnabled) {
     researchCaptureInit();
     driverMonitorCaptureInit();

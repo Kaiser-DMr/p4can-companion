@@ -143,6 +143,8 @@ static void rearFogStrobeStop(uint8_t reason) {
   uint8_t snapshot[8];
   bool stockOn = false;
   bool wasActive = false;
+  bool templateValid = false;
+  uint32_t templateAgeMs = 0;
   portENTER_CRITICAL(&rearFogStrobeMux);
   wasActive = rearFogStrobeState.active;
   rearFogStrobeState.active = false;
@@ -152,11 +154,15 @@ static void rearFogStrobeStop(uint8_t reason) {
   dlc = rearFogStrobeState.templateDlc;
   memcpy(snapshot, rearFogStrobeState.templateData, 8);
   stockOn = rearFogStrobeState.stockFogOn;
-  const bool templateFresh =
-      rearFogStrobeState.templateValid &&
-      (uint32_t)((uint32_t)millis() - rearFogStrobeState.templateMs) <= REAR_FOG_TEMPLATE_TTL_MS;
+  templateValid = rearFogStrobeState.templateValid;
+  templateAgeMs = (uint32_t)((uint32_t)millis() - rearFogStrobeState.templateMs);
+  const bool templateFresh = templateValid && templateAgeMs <= REAR_FOG_TEMPLATE_TTL_MS;
   portEXIT_CRITICAL(&rearFogStrobeMux);
-  if (!wasActive || !templateFresh) return;
+  if (!wasActive) return;
+  // 模板刚好过期（NO_FRAME 停止就是这种场景）也要尽力补发一次：
+  // 最后一次注入可能是 ON 相位，不发就会把后雾灯留在常亮。
+  // 但太旧的模板（>10 s）不再使用，避免把很早以前的状态写回车上。
+  if (!templateFresh && !(templateValid && templateAgeMs <= 10000u)) return;
   // 补发一帧「整车原始状态」，让灯立刻回到触发前，而不是等下一帧。
   rearFogStrobeSend(bus, snapshot, dlc, stockOn);
 }

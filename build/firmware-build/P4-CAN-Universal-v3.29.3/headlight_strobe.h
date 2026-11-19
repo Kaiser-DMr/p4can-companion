@@ -166,6 +166,28 @@ static bool headlightStrobeSend(uint8_t beam) {
   return false;
 }
 
+// ── 按住与恢复状态（提前声明：stop() 要清计时并排恢复确认）──────────
+
+// 恢复确认：stop() 先尽力发一帧，再由 tick 在 30 ms 后补发一帧收尾，
+// 覆盖「web 任务 stop 与 CAN tick 并发，最后一帧可能是 PULL」的窗口。
+static bool hsRestorePending = false;
+static uint8_t hsPendingRestoreBeam = 0;
+static uint8_t hsRestoreSuccesses = 0;
+static uint8_t hsRestoreAttempts = 0;
+static uint32_t hsRestoreNextMs = 0;
+
+static uint32_t hsHoldSeenRx = 0;
+static uint32_t hsHoldPullSinceMs = 0;   // 本轮连续 PULL 的起点
+static uint32_t hsHoldLastRxMs = 0;
+static uint8_t hsHoldPullFrames = 0;
+static uint8_t hsHoldFreeFrames = 0;
+static bool hsHoldRequireRelease = false; // 停止后必须先松开，才允许再次按住起爆
+// 现场诊断：最长一次「连续 PULL」持续了多久、见过几帧 PULL。
+static uint32_t hsHoldPullMaxMs = 0;
+static uint32_t hsHoldPullTotal = 0;
+static uint8_t hsHoldLastBeam = 0;
+
+
 // source: 0=APP, 1=S3XY。返回 false 时 blockReason 说明原因。
 static bool headlightStrobeBegin(uint8_t source) {
   if (headlightStrobeState.active) {
@@ -195,6 +217,10 @@ static bool headlightStrobeBegin(uint8_t source) {
   portEXIT_CRITICAL(&blinkAMux);
   if (turnBusy) {
     headlightStrobeSetBlocked("TURN_SIGNAL_ACTIVE");
+    return false;
+  }
+  if (hsRestorePending) {
+    headlightStrobeSetBlocked("RESTORE_PENDING");
     return false;
   }
 
@@ -260,24 +286,75 @@ static void headlightStrobeStop(const char *reason, bool restore) {
   headlightStrobeState.blockReason = reason ? reason : "COMPLETE";
   portEXIT_CRITICAL(&headlightStrobeMux);
 
+  // 任何一次停止都要先松开拨杆才算「重新武装」：
+  // 否则 maxRunMs 到时 / 点停止后，heldLongEnough 仍为真，下一拍立刻又起爆。
+  hsHoldPullSinceMs = 0;
+  hsHoldPullFrames = 0;
+  hsHoldFreeFrames = 0;
+  hsHoldRequireRelease = true;
+
   if (wasActive && restore) {
-    // 先恢复高灯，再释放 0x249 独占。
+    // 先尽力恢复；无论成败都排一次确认重发，由 tick 在 30 ms 后补发，
+    // 盖住「tick 已经读过 active、stop 之后又发出一帧 PULL」的跨核窗口。
     (void)headlightStrobeSend(pre);
+    hsPendingRestoreBeam = pre;
+    hsRestorePending = true;
+    hsRestoreSuccesses = 0;
+    hsRestoreAttempts = 0;
+    hsRestoreNextMs = (uint32_t)millis() + 30u;
+    // 独占标志保持到确认完成，避免转向注入插进恢复中间。
+  } else {
+    headlightStrobeActiveFlag = false;
   }
-  headlightStrobeActiveFlag = false;
 }
 
 // 按住拨杆检测：读最新真实 0x249（整车 SCCM 发来的，不含本机注入）的高灯状态。
 static void headlightStrobeHoldTick(uint32_t now);
 
+// 恢复确认：失败按 50 ms 重试，最多约 2 s；连续两帧成功才释放 0x249 独占。
+static void headlightStrobeRestoreTick(uint32_t now) {
+  if (!hsRestorePending) return;
+  if ((int32_t)(now - hsRestoreNextMs) < 0) return;
+  hsRestoreAttempts++;
+  if (headlightStrobeSend(hsPendingRestoreBeam)) {
+    hsRestoreSuccesses++;
+    // 连续两帧恢复才收工：第一帧可能正好和 tick 已发出的 PULL 交错，
+    // 第二帧（再 50 ms）负责把最终状态压回 IDLE / 原状态。
+    if (hsRestoreSuccesses >= 2) {
+      hsRestorePending = false;
+      headlightStrobeActiveFlag = false;
+      return;
+    }
+    hsRestoreNextMs = now + 50u;
+    return;
+  }
+  if (hsRestoreAttempts >= 40) {
+    hsRestorePending = false;
+    headlightStrobeActiveFlag = false;
+    portENTER_CRITICAL(&headlightStrobeMux);
+    headlightStrobeState.blockReason = "RESTORE_FAILED";
+    portEXIT_CRITICAL(&headlightStrobeMux);
+    return;
+  }
+  hsRestoreNextMs = now + 50u;
+}
+
 static void headlightStrobeTick() {
   const uint32_t tickNow = (uint32_t)millis();
+  headlightStrobeRestoreTick(tickNow);
   headlightStrobeHoldTick(tickNow);
   if (!headlightStrobeState.active) return;
 
-  if (canTxEpochSnapshot() != headlightStrobeState.epochAtStart) {
-    headlightStrobeStop("CAN_EPOCH_CHANGED", true);
-    return;
+  // canTxEpochSnapshot() 拿不到屏障锁时返回 0（真实 epoch 从 1 起）；
+  // 0 只能视为「本拍未知」，不能当成 epoch 变化，否则会随机掐掉正在跑的爆闪。
+  const uint32_t epochNow = canTxEpochSnapshot();
+  if (epochNow != 0) {
+    if (headlightStrobeState.epochAtStart == 0) {
+      headlightStrobeState.epochAtStart = epochNow;
+    } else if (epochNow != headlightStrobeState.epochAtStart) {
+      headlightStrobeStop("CAN_EPOCH_CHANGED", true);
+      return;
+    }
   }
 
   const uint32_t now = (uint32_t)millis();
@@ -313,15 +390,6 @@ static void headlightStrobeTick() {
 // ── 按住拨杆 → 持续爆闪（Web 开关 holdEnabled 控制）────────────────
 // 说明：本机 TX 不会被自己接收，rx249 只随整车 SCCM 的 0x249 递增，
 // 所以 realRaw249[1] 的 bit5:4 就是物理拨杆的真实状态。
-static uint32_t hsHoldSeenRx = 0;
-static uint32_t hsHoldPullSinceMs = 0;   // 本轮连续 PULL 的起点
-static uint32_t hsHoldLastRxMs = 0;
-static uint8_t hsHoldPullFrames = 0;
-static uint8_t hsHoldFreeFrames = 0;
-// 现场诊断：最长一次「连续 PULL」持续了多久、见过几帧 PULL、最近一次起爆被谁拦住。
-static uint32_t hsHoldPullMaxMs = 0;
-static uint32_t hsHoldPullTotal = 0;
-static uint8_t hsHoldLastBeam = 0;
 
 static void headlightStrobeHoldTick(uint32_t now) {
   const bool holdOn = headlightStrobeConfig.holdEnabled != 0;
@@ -367,6 +435,14 @@ static void headlightStrobeHoldTick(uint32_t now) {
   // 注意：这里不再因为「一段时间没有新帧」就把按住计时清零。
   // 有些车型的 0x249 是事件型报文——按住期间根本不发新帧，
   // 旧逻辑会在 500 ms 后清掉计时，导致「2.5 秒」永远攒不够。
+
+  // 停止后必须先看到一帧明确非 PULL，才允许再次按住起爆。
+  if (hsHoldRequireRelease) {
+    if (newFrame && beam != HS_BEAM_PULL) hsHoldRequireRelease = false;
+    hsHoldPullSinceMs = 0;
+    hsHoldPullFrames = 0;
+    return;
+  }
 
   if (holdActive) {
     // 松开判定：连续 2 帧明确不是 PULL 才停（≈40 ms），保住「松手即停」体感。

@@ -5632,8 +5632,10 @@ static bool headlightStrobePrefsLoaded = false;
 
 static void headlightStrobeLoadPrefs() {
   if (headlightStrobePrefsLoaded) return;
+  // begin() 失败时不能置位：否则后面所有 get* 都返回 0，
+  // clamp 后变成「1 次 + 50 ms + 按住一帧就起爆」这种最危险的组合，且本次上电不再重试。
+  if (!headlightStrobePrefs.begin("hstrobe", false)) return;
   headlightStrobePrefsLoaded = true;
-  headlightStrobePrefs.begin("hstrobe", false);
   headlightStrobeConfig.count =
       headlightStrobeClampCount(headlightStrobePrefs.getUShort("count", 10));
   headlightStrobeConfig.intervalMs =
@@ -5731,17 +5733,23 @@ static void httpHeadlightStrobeConfig() {
   // 等于每 1.5 s 往 NVS 写 8 个键 —— flash 提交会把 HTTP 卡住，
   // 写失败时开关还会「点了没反应」，并伴随右上角 Disconnected。
   const bool isWrite = (server.method() == HTTP_POST);
-  if (isWrite && headlightStrobeState.active) {
-    server.send(409, "application/json", "{\"ok\":false,\"error\":\"ALREADY_ACTIVE\"}");
+  if (!isWrite) {
+    // GET 严格只读：即使带了 query 也不改 RAM/NVS，避免轮询路径产生副作用。
+    server.send(200, "application/json", headlightStrobeJson());
     return;
   }
+
+
+  // 先全部解析/校验到临时副本：任何一项非法都直接返回，
+  // 不会出现「count 已生效、intervalMs 报错」的半生效状态。
+  HeadlightStrobeConfig next = headlightStrobeConfig;
   if (server.hasArg("count")) {
     const int value = server.arg("count").toInt();
     if (value < 1 || value > 30) {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"count must be 1..30\"}");
       return;
     }
-    headlightStrobeConfig.count = (uint16_t)value;
+    next.count = (uint16_t)value;
   }
   if (server.hasArg("intervalMs")) {
     const int value = server.arg("intervalMs").toInt();
@@ -5749,9 +5757,7 @@ static void httpHeadlightStrobeConfig() {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"intervalMs must be 50..1000\"}");
       return;
     }
-    headlightStrobeConfig.intervalMs = (uint16_t)value;
-    // 运行中调整间隔：让当前这次爆闪立刻改用新半周期。
-    if (headlightStrobeState.active) headlightStrobeState.intervalMs = (uint16_t)value;
+    next.intervalMs = (uint16_t)value;
   }
   if (server.hasArg("trigger")) {
     const int value = server.arg("trigger").toInt();
@@ -5759,7 +5765,7 @@ static void httpHeadlightStrobeConfig() {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"trigger must be 0 or 1\"}");
       return;
     }
-    headlightStrobeConfig.trigger = (uint8_t)value;
+    next.trigger = (uint8_t)value;
   }
   if (server.hasArg("durationMs")) {
     const int value = server.arg("durationMs").toInt();
@@ -5767,7 +5773,7 @@ static void httpHeadlightStrobeConfig() {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"durationMs must be 0 or 100..30000\"}");
       return;
     }
-    headlightStrobeConfig.durationMs = (uint16_t)value;
+    next.durationMs = (uint16_t)value;
   }
   if (server.hasArg("stopMode")) {
     const int value = server.arg("stopMode").toInt();
@@ -5775,7 +5781,7 @@ static void httpHeadlightStrobeConfig() {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"stopMode must be 0..2\"}");
       return;
     }
-    headlightStrobeConfig.stopMode = (uint8_t)value;
+    next.stopMode = (uint8_t)value;
   }
   if (server.hasArg("maxRunMs")) {
     const int value = server.arg("maxRunMs").toInt();
@@ -5783,7 +5789,7 @@ static void httpHeadlightStrobeConfig() {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"maxRunMs must be 500..60000\"}");
       return;
     }
-    headlightStrobeConfig.maxRunMs = (uint16_t)value;
+    next.maxRunMs = (uint16_t)value;
   }
   if (server.hasArg("holdDelayMs")) {
     const int value = server.arg("holdDelayMs").toInt();
@@ -5791,7 +5797,7 @@ static void httpHeadlightStrobeConfig() {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"holdDelayMs must be 0..10000\"}");
       return;
     }
-    headlightStrobeConfig.holdDelayMs = (uint16_t)value;
+    next.holdDelayMs = (uint16_t)value;
   }
   if (server.hasArg("holdEnabled")) {
     const int value = server.arg("holdEnabled").toInt();
@@ -5799,16 +5805,38 @@ static void httpHeadlightStrobeConfig() {
       server.send(400, "application/json", "{\"ok\":false,\"error\":\"holdEnabled must be 0 or 1\"}");
       return;
     }
-    // 运行中关闭：立即停止并恢复
-    if (value == 0 && headlightStrobeState.active &&
-        headlightStrobeState.trigger == HS_TRIGGER_HOLD) {
-      headlightStrobeStop("HOLD_DISABLED", true);
-    }
-    headlightStrobeConfig.holdEnabled = (uint8_t)value;
+    next.holdEnabled = (uint8_t)value;
+  }
+
+  // 运行中只允许改间隔、或关掉按住开关；其余参数会改变本次运行的含义，仍然 409。
+  const bool active = headlightStrobeState.active;
+  const bool onlySafeWhileActive =
+      !server.hasArg("count") && !server.hasArg("trigger") &&
+      !server.hasArg("durationMs") && !server.hasArg("stopMode") &&
+      !server.hasArg("maxRunMs") && !server.hasArg("holdDelayMs");
+  if (isWrite && active && !onlySafeWhileActive) {
+    server.send(409, "application/json", "{\"ok\":false,\"error\":\"ALREADY_ACTIVE\"}");
+    return;
+  }
+
+  // 校验全部通过，一次性提交。
+  const uint16_t appliedInterval = next.intervalMs;
+  headlightStrobeConfig = next;
+  if (active && server.hasArg("intervalMs")) {
+    // 运行中调整间隔：让当前这次爆闪立刻改用新半周期。
+    portENTER_CRITICAL(&headlightStrobeMux);
+    headlightStrobeState.intervalMs = appliedInterval;
+    portEXIT_CRITICAL(&headlightStrobeMux);
+  }
+  if (next.holdEnabled == 0 && active &&
+      headlightStrobeState.trigger == HS_TRIGGER_HOLD) {
+    // 关闭开关：立即停止并恢复（以前被开头的无条件 409 挡住，永远走不到）。
+    headlightStrobeStop("HOLD_DISABLED", true);
   }
   if (isWrite && server.args() > 0) headlightStrobeSavePrefs();
   server.send(200, "application/json", headlightStrobeJson());
 }
+
 
 static void httpHeadlightStrobeTrigger() {
   headlightStrobeLoadPrefs();
