@@ -1001,7 +1001,7 @@ final class AppEnvironment: ObservableObject {
     /// URLSession 的本地化错误对车主没意义（"The request timed out."），
     /// 这里按失败类型给出下一步动作，避免用户只能反复重试。
     static func friendly(_ error: Error) -> String {
-        if let apiError = error as? P4APIError { return apiError.message }
+        if let apiError = error as? P4APIError { return deviceMessage(apiError) }
         if let upload = error as? P4UploadInterrupted { return upload.description }
         guard let urlError = error as? URLError else { return error.localizedDescription }
         switch urlError.code {
@@ -1019,6 +1019,116 @@ final class AppEnvironment: ObservableObject {
             return urlError.localizedDescription
         }
     }
+
+    /// 固件错误码 → 可执行的中文提示。
+    ///
+    /// 固件把「为什么不允许」直接写在 `error` 里（多为英文常量），App 以前原样透传，
+    /// 用户只看到 `lab-disabled` / `ALREADY_ACTIVE` 这类字符串。这里按语义翻译，
+    /// 保留原文的接口留给诊断（网络日志里仍记录原始 error）。
+    private static func deviceMessage(_ error: P4APIError) -> String {
+        guard let raw = error.deviceError else { return error.message }
+        if let mapped = deviceErrorText[raw] { return mapped }
+
+        // 前缀类：`<Action> unavailable for current profile/topology`、
+        // `<xxx> requires ...`、`... must be ...` 等带参数的文案。
+        if raw.hasPrefix("driver monitoring control unavailable") {
+            return "当前车型不支持驾驶员监控控制（DMS）"
+        }
+        if raw.hasPrefix("ISA suppression unavailable") {
+            return "当前车型不支持 ISA 抑制"
+        }
+        if raw.hasPrefix("NAG unavailable") || raw.hasPrefix("NAG method unavailable") {
+            return "当前车型/拓扑不支持该 NAG 方式"
+        }
+        if raw.hasPrefix("Confirm-Free unsupported") {
+            return "当前车型不支持「免确认」"
+        }
+        if raw.hasPrefix("Advanced EAP unavailable") {
+            return "当前拓扑不支持高级 EAP"
+        }
+        if raw.hasPrefix("AP Pedal / Regen Profile requires") {
+            return "该踏板/回充档位需要车型支持 0x334 报文"
+        }
+        if raw.hasPrefix("Legacy TSL9 route selector unavailable") {
+            return "当前车型不支持旧版 TSL9 通道选择"
+        }
+        if raw.hasPrefix("banned car not supported") {
+            return "当前车型不支持「封禁车辆」"
+        }
+        if raw.hasPrefix("invalid topology") || raw == "Invalid vehicle topology" || raw == "missing topology" {
+            return "车型拓扑与当前车辆不匹配，请先在「设置 → 车型」确认识别结果"
+        }
+        if raw.hasPrefix("mixed-hw3-settings") || raw.hasPrefix("hw3-unsupported-profile") {
+            return "HW3 相关设置与当前车型不匹配"
+        }
+        if raw.contains("must be") || raw.hasPrefix("invalid ") || raw.hasPrefix("missing ") {
+            return "参数未通过设备校验：\(raw)"
+        }
+        if raw.contains("still active") || raw == "CSV export active" || raw == "capture busy or NVS write failed" {
+            return "捕获或导出仍在进行，请等它结束再操作"
+        }
+        if raw.contains("still in progress") {
+            return "上一步还没结束，请稍后重试"
+        }
+        if raw.contains("requires") {
+            return "设备要求满足前置条件：\(raw)"
+        }
+
+        switch error.status {
+        case 403:
+            return "设备拒绝了该操作（HTTP 403）：\(raw)"
+        case 409:
+            return "设备当前状态不允许该操作（HTTP 409）：\(raw)"
+        case 410:
+            return "该功能在当前固件中已不可用（HTTP 410）：\(raw)"
+        case 503:
+            return "设备忙或正在重启（HTTP 503）：\(raw)"
+        default:
+            return error.message
+        }
+    }
+
+    /// 高频固件错误常量的中文释义（与 `web_api.h` 的 `send(4xx, ...)` 对齐）。
+    private static let deviceErrorText: [String: String] = [
+        "ALREADY_ACTIVE": "上一次操作还没结束，请先停止或等它完成",
+        "NO_FRAME": "还没收到整车对应报文：车辆需上电，相关总线在线",
+        "SOURCE_MISMATCH": "触发入口与配置不一致：请到「蓝牙」页确认 S3XY 按键设置",
+        "TURN_SIGNAL_ACTIVE": "转向灯注入进行中，请等转向结束再试",
+        "SEND_FAILED": "CAN 发送失败，已停止并恢复",
+        "CAN_EPOCH_CHANGED": "CAN 总线重启过，操作已停止；请重新触发",
+        "STALKLESS_UNSUPPORTED": "当前车型为无拨杆版本，不支持拨杆注入",
+        "NO_STOCK_TEMPLATE": "还没捕获到整车原始帧：先让车辆上报一次拨杆状态",
+        "HOLD_DISABLED": "「按住拨杆爆闪」已关闭",
+        "USER_STOP": "已手动停止",
+        "COMPLETE": "已完成并恢复",
+        "LAB disabled": "实验室功能未开启：请先在「实验室」页打开总开关",
+        "lab-disabled": "实验室功能未开启：请先在「实验室」页打开总开关",
+        "bluetooth disabled": "蓝牙已关闭：请先在「蓝牙」页打开总开关",
+        "BLE shutdown still in progress": "蓝牙正在关闭，请稍后再开",
+        "not available in setup mode": "设备处于 Setup 模式，该操作被禁用；请先完成配网",
+        "CAN stopped for maintenance; reboot required": "CAN 已因维护停止，需要重启设备",
+        "capture or CSV export still active": "捕获或 CSV 导出仍在进行，请等它结束",
+        "CSV export active": "CSV 导出仍在进行，请等它结束",
+        "capture busy or NVS write failed": "捕获正忙，或参数写入失败；请稍后重试",
+        "confirm free unsupported": "当前车型不支持免确认",
+        "empty name": "名称不能为空",
+        "missing ssid": "请填写 Wi-Fi 名称",
+        "already registered": "该设备已注册",
+        "device not found": "设备未找到",
+        "invalid action": "动作无效，请重新选择",
+        "invalid confirm": "确认参数无效",
+        "invalid gesture": "手势参数无效",
+        "invalid mode": "模式参数无效",
+        "invalid profile": "车型配置无效",
+        "invalid timing": "时序参数无效",
+        "invalid bus": "总线参数无效",
+        "invalid enabled": "开关参数无效",
+        "settings not supplied": "没有提交任何设置",
+        "no setting supplied": "没有提交任何设置",
+        "restore not allowed for current state/profile": "当前状态/车型不允许恢复",
+        "CAN stop not confirmed; retry reboot": "CAN 停止未确认，请重试重启",
+        "Mode H profiles retired; Mode H uses one engine": "Mode H 已改为单一引擎，旧的档位配置不再生效",
+    ]
 }
 
 private extension Array {

@@ -141,8 +141,15 @@ struct P4Param: Sendable, Hashable {
 }
 
 /// 服务端返回的业务错误（`{"ok":false,"error":"..."}`）。
+///
+/// 除可读文案外还保留 `status` 与固件原始 `deviceError`：
+/// 固件用 403/409 表达「功能未启用 / 当前状态不允许」，同一条 error 文案
+/// 在不同状态码下处理方式不同（例如 `ALREADY_ACTIVE` 只需等它结束），
+/// 因此调用方需要原始语义做映射，而不是只拿到一句已翻译的提示。
 struct P4APIError: LocalizedError, Sendable {
     let message: String
+    var status: Int? = nil
+    var deviceError: String? = nil
     var errorDescription: String? { message }
 }
 
@@ -431,13 +438,14 @@ final class P4APIClient: Sendable {
            let message = body.error,
            !message.isEmpty,
            body.ok == false || !httpOK {
-            throw P4APIError(message: message)
+            throw P4APIError(message: message, status: http?.statusCode, deviceError: message)
         }
         if let http, (300...399).contains(http.statusCode) {
-            throw P4APIError(message: "已阻止设备返回的重定向（HTTP \(http.statusCode)），请确认连接的仍是 P4-CAN")
+            throw P4APIError(message: "已阻止设备返回的重定向（HTTP \(http.statusCode)），请确认连接的仍是 P4-CAN",
+                             status: http.statusCode)
         }
         if let http, !(200...299).contains(http.statusCode) {
-            throw P4APIError(message: "请求失败：\(path)（HTTP \(http.statusCode)）")
+            throw P4APIError(message: "请求失败：\(path)（HTTP \(http.statusCode)）", status: http.statusCode)
         }
         if data.isEmpty { return .null }
         do {

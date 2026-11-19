@@ -394,10 +394,12 @@ STATS = {
         "appliedCount": 0, "txFail": 0, "blocked": False, "state": "IDLE",
     },
     "/api/researchcapture/stats": {
-        "state": "IDLE", "captureMode": "SNAPSHOT", "capturing": False, "exporting": False,
+        "state": "READY", "captureMode": "SNAPSHOT", "capturing": False, "exporting": False,
         "preMs": 5000, "postMs": 5000, "preWindowMs": 5000, "postWindowMs": 5000,
         "samples": 0, "capacity": 20000, "requests": 0, "dropped": 0,
-        "currentSlot": 0, "completedSegments": 0,
+        "segments": 0, "completedSegments": 0, "maxSegments": 8, "fullReason": "",
+        "preSnapshotsReady": 3, "preSnapshotSlots": 3,
+        "currentSlot": 0,
         "labels": {"A": "baseline", "B": "glance", "C": "side", "D": "down"},
     },
     "/api/country/stats": {
@@ -440,7 +442,8 @@ STATS = {
     },
     # DMS 捕获（对应 web /api/drivermonitor/stats）
     "/api/drivermonitor/stats": {
-        "state": "READY", "segments": 0, "maxSegments": 12,
+        "state": "READY", "capturing": False, "exporting": False, "supported": True,
+        "segments": 0, "maxSegments": 12, "remainingMs": 0,
         "samples": 0, "capacity": 1024, "remainingPostMs": 0,
         "preBuffer": "WARMUP", "lastInteraction": "—",
         "requests": 0, "ignored": 0, "dropped": 0,
@@ -485,6 +488,9 @@ ISA = STATS["/api/isa-suppression/config"]
 
 HEADLIGHT = {
     "count": 10, "intervalMs": 100, "trigger": 0, "holdEnabled": True, "holdDelayMs": 2500,
+    # 与固件 HeadlightStrobeConfig 对齐：0=按次数；durationMs>0 固定总时长；
+    # stopMode=1 只能手动停（实际运行上限 maxRunMs）。
+    "durationMs": 0, "stopMode": 0, "maxRunMs": 30000,
     "active": False, "started": 0.0, "state": "IDLE", "blockReason": "",
     "txOk": 0, "txFail": 0,
 }
@@ -514,11 +520,25 @@ def rear_fog_json():
         "frameAgeMs": 12, "setupMode": False, "stopReason": rf["stopReason"],
     }
 
+def hl_mode(hl):
+    if hl["stopMode"] == 1:
+        return "MANUAL"
+    return "DURATION" if hl["durationMs"] > 0 else "COUNT"
+
+
+def hl_total_s(hl):
+    if hl["stopMode"] == 1:
+        return max(0.5, hl["maxRunMs"] / 1000.0)
+    if hl["durationMs"] > 0:
+        return hl["durationMs"] / 1000.0
+    return hl["count"] * 2 * max(0.05, hl["intervalMs"] / 1000.0)
+
+
 def headlight_json():
     hl = HEADLIGHT
+    total_s = hl_total_s(hl)
+    elapsed = 0.0
     if hl["active"]:
-        half = max(0.05, hl["intervalMs"] / 1000.0)
-        total_s = hl["count"] * 2 * half
         elapsed = max(0.0, time.time() - hl["started"])
         if elapsed >= total_s:
             hl["active"] = False
@@ -526,13 +546,17 @@ def headlight_json():
             hl["blockReason"] = "COMPLETE"
         else:
             hl["state"] = "ACTIVE"
+    half = max(0.05, hl["intervalMs"] / 1000.0)
     done = hl["count"] if hl["state"] == "COMPLETE" else (
-        min(hl["count"], int(max(0.0, time.time() - hl["started"]) / (2 * max(0.05, hl["intervalMs"] / 1000.0))))
-        if hl["active"] else 0
+        min(hl["count"], int(elapsed / (2 * half))) if hl["active"] else 0
     )
     return {
         "ok": True, "count": hl["count"], "intervalMs": hl["intervalMs"],
         "trigger": hl["trigger"], "triggerName": "S3XY" if hl["trigger"] == 1 else "APP",
+        "durationMs": hl["durationMs"], "stopMode": hl["stopMode"],
+        "maxRunMs": hl["maxRunMs"], "mode": hl_mode(hl),
+        "totalMs": int(total_s * 1000),
+        "elapsedMs": int(elapsed * 1000) if hl["active"] else 0,
         "holdEnabled": bool(hl.get("holdEnabled", True)),
         "holdDelayMs": int(hl.get("holdDelayMs", 2500)),
         "supported": True, "stalkVariant": "STALK",
@@ -793,6 +817,9 @@ def apply_post(path, qs):
             count = int(val("count")) if has("count") else HEADLIGHT["count"]
             interval = int(val("intervalMs")) if has("intervalMs") else HEADLIGHT["intervalMs"]
             trigger = int(val("trigger")) if has("trigger") else HEADLIGHT["trigger"]
+            duration = int(val("durationMs")) if has("durationMs") else HEADLIGHT["durationMs"]
+            stop_mode = int(val("stopMode")) if has("stopMode") else HEADLIGHT["stopMode"]
+            max_run = int(val("maxRunMs")) if has("maxRunMs") else HEADLIGHT["maxRunMs"]
         except ValueError:
             return "invalid number"
         if not (1 <= count <= 30):
@@ -801,10 +828,17 @@ def apply_post(path, qs):
             return "intervalMs must be 50..1000"
         if trigger not in (0, 1):
             return "trigger must be 0 or 1"
+        if duration != 0 and not (100 <= duration <= 30000):
+            return "durationMs must be 0 or 100..30000"
+        if stop_mode not in (0, 1, 2):
+            return "stopMode must be 0..2"
+        if not (500 <= max_run <= 60000):
+            return "maxRunMs must be 500..60000"
         hold = HEADLIGHT.get("holdEnabled", True)
         if has("holdEnabled"):
             hold = val("holdEnabled") == "1"
         HEADLIGHT.update(count=count, intervalMs=interval, trigger=trigger,
+                         durationMs=duration, stopMode=stop_mode, maxRunMs=max_run,
                          holdEnabled=hold, state="IDLE", blockReason="", txOk=0, txFail=0)
         return None
 

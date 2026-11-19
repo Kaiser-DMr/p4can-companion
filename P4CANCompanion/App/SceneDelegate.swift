@@ -36,4 +36,17 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         environment.start()
     }
+
+    /// 回前台：立即刷新一次并恢复轮询。
+    ///
+    /// 以前 `start()` 只在 `willConnectTo` 调一次，`stop()` 全仓没有调用点，
+    /// 于是退到后台仍在按 500 ms 打设备（直到系统挂起），回前台也不会立即更新。
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        environment.start()
+    }
+
+    /// 退到后台/被系统遮挡（控制中心、来电横幅）：停掉轮询，省电也避免和设备抢连接。
+    func sceneWillResignActive(_ scene: UIScene) {
+        environment.stop()
+    }
 }

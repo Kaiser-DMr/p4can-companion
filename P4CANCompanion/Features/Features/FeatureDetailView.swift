@@ -20,6 +20,11 @@ struct FeatureDetailView: View {
     @State private var optimisticToggles: [String: Bool] = [:]
     /// 正在拖动的滑杆（拖动期间不回写设备值，避免手指被覆盖）。
     @State private var sliderEditing: Set<String> = []
+    /// 已发出写请求、尚未完成回读的控件：1.2 s 轮询不能在这期间把值改回旧值，
+    /// 否则会出现「刚拖完又跳回去」或「选择器闪回」。
+    @State private var pendingWrites: Set<String> = []
+    /// 成对数值改过、但还没点「同时提交」：这期间不能被轮询覆盖，否则拖完就白拖。
+    @State private var editedPairs: Set<String> = []
     @State private var showsRawData = false
     @State private var showsAdvanced = false
     @State private var showsResearchLabels = false
@@ -40,11 +45,37 @@ struct FeatureDetailView: View {
         return environment.capability(key) != false
     }
 
-    /// 允许写入：能力支持 + 非 Setup 模式 + 实验室模块需 LAB 已开。
+    /// 允许写入：能力支持 + 非 Setup 模式 + 实验室模块需 LAB 已开 + 捕获类模块没在录制/导出。
     private var canWrite: Bool {
         guard capabilitySupported, !environment.isSetupMode else { return false }
         if module.section == .lab, !environment.isLabEnabled { return false }
+        if captureBusy { return false }
         return true
+    }
+
+    // MARK: - 捕获类模块（研究捕获 / DMS 捕获）
+
+    private var isCaptureModule: Bool { module.id == "research" || module.id == "dmscapture" }
+
+    private var captureObject: [String: P4JSON]? {
+        isCaptureModule ? stats?.objectValue : nil
+    }
+
+    /// 录制或导出进行中：固件对这些接口一律回 409，先在 UI 层拦住。
+    private var captureBusy: Bool {
+        guard let object = captureObject else { return false }
+        return object["capturing"]?.boolValue == true || object["exporting"]?.boolValue == true
+    }
+
+    private var captureStateText: String {
+        switch captureObject?["state"]?.stringValue {
+        case "CAPTURING": return L10n.t("录制中", "Capturing")
+        case "PAUSED": return L10n.t("已暂停", "Paused")
+        case "FULL": return L10n.t("缓冲区已满", "Buffer full")
+        case "ERROR": return L10n.t("初始化失败", "Init failed")
+        case "READY": return L10n.t("就绪", "Ready")
+        default: return "—"
+        }
     }
 
     var body: some View {
@@ -83,6 +114,8 @@ struct FeatureDetailView: View {
                 }
             }
 
+            captureSection
+
             if module.id == "headlight" {
                 Section {
                     NavigationLink {
@@ -90,7 +123,8 @@ struct FeatureDetailView: View {
                     } label: {
                         NavRow(icon: "emoji:🎛️",
                                title: L10n.t("爆闪设置与触发", "Strobe settings and trigger"),
-                               subtitle: L10n.t("次数 / 间隔 / 触发入口", "Count / interval / trigger source"))
+                               subtitle: L10n.t("次数 / 时长 / 手动停止 / 触发入口",
+                                                "Count / duration / manual stop / trigger"))
                     }
                 } footer: {
                     Text(L10n.t("爆闪会实际控制远光灯；请只在安全环境使用，并确认周围没有对向车辆。",
@@ -271,9 +305,11 @@ struct FeatureDetailView: View {
     /// - 正在拖动的滑杆跳过，避免手抖。
     private func syncFromDevice() {
         for control in module.controls {
+            // 本控件正在拖动或刚提交、还没回读：保留手指/请求带来的本地值。
+            if sliderEditing.contains(control.id) || pendingWrites.contains(control.id)
+                || editedPairs.contains(control.id) { continue }
             switch control.kind {
             case .number(let key, _, _, _, _, _):
-                if sliderEditing.contains(control.id) { continue }
                 numberValues[key] = numberState(control, writeKey: key)
             case .pairNumber(let first, let second, _):
                 numberValues[first.key] = numberState(control, writeKey: first.key)
@@ -297,6 +333,7 @@ struct FeatureDetailView: View {
                     get: { optimisticToggles[control.id] ?? current },
                     set: { newValue in
                         optimisticToggles[control.id] = newValue
+                        pendingWrites.insert(control.id)
                         Task {
                             await submitToggle(control, key: key, newValue: newValue)
                             optimisticToggles[control.id] = nil
@@ -305,7 +342,7 @@ struct FeatureDetailView: View {
                 )) {
                     controlLabel(control)
                 }
-                .disabled(!canWrite || environment.isBusy)
+                .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
             } else {
                 pendingRow(control)
             }
@@ -316,6 +353,7 @@ struct FeatureDetailView: View {
                     get: { optimisticToggles[control.id] ?? current },
                     set: { newValue in
                         optimisticToggles[control.id] = newValue
+                        pendingWrites.insert(control.id)
                         Task {
                             await submitEndpoint(control, newValue: newValue)
                             optimisticToggles[control.id] = nil
@@ -324,7 +362,7 @@ struct FeatureDetailView: View {
                 )) {
                     controlLabel(control)
                 }
-                .disabled(!canWrite || environment.isBusy)
+                .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
             } else {
                 pendingRow(control)
             }
@@ -335,6 +373,7 @@ struct FeatureDetailView: View {
                     get: { current },
                     set: { newValue in
                         selectedOptions[key] = newValue
+                        pendingWrites.insert(control.id)
                         // 读取值（如 STANDARD）与提交值（如 20）可能不同名，按 Option.submitValue 提交。
                         let submit = options.first { $0.rawValue == newValue }?.submitValue ?? newValue
                         Task { await submitSelect(control, key: key, rawValue: submit) }
@@ -345,7 +384,7 @@ struct FeatureDetailView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .disabled(!canWrite || environment.isBusy)
+                .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
                 .accessibilityLabel("\(control.title)选择器")
             } else if let current = selectedOptions[key] {
                 // 设备返回了值，但不在 App 的选项域内（固件新增枚举等）→ 原样只读展示
@@ -385,11 +424,13 @@ struct FeatureDetailView: View {
                         } else {
                             sliderEditing.remove(control.id)
                             if let value = numberValues[key] {
+                                // 松手到 Task 真正开始之间还有一帧，先占锁再提交。
+                                pendingWrites.insert(control.id)
                                 Task { await submitNumber(control, key: key, value: value) }
                             }
                         }
                     }
-                    .disabled(!canWrite || environment.isBusy)
+                    .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
                     .accessibilityLabel("\(control.title)，单位\(unit)")
                     if let footnote = control.footnote {
                         Text(footnote).font(.caption2).foregroundStyle(.secondary)
@@ -404,8 +445,8 @@ struct FeatureDetailView: View {
             if numberValues[first.key] != nil, numberValues[second.key] != nil {
                 VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
                     Text(control.title).font(.subheadline)
-                    pairSlider(first)
-                    pairSlider(second)
+                    pairSlider(first, controlID: control.id)
+                    pairSlider(second, controlID: control.id)
                     if let footnote = control.footnote {
                         Text(footnote).font(.caption2).foregroundStyle(.secondary)
                     }
@@ -415,7 +456,7 @@ struct FeatureDetailView: View {
                         Label("同时提交", systemImage: "arrow.up.circle")
                             .font(.footnote.weight(.medium))
                     }
-                    .disabled(!canWrite || environment.isBusy)
+                    .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
                 }
                 .padding(.vertical, 2)
             } else {
@@ -433,11 +474,11 @@ struct FeatureDetailView: View {
                 controlLabel(control)
                     .foregroundStyle(destructive ? Color.p4Err : Color.accentColor)
             }
-            .disabled(!canWrite || environment.isBusy)
+            .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
         }
     }
 
-    private func pairSlider(_ spec: NumberSpec) -> some View {
+    private func pairSlider(_ spec: NumberSpec, controlID: String) -> some View {
         HStack {
             Text(spec.key == "noaStabilizationSeconds" ? "NOA 稳定期" :
                  spec.key == "cancelPauseSeconds" ? "取消暂停" :
@@ -465,11 +506,21 @@ struct FeatureDetailView: View {
                 Slider(
                     value: Binding(
                         get: { min(max(numberValues[spec.key] ?? spec.range.lowerBound, spec.range.lowerBound), spec.range.upperBound) },
-                        set: { numberValues[spec.key] = $0 }
+                        set: {
+                            numberValues[spec.key] = $0
+                            editedPairs.insert(controlID)
+                        }
                     ),
                     in: spec.range,
                     step: 1
-                )
+                ) { editing in
+                    // 成对参数只在「同时提交」时写入，但拖动期间同样不能被轮询覆盖。
+                    if editing {
+                        sliderEditing.insert(controlID)
+                    } else {
+                        sliderEditing.remove(controlID)
+                    }
+                }
                 .accessibilityLabel("\(spec.key)，单位\(spec.unit)")
                 Text("\(Int(numberValues[spec.key] ?? spec.range.lowerBound)) \(spec.unit)")
                     .font(.caption)
@@ -570,6 +621,10 @@ struct FeatureDetailView: View {
 
     private func submitToggle(_ control: FeatureControl, key: String, newValue: Bool) async {
         guard case .toggle(_, let path, let extra) = control.kind else { return }
+        // 入口即加锁并用 defer 兜底：早退分支（缺兄弟参数、常驻 AP 未选手势）
+        // 若不加锁会留下一个永远 disabled 的控件。
+        pendingWrites.insert(control.id)
+        defer { pendingWrites.remove(control.id) }
 
         // 常驻 AP：固件要求 enabled + method 两个参数同时提交，且 method 不能是「未选择」。
         if path == P4Route.continuousAPConfig, newValue {
@@ -610,6 +665,8 @@ struct FeatureDetailView: View {
 
     private func submitEndpoint(_ control: FeatureControl, newValue: Bool) async {
         guard case .endpointToggle(_, let on, let off) = control.kind else { return }
+        pendingWrites.insert(control.id)
+        defer { pendingWrites.remove(control.id) }
         await environment.command(
             "\(module.title) · \(control.title)",
             path: newValue ? on : off
@@ -618,6 +675,8 @@ struct FeatureDetailView: View {
     }
 
     private func submitSelect(_ control: FeatureControl, key: String, rawValue: String) async {
+        pendingWrites.insert(control.id)
+        defer { pendingWrites.remove(control.id) }
         let path: String?
         let extra: [String]
         switch control.kind {
@@ -644,6 +703,8 @@ struct FeatureDetailView: View {
 
     private func submitNumber(_ control: FeatureControl, key: String, value: Double) async {
         guard case .number(_, _, _, _, let path, let extra) = control.kind else { return }
+        pendingWrites.insert(control.id)
+        defer { pendingWrites.remove(control.id) }
         let missing = missingSiblings(extra)
         if !missing.isEmpty {
             environment.toast = P4Toast(
@@ -660,6 +721,11 @@ struct FeatureDetailView: View {
 
     private func submitPair(_ control: FeatureControl, first: NumberSpec, second: NumberSpec) async {
         guard case .pairNumber(_, _, let path) = control.kind else { return }
+        pendingWrites.insert(control.id)
+        defer {
+            pendingWrites.remove(control.id)
+            editedPairs.remove(control.id)
+        }
         let query = [
             P4Param(first.key, "\(Int(numberValues[first.key] ?? first.range.lowerBound))"),
             P4Param(second.key, "\(Int(numberValues[second.key] ?? second.range.lowerBound))"),
@@ -675,6 +741,96 @@ struct FeatureDetailView: View {
     }
 
     // MARK: - 状态展示
+
+    /// 捕获类模块的运行状态：进度、容量、前置条件。
+    ///
+    /// 这两个模块以前只有一排触发按钮：开始后不知道录到哪、为什么被 409 拒绝、
+    /// 什么时候能导出。状态字段固件都给了，这里直接呈现，不再让用户去原始表里找。
+    @ViewBuilder
+    private var captureSection: some View {
+        if let object = captureObject {
+            Section {
+                HStack {
+                    Text(L10n.t("状态", "State"))
+                    Spacer()
+                    Text(captureStateText)
+                        .foregroundStyle(captureBusy ? Color.p4Warn : Color.secondary)
+                }
+                .font(.subheadline)
+
+                if let maxSegments = object["maxSegments"]?.intValue, maxSegments > 0 {
+                    let done = Int(object["completedSegments"]?.intValue
+                                   ?? object["segments"]?.intValue ?? 0)
+                    LabeledContent(L10n.t("已捕获段数", "Segments"),
+                                   value: "\(done) / \(maxSegments)")
+                        .font(.subheadline)
+                }
+
+                if let samples = object["samples"]?.intValue,
+                   let capacity = object["capacity"]?.intValue, capacity > 0 {
+                    LabeledContent(L10n.t("样本", "Samples"), value: "\(samples) / \(capacity)")
+                        .font(.subheadline)
+                }
+
+                if object["exporting"]?.boolValue != true,
+                   let remaining = object["remainingMs"]?.intValue, remaining > 0 {
+                    LabeledContent(L10n.t("剩余", "Remaining"),
+                                   value: "\(Int(remaining / 1000)) s")
+                        .font(.subheadline)
+                }
+
+                if module.id == "research",
+                   let ready = object["preSnapshotsReady"]?.intValue,
+                   let slots = object["preSnapshotSlots"]?.intValue, slots > 0 {
+                    LabeledContent(L10n.t("前置快照", "Pre-snapshots"), value: "\(ready) / \(slots)")
+                        .font(.subheadline)
+                        .foregroundStyle(ready < slots ? Color.p4Warn : Color.primary)
+                }
+
+                if let reason = object["fullReason"]?.stringValue, !reason.isEmpty {
+                    Text(captureReasonText(reason))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Label(L10n.t("捕获状态", "Capture status"), systemImage: "record.circle")
+            } footer: {
+                Text(captureFooterText(object))
+            }
+        }
+    }
+
+    private func captureReasonText(_ raw: String) -> String {
+        switch raw {
+        case "SAMPLES": return L10n.t("样本数已达上限，需要重置后才能继续。", "Sample buffer is full; reset before capturing again.")
+        case "SEGMENTS": return L10n.t("段数已达上限，需要重置后才能继续。", "Segment limit reached; reset before capturing again.")
+        case "ARCHIVE": return L10n.t("原始归档已满，需要重置后才能继续。", "Raw archive is full; reset before capturing again.")
+        default: return raw
+        }
+    }
+
+    private func captureFooterText(_ object: [String: P4JSON]) -> String {
+        if object["exporting"]?.boolValue == true {
+            return L10n.t("正在导出 CSV：导出完成前不能开始新的捕获。",
+                          "Exporting CSV; new captures are blocked until it finishes.")
+        }
+        if object["capturing"]?.boolValue == true {
+            return L10n.t("录制进行中：固件不支持中途停止，结束后才能开始下一次；完成后再导出或重置。",
+                          "Capturing: the firmware cannot stop mid-run; wait for it to finish before starting again.")
+        }
+        if module.id == "research",
+           let ready = object["preSnapshotsReady"]?.intValue,
+           let slots = object["preSnapshotSlots"]?.intValue, ready < slots {
+            return L10n.t("前置快照未就绪（\(ready)/\(slots)）：先让车辆上电、相关总线在线，否则开始会被拒绝。",
+                          "Pre-snapshots not ready (\(ready)/\(slots)); power the car and bring the bus online first.")
+        }
+        if object["state"]?.stringValue == "FULL" {
+            return L10n.t("缓冲区已满：先导出 CSV 或重置，再开始新的捕获。",
+                          "Buffer full: export the CSV or reset before capturing.")
+        }
+        return L10n.t("录制会持续到固件预置的时长结束；开始前请确认槽位标签。",
+                      "Recording runs for the firmware-defined window; check the slot label before starting.")
+    }
 
     @ViewBuilder
     private var statsSection: some View {

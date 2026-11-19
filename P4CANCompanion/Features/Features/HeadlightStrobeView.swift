@@ -1,20 +1,35 @@
 import SwiftUI
 
-/// 前大灯爆闪：远光灯 PULL/IDLE 交替 `count` 次，结束后恢复触发前的高灯状态。
+/// 前大灯爆闪：远光灯 PULL/IDLE 交替，结束后恢复触发前的高灯状态。
 ///
 /// 固件契约（`/api/headlight-strobe/*`）：
-/// - `config`：count 1–30、intervalMs 50–1000、trigger 0=App / 1=S3XY、holdEnabled 按住拨杆开关；
+/// - `config`：count 1–30、intervalMs 50–1000、trigger 0=App / 1=S3XY、
+///   `durationMs`（0=按次数，>0 固定总时长 100–30000）、
+///   `stopMode`（0=到时自动停 / 1=只能手动停 / 2=两者皆可）、
+///   `maxRunMs`（500–60000 安全上限，手动模式的实际运行上限）、holdEnabled 按住拨杆开关；
 /// - `trigger`：仅当 trigger 与入口匹配且无转向灯注入时启动；
 /// - `stop`：立即中断并恢复；
-/// - `stats`：active / state / flashesDone / flashesTotal / blockReason。
+/// - `stats`：active / state / flashesDone / flashesTotal / elapsedMs / totalMs / mode / blockReason。
 struct HeadlightStrobeView: View {
     @EnvironmentObject private var environment: AppEnvironment
+
+    /// 结束方式（App 侧语义，落盘时映射为固件的 `stopMode` + `durationMs`）。
+    private enum Ending: Int, CaseIterable, Identifiable {
+        case count      // 按次数：跑完 count 次自动停
+        case duration   // 按总时长：durationMs 到点自动停
+        case manual     // 手动停止：一直闪，直到手动停或到 maxRunMs
+
+        var id: Int { rawValue }
+    }
 
     private struct Config: Equatable {
         var count: Int
         var intervalMs: Int
         var trigger: Int
         var hold: Bool
+        var durationMs: Int
+        var stopMode: Int
+        var maxRunMs: Int
     }
 
     @State private var count = 10
@@ -22,7 +37,11 @@ struct HeadlightStrobeView: View {
     @State private var triggerSource = 0
     @State private var holdEnabled = false
     @State private var holdDelayMs = 2500
-    @State private var saved = Config(count: 10, intervalMs: 100, trigger: 0, hold: false)
+    @State private var ending: Ending = .count
+    @State private var durationSec = 5
+    @State private var maxRunSec = 30
+    @State private var saved = Config(count: 10, intervalMs: 100, trigger: 0, hold: false,
+                                      durationMs: 0, stopMode: 0, maxRunMs: 30_000)
 
     @State private var stats: P4JSON?
     @State private var supported = true
@@ -44,9 +63,22 @@ struct HeadlightStrobeView: View {
         return raw
     }
 
-    private var dirty: Bool {
-        Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled) != saved
+    private var effectiveDurationMs: Int {
+        ending == .duration ? durationSec * 1000 : 0
     }
+
+    private var effectiveStopMode: Int {
+        ending == .manual ? 1 : 0
+    }
+
+    private var effectiveMaxRunMs: Int { maxRunSec * 1000 }
+
+    private var drafted: Config {
+        Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled,
+               durationMs: effectiveDurationMs, stopMode: effectiveStopMode, maxRunMs: effectiveMaxRunMs)
+    }
+
+    private var dirty: Bool { drafted != saved }
 
     /// 按钮下方的提醒：优先说明为什么点不了，其次说明操作限制。
     private var triggerHintText: String {
@@ -57,6 +89,10 @@ struct HeadlightStrobeView: View {
         if dirty {
             return L10n.t("参数有未保存修改，保存后才能触发。", "Save parameter changes before flashing.")
         }
+        if ending == .manual {
+            return L10n.t("将持续爆闪，最长 \(maxRunSec) s，需要手动停止。",
+                          "Flashes continuously for up to \(maxRunSec) s until you stop it.")
+        }
         return L10n.t("参数改动需先保存；爆闪期间不能重复触发，可随时停止。",
                       "Save changes first. Re-trigger is blocked while active; you can stop at any time.")
     }
@@ -66,8 +102,15 @@ struct HeadlightStrobeView: View {
     }
 
     private var totalDurationText: String {
-        let seconds = Double(count * 2 * intervalMs) / 1000
-        return String(format: "%.1f s", seconds)
+        switch ending {
+        case .count:
+            let seconds = Double(count * 2 * intervalMs) / 1000
+            return String(format: "%.1f s", seconds)
+        case .duration:
+            return String(format: "%.1f s", Double(durationSec))
+        case .manual:
+            return L10n.t("最长 \(maxRunSec) s（需手动停止）", "up to \(maxRunSec) s (manual stop)")
+        }
     }
 
     private var intervalStepText: String { "10" }
@@ -155,9 +198,15 @@ struct HeadlightStrobeView: View {
                     }
                 }
                 .tint(.accentColor)
+                // 固件在爆闪进行中对任何 config POST 都回 409，开关此时必然写失败：
+                // 先禁用并说明，避免「点了开关又被弹回去」。
+                .disabled(active || busy)
             } footer: {
-                Text(L10n.t("开关立即写入设备，无需保存。",
-                            "The switch is written to the device immediately; no save needed."))
+                Text(active
+                     ? L10n.t("爆闪进行中，先点「停止并恢复」才能改这个开关。",
+                              "Stop the strobe before changing this switch.")
+                     : L10n.t("开关立即写入设备，无需保存。",
+                              "The switch is written to the device immediately; no save needed."))
             }
 
             if !supported {
@@ -232,16 +281,50 @@ struct HeadlightStrobeView: View {
             statusSection
 
             Section {
-                RulerSlider(
-                    title: L10n.t("闪烁次数", "Flashes"),
-                    unit: L10n.t("次", "×"),
-                    value: $count,
-                    range: 1...30,
-                    step: 1,
-                    majorEvery: 5,
-                    caption: L10n.t("总时长 = 次数 × 2 × 间隔 = \(totalDurationText)",
-                                     "Duration = count × 2 × interval = \(totalDurationText)")
-                )
+                Picker(selection: $ending) {
+                    Text(L10n.t("按次数", "By count")).tag(Ending.count)
+                    Text(L10n.t("按总时长", "By duration")).tag(Ending.duration)
+                    Text(L10n.t("手动停止", "Until stopped")).tag(Ending.manual)
+                } label: {
+                    Label(L10n.t("结束方式", "Ending"), systemImage: "timer")
+                }
+                .pickerStyle(.segmented)
+
+                switch ending {
+                case .count:
+                    RulerSlider(
+                        title: L10n.t("闪烁次数", "Flashes"),
+                        unit: L10n.t("次", "×"),
+                        value: $count,
+                        range: 1...30,
+                        step: 1,
+                        majorEvery: 5,
+                        caption: L10n.t("总时长 = 次数 × 2 × 间隔 = \(totalDurationText)",
+                                         "Duration = count × 2 × interval = \(totalDurationText)")
+                    )
+                case .duration:
+                    RulerSlider(
+                        title: L10n.t("总时长", "Duration"),
+                        unit: "s",
+                        value: $durationSec,
+                        range: 1...30,
+                        step: 1,
+                        majorEvery: 5,
+                        caption: L10n.t("到点自动停止；次数按间隔自动排满这段时间。",
+                                         "Stops automatically; the flashes fill this window.")
+                    )
+                case .manual:
+                    RulerSlider(
+                        title: L10n.t("安全上限", "Max run"),
+                        unit: "s",
+                        value: $maxRunSec,
+                        range: 5...60,
+                        step: 5,
+                        majorEvery: 4,
+                        caption: L10n.t("一直闪到手动停止；到达上限也会强制停止并恢复。",
+                                         "Runs until stopped; the cap force-stops and restores.")
+                    )
+                }
 
                 RulerSlider(
                     title: L10n.t("间隔", "Interval"),
@@ -263,8 +346,11 @@ struct HeadlightStrobeView: View {
             } header: {
                 Label(L10n.t("参数", "Parameters"), systemImage: "slider.horizontal.3")
             } footer: {
-                Text(L10n.t("刻度按 \(intervalStepText) ms 吸附；参数改动需保存后才会用于下一次触发。",
-                            "The ruler snaps every \(intervalStepText) ms. Save changes before the next run."))
+                Text(ending == .count
+                     ? L10n.t("刻度按 \(intervalStepText) ms 吸附；参数改动需保存后才会用于下一次触发。",
+                              "The ruler snaps every \(intervalStepText) ms. Save changes before the next run.")
+                     : L10n.t("时长按 1 s、安全上限按 5 s 吸附；参数改动需保存后才会用于下一次触发。",
+                              "Snaps to 1 s for duration and 5 s for the cap. Save before the next run."))
             }
             .id("params")
 
@@ -344,9 +430,22 @@ struct HeadlightStrobeView: View {
             }
             Button(L10n.t("取消", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L10n.t("将闪烁 \(count) 次，间隔 \(intervalMs) ms，结束后恢复触发前的灯光状态。",
-                        "\(count) flashes at \(intervalMs) ms, then restore the previous light state."))
+            Text(confirmMessage)
         }
+        }
+    }
+
+    private var confirmMessage: String {
+        switch ending {
+        case .count:
+            return L10n.t("将闪烁 \(count) 次，间隔 \(intervalMs) ms，结束后恢复触发前的灯光状态。",
+                          "\(count) flashes at \(intervalMs) ms, then restore the previous light state.")
+        case .duration:
+            return L10n.t("将在 \(durationSec) s 内按 \(intervalMs) ms 间隔闪烁，到点自动停止并恢复。",
+                          "Flashes for \(durationSec) s at \(intervalMs) ms, then stops and restores.")
+        case .manual:
+            return L10n.t("将持续闪烁，最长 \(maxRunSec) s；需要手动点「停止并恢复」。",
+                          "Flashes until you stop it, capped at \(maxRunSec) s.")
         }
     }
 
@@ -354,9 +453,16 @@ struct HeadlightStrobeView: View {
     private var statusSection: some View {
         Section {
             HStack {
+                Text(L10n.t("结束方式", "Ending"))
+                Spacer()
+                Text(runModeText).foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+
+            HStack {
                 Text(L10n.t("进度", "Progress"))
                 Spacer()
-                Text("\(done) / \(total)").monospacedDigit().foregroundStyle(.secondary)
+                Text(progressText).monospacedDigit().foregroundStyle(.secondary)
             }
             .font(.subheadline)
 
@@ -389,6 +495,24 @@ struct HeadlightStrobeView: View {
             Text(L10n.t("0x249 高灯 PULL/IDLE；爆闪期间暂停其他 0x249 注入，结束后自动解除。",
                         "0x249 high-beam PULL/IDLE. Other 0x249 injections are paused while active."))
         }
+    }
+
+    private var runModeText: String {
+        switch stats?["mode"]?.stringValue {
+        case "MANUAL": return L10n.t("手动停止", "Until stopped")
+        case "DURATION": return L10n.t("按总时长", "By duration")
+        case "COUNT": return L10n.t("按次数", "By count")
+        default: return "—"
+        }
+    }
+
+    /// COUNT 模式看「第几次」，其余模式看「已运行 / 总时长」。
+    private var progressText: String {
+        guard stats?["mode"]?.stringValue != "COUNT" else { return "\(done) / \(total)" }
+        let totalMs = Int(stats?["totalMs"]?.intValue ?? 0)
+        guard totalMs > 0 else { return "\(done) / \(total)" }
+        let elapsed = Int(stats?["elapsedMs"]?.intValue ?? 0)
+        return String(format: "%.1f / %.1f s", Double(elapsed) / 1000, Double(totalMs) / 1000)
     }
 
     private var stateText: String {
@@ -453,9 +577,22 @@ struct HeadlightStrobeView: View {
             if let t = object["trigger"]?.intValue { triggerSource = Int(t) }
             holdEnabled = object["holdEnabled"]?.boolValue ?? false
             if let d = object["holdDelayMs"]?.intValue { holdDelayMs = Int(d) }
+            // 结束方式由固件的 stopMode + durationMs 共同决定（mode 字段是二者的合成结果）。
+            let stopMode = Int(object["stopMode"]?.intValue ?? 0)
+            let durationMs = Int(object["durationMs"]?.intValue ?? 0)
+            let maxRunMs = Int(object["maxRunMs"]?.intValue ?? 30_000)
+            ending = stopMode == 1 ? .manual : (durationMs > 0 ? .duration : .count)
+            durationSec = min(max(Int((Double(durationMs) / 1000).rounded()), 1), 30)
+            maxRunSec = min(max(Int((Double(maxRunMs) / 1000).rounded()), 5), 60)
             supported = object["supported"]?.boolValue ?? true
             stalkVariant = object["stalkVariant"]?.stringValue ?? stalkVariant
-            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled)
+            // 存盘值按 UI 粒度归一：设备里可能有 1500 ms 这类非整秒值，
+            // 若原样当基线，一进页面就会显示「有未保存修改」。
+            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource,
+                           hold: holdEnabled,
+                           durationMs: ending == .duration ? durationSec * 1000 : 0,
+                           stopMode: stopMode == 1 ? 1 : 0,
+                           maxRunMs: maxRunSec * 1000)
             stats = value
             errorText = nil
         } catch {
@@ -471,11 +608,15 @@ struct HeadlightStrobeView: View {
         intervalMs = saved.intervalMs
         triggerSource = saved.trigger
         holdEnabled = saved.hold
+        ending = saved.stopMode == 1 ? .manual : (saved.durationMs > 0 ? .duration : .count)
+        durationSec = min(max(saved.durationMs / 1000, 1), 30)
+        maxRunSec = min(max(saved.maxRunMs / 1000, 5), 60)
         Haptics.impact()
     }
 
     private func saveConfig() async {
-        guard (1...30).contains(count), (50...1000).contains(intervalMs) else { return }
+        guard (1...30).contains(count), (50...1000).contains(intervalMs),
+              (1...30).contains(durationSec), (5...60).contains(maxRunSec) else { return }
         busy = true
         errorText = nil
         do {
@@ -484,9 +625,12 @@ struct HeadlightStrobeView: View {
                 P4Param("intervalMs", String(intervalMs)),
                 P4Param("trigger", String(triggerSource)),
                 P4Param("holdEnabled", holdEnabled ? "1" : "0"),
+                P4Param("durationMs", String(effectiveDurationMs)),
+                P4Param("stopMode", String(effectiveStopMode)),
+                P4Param("maxRunMs", String(effectiveMaxRunMs)),
             ])
             stats = value
-            saved = Config(count: count, intervalMs: intervalMs, trigger: triggerSource, hold: holdEnabled)
+            saved = drafted
             Haptics.success()
             withAnimation(.spring(response: 0.28, dampingFraction: 1.0)) { justSaved = true }
             Task {
@@ -509,7 +653,9 @@ struct HeadlightStrobeView: View {
             ])
             stats = value
             saved = Config(count: saved.count, intervalMs: saved.intervalMs,
-                           trigger: saved.trigger, hold: on)
+                           trigger: saved.trigger, hold: on,
+                           durationMs: saved.durationMs, stopMode: saved.stopMode,
+                           maxRunMs: saved.maxRunMs)
             environment.toast = P4Toast(
                 message: on ? L10n.t("按住拨杆爆闪已开启", "Hold-stalk strobe on")
                             : L10n.t("按住拨杆爆闪已关闭", "Hold-stalk strobe off"),
@@ -535,8 +681,11 @@ struct HeadlightStrobeView: View {
         } catch {
             let message = AppEnvironment.friendly(error)
             errorText = message
-            // 胶囊里只放短标签，完整原因留在下方错误行，避免胶囊被长文案撑爆。
-            commitPhase = .error(L10n.t("失败 · 点按重试", "Failed · tap to retry"))
+            // 409 是「设备当前状态不允许」，立刻重试只会再撞一次；引导稍后再试。
+            let retryable = (error as? P4APIError)?.status != 409
+            commitPhase = .error(retryable
+                                 ? L10n.t("失败 · 点按重试", "Failed · tap to retry")
+                                 : L10n.t("未开始 · 稍后重试", "Not started · retry later"))
         }
         busy = false
     }

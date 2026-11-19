@@ -196,11 +196,20 @@ struct RearFogStrobeView: View {
             stats = value
             Haptics.success()
         } catch {
-            // 409：已在运行，或还没收到整车 0x273
-            errorText = templateValid
-                ? L10n.t("无法开始：上一次爆闪还没结束，请先停止。", "Cannot start: the previous run is still active.")
-                : L10n.t("无法开始：还没收到整车 0x273 帧（车辆需上电，车身总线在线）。",
-                         "Cannot start: no 0x273 frame from the car yet.")
+            // 409 的 body 就是原因（ALREADY_ACTIVE / NO_FRAME），不要再按 templateValid 猜：
+            // Setup 模式下 start() 直接返回 false，猜法会给出完全错误的解释。
+            switch (error as? P4APIError)?.deviceError {
+            case "ALREADY_ACTIVE":
+                errorText = L10n.t("上一次爆闪还没结束，请先停止。", "The previous run is still active; stop it first.")
+            case "NO_FRAME":
+                errorText = setupMode
+                    ? L10n.t("Setup 模式下不能开始爆闪，请先完成车型配置。",
+                             "Unavailable in setup mode; finish the vehicle profile first.")
+                    : L10n.t("还没收到整车 0x273 帧：车辆需上电，车身总线在线。",
+                             "No 0x273 frame from the car yet: power the car and check the body bus.")
+            default:
+                errorText = AppEnvironment.friendly(error)
+            }
             Haptics.error()
         }
         busy = false
