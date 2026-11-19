@@ -10,6 +10,10 @@ import json
 import os
 import threading
 import time
+
+# 固件代次模拟：P4CAN_MOCK_FW=3.35.2 时移除爆闪与封禁/TLSSC 恢复端点，
+# 用于验证 App 在官方新版固件上的兼容降级。
+FW_VARIANT = os.environ.get("P4CAN_MOCK_FW", "3.29.3")
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -933,6 +937,15 @@ class Handler(BaseHTTPRequestHandler):
         if self._rebooting():
             return
 
+        if FW_VARIANT.startswith("3.35"):
+            if path.startswith(("/api/headlight-strobe/", "/api/rear-fog-strobe/",
+                                "/api/features/banned", "/api/features/tlssc-restore")):
+                return self.send_json({"ok": False, "error": "not found"}, status=404)
+            if path == "/api/features/status":
+                return self.send_json({k: v for k, v in FEATURES.items()
+                                       if k not in ("banned", "bannedSupported",
+                                                    "tlsscRestore", "tlsscRestoreSupported")})
+
         if path in ("/api/headlight-strobe/config", "/api/headlight-strobe/stats"):
             return self.send_json(headlight_json())
         if path == "/api/rear-fog-strobe/stats":
@@ -977,6 +990,10 @@ class Handler(BaseHTTPRequestHandler):
         path, qs = parsed.path, parse_qs(parsed.query)
         if self._rebooting():
             return
+        if FW_VARIANT.startswith("3.35") and path.startswith(
+                ("/api/headlight-strobe/", "/api/rear-fog-strobe/",
+                 "/api/features/banned", "/api/features/tlssc-restore")):
+            return self.send_json({"ok": False, "error": "not found"}, status=404)
         # OTA 上传（与固件 server.on("/update", HTTP_POST, ...) 对齐）：
         # 按 Content-Length 读满 multipart，取 part 头之后的净载荷长度当写入量。
         if path == "/update":

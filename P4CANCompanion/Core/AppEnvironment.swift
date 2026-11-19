@@ -72,6 +72,11 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var dasStats: P4JSON?
     /// 完整 NAG 配置（含 enabled / method / mode），用于首页快捷开关。
     @Published private(set) var nagConfig: P4JSON?
+    /// 固件是否提供前后爆闪接口（v3.35.2 官方固件已移除这两个端点）。
+    /// nil = 尚未探测或离线不确定；false 时功能列表隐藏两个灯光入口。
+    @Published private(set) var strobeSupported: Bool?
+    /// 上次探测爆闪接口的时间：为 false 时每分钟复探一次，方便重新刷回带爆闪的固件后自动恢复入口。
+    private var lastStrobeProbe: Date?
 
     /// 三路 CAN 总线（CAN 1 BODY / CAN 2 CHASSIS / CAN 3 PARTY）。
     @Published private(set) var canBuses: [CanBusSnapshot] = []
@@ -357,6 +362,7 @@ final class AppEnvironment: ObservableObject {
         s3xyStats = nil
         dasStats = nil
         nagConfig = nil
+        strobeSupported = nil
         mergedStats = [:]
         canBuses = []
         trendSamples = []
@@ -431,6 +437,12 @@ final class AppEnvironment: ObservableObject {
         }
         if let profile { profileStatus = profile }
         if let features { featuresStatus = features }
+        // v3.35.2 起官方固件移除了爆闪接口：探测一次 404 就把两个入口隐藏，
+        // 避免列表里留着点进去只有报错的模块。网络错误不判定为“不支持”。
+        if includeMeta, strobeSupported != true, features != nil {
+            let due = lastStrobeProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
+            if due { await probeStrobeSupport(using: currentClient) }
+        }
         if let s3xy { s3xyStats = s3xy }
         if isS3XYEnabled && !showsS3XYTab {
             showsS3XYTab = true
@@ -591,6 +603,19 @@ final class AppEnvironment: ObservableObject {
         guard let profile = try? await client.get(P4Route.profileStatus) else { return }
         profileStatus = profile
         rebuildDerived()
+    }
+
+    /// 探测固件是否提供前后爆闪接口。
+    private func probeStrobeSupport(using client: P4APIClient) async {
+        lastStrobeProbe = Date()
+        do {
+            _ = try await client.get(P4Route.headlightStrobeStats)
+            strobeSupported = true
+        } catch let error as P4APIError {
+            if error.status == 404 { strobeSupported = false }
+        } catch {
+            // 离线/超时：保持未知，下一轮再试；不能把“没连上”当成“不支持”。
+        }
     }
 
     /// 单独拉取功能闸门（LAB Menu / S3XY / 封禁方案），用于开关后立即刷新标签栏。

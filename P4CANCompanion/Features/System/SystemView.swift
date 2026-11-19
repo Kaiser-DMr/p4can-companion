@@ -26,8 +26,12 @@ struct SystemView: View {
                     ProfileSection()
                     SystemSection(destructiveAction: $destructiveAction)
                         .id("system")
-                    BannedSection(pending: $dangerToggle)
-                        .id("banned")
+                    // v3.35.2 起官方固件移除了 /api/features/banned 与 tlssc-restore，
+                    // 能力位也随之消失；没有这两个键时整段隐藏，避免点进去 404。
+                    if environment.featuresStatus?["bannedSupported"] != nil {
+                        BannedSection(pending: $dangerToggle)
+                            .id("banned")
+                    }
                     AppSection()
                     DataBrowseSection()
                     LogsSection()

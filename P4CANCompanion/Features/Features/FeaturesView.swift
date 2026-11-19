@@ -46,7 +46,14 @@ struct FeaturesView: View {
 
     /// 功能模块（不含车型卡片与实验室专属工具）
     private var modules: [FeatureModule] {
-        FeatureCatalog.modules.filter { $0.section != .lab && $0.id != "profile" }
+        FeatureCatalog.modules.filter { module in
+            guard module.section != .lab, module.id != "profile" else { return false }
+            // v3.35.2 起官方固件移除了爆闪接口：探测到 404 后不再展示这两个入口。
+            if module.id == "headlight" || module.id == "rearFog" {
+                return environment.strobeSupported != false
+            }
+            return true
+        }
     }
 
     /// 全量行（含已置顶的）：搜索、置顶解析与深链滚动共用。
@@ -515,6 +522,10 @@ struct FeaturesView: View {
     /// 灯光类模块的运行态：只读，失败即视为「未知」，不显示徽章。
     /// 走共享端点缓存：灯光页在 800/500 ms 轮询时，这里直接复用，不再重复打设备。
     private func loadStrobeStates() async {
+        guard environment.strobeSupported != false else {
+            strobeActive = [:]
+            return
+        }
         var fresh: [String: Bool] = [:]
         if let json = await environment.refreshEndpoint(P4Route.headlightStrobeStats, maxAge: 3),
            let active = json.objectValue?["active"]?.boolValue {
