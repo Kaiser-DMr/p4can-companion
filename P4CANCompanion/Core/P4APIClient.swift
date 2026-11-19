@@ -422,15 +422,21 @@ final class P4APIClient: Sendable {
     }
 
     private static func interpret(data: Data, response: URLResponse, path: String) throws -> P4JSON {
+        let http = response as? HTTPURLResponse
+        let httpOK = http.map { (200...299).contains($0.statusCode) } ?? true
+        // 注意：`ok:false` 不一定是错误。/api/ota/status 用 `ok` 表示「上次刷写是否成功」，
+        // 未刷写过时恒为 false 且 error 为空串——把这类状态当异常会让 OTA 整条流程失效。
+        // 只有「带非空 error」且（ok:false 或 HTTP 非 2xx）才算业务错误。
         if let body = Self.tryDecode(ErrorBody.self, from: data),
            let message = body.error,
-           body.ok == false || body.ok == nil {
+           !message.isEmpty,
+           body.ok == false || !httpOK {
             throw P4APIError(message: message)
         }
-        if let http = response as? HTTPURLResponse, (300...399).contains(http.statusCode) {
+        if let http, (300...399).contains(http.statusCode) {
             throw P4APIError(message: "已阻止设备返回的重定向（HTTP \(http.statusCode)），请确认连接的仍是 P4-CAN")
         }
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+        if let http, !(200...299).contains(http.statusCode) {
             throw P4APIError(message: "请求失败：\(path)（HTTP \(http.statusCode)）")
         }
         if data.isEmpty { return .null }

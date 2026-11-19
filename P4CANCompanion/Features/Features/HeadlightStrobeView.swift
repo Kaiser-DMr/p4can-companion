@@ -247,7 +247,7 @@ struct HeadlightStrobeView: View {
                     title: L10n.t("间隔", "Interval"),
                     unit: "ms",
                     value: $intervalMs,
-                    range: 50...500,
+                    range: 50...1000,
                     step: 10,
                     majorEvery: 5,
                     caption: L10n.t("开/关之间的半周期，随「保存参数」一起写入设备。",

@@ -76,6 +76,7 @@ struct WirelessView: View {
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
+                if environment.isPollingPaused { continue }
                 await load()
             }
         }
@@ -203,16 +204,30 @@ struct WirelessView: View {
     }
 
     private func applyWiFi() {
+        // 固件强制要求 ssid：只改密码时必须把当前 SSID 一起提交，否则必回 400。
+        let effectiveSSID = ssid.isEmpty
+            ? (environment.wifiStatus?["ssid"]?.stringValue ?? "")
+            : ssid
+        guard !effectiveSSID.isEmpty else {
+            environment.toast = P4Toast(
+                message: L10n.t("先填写新的热点名称（当前热点名还没读到）",
+                                "Enter a new SSID first — the current one has not been read yet"),
+                style: .failure
+            )
+            return
+        }
         busy = true
         Task {
-            var query: [P4Param] = []
-            if !ssid.isEmpty { query.append(P4Param("ssid", ssid)) }
+            var query: [P4Param] = [P4Param("ssid", effectiveSSID)]
             if !password.isEmpty { query.append(P4Param("password", password)) }
-            await environment.command(L10n.t("热点设置", "Wi-Fi settings"),
-                                      path: P4Route.wifiApply, query: query, refresh: false)
+            let ok = await environment.command(L10n.t("热点设置", "Wi-Fi settings"),
+                                               path: P4Route.wifiApply, query: query, refresh: false)
             busy = false
-            ssid = ""
-            password = ""
+            // 失败时保留输入，避免用户重输。
+            if ok {
+                ssid = ""
+                password = ""
+            }
             await environment.refreshOnce()
         }
     }

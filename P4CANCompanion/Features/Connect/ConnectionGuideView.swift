@@ -70,20 +70,13 @@ struct ConnectionGuideView: View {
                     }
                 }
 
-                Section(L10n.t("设备已加入家庭 Wi-Fi？", "Joined home Wi-Fi?")) {
-                    Text(
-                        L10n.t("若设备已通过“系统 → Wi-Fi 配置”加入家庭网络，请在该页把设备地址改为设备在新网络中的 IP。", "If the device joined your home network via System → Wi-Fi, set its new IP in the device address field.")
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                }
             }
-            .navigationTitle("连接引导")
+            .navigationTitle(L10n.t("连接引导", "Connection guide"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") { dismiss() }
-                        .accessibilityLabel("关闭连接引导")
+                    Button(L10n.t("完成", "Done")) { dismiss() }
+                        .accessibilityLabel(L10n.t("关闭连接引导", "Close connection guide"))
                 }
             }
         }

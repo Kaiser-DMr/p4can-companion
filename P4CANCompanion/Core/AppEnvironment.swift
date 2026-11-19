@@ -82,6 +82,10 @@ final class AppEnvironment: ObservableObject {
     /// 是否开启锁屏 / 灵动岛实时活动（持久化）。
     @Published private(set) var liveActivityEnabled = false
     /// 蓝牙标签是否显示：与网页一致，由固件 S3XY 功能闸门决定（功能页的 S3XY 开关）。
+    /// 「蓝牙」标签是否显示：与 BLE 总开关解耦。
+    /// 开关关闭只影响连接，不应把唯一的重开入口一起删掉。
+    @Published private(set) var showsS3XYTab = UserDefaults.standard.bool(forKey: "p4can.tab.s3xy")
+
     var isS3XYEnabled: Bool {
         #if DEBUG
         if let raw = ProcessInfo.processInfo.environment["P4CAN_BT_TAB"] {
@@ -123,6 +127,9 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var endpointErrors: [String: String] = [:]
     @Published private(set) var endpointsUpdatedAt: Date?
     @Published private(set) var isScanningEndpoints = false
+
+    /// 是否处于独占操作（OTA / 批量扫描）——页面级轮询应据此暂停。
+    var isPollingPaused: Bool { exclusiveOperationDepth > 0 }
 
     static let browseEndpoints: [String] = [
         "/api/snapshot?groups=home-fast&slow=1",
@@ -168,7 +175,10 @@ final class AppEnvironment: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var client: P4APIClient
     private var tick = 0
+    private var isRefreshing = false
     private var lastLiveActivityAttempt: Date?
+    /// 连续离线起点：超过 1 分钟就结束实时活动，避免锁屏长期显示旧状态。
+    private var liveActivityOfflineSince: Date?
     /// 上次写缓存的时间（节流用）。
     private var lastCacheWriteAt: Date?
     /// 上次写入包含的端点数量（新端点出现时立刻补写）。
@@ -250,28 +260,68 @@ final class AppEnvironment: ObservableObject {
         pollTask = nil
     }
 
-    func updateHost(_ newHost: String) {
+    @discardableResult
+    func updateHost(_ newHost: String) -> Bool {
         let trimmed = newHost.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != host else { return }
+        guard !trimmed.isEmpty, trimmed != host else { return false }
         guard let normalized = P4APIClient.validatedHost(trimmed) else {
             toast = P4Toast(
                 message: "地址格式无效：只支持 http(s)://主机[:端口] 或 主机[:端口]，不要带账号、路径或查询参数",
                 style: .failure
             )
-            return
+            return false
         }
         host = normalized
         UserDefaults.standard.set(normalized, forKey: Self.hostDefaultsKey)
         client = P4APIClient(host: normalized)
+        // 换设备必须清状态：否则会继续以新地址的名义显示上一台车的车型/挡位/扭矩，
+        // 且 hasRenderableData 为真会让新设备的缓存永不加载。
+        resetDeviceState()
         phase = .idle
         start()
+        restoreCacheIfNeeded()
+        toast = P4Toast(
+            message: L10n.t("已切换到 \(normalized)", "Now using \(normalized)"),
+            style: .info
+        )
+        return true
+    }
+
+    /// 清空与「某台设备」绑定的全部展示状态（切换设备地址时调用）。
+    private func resetDeviceState() {
+        fastGroups = [:]
+        slowGroups = [:]
+        profileStatus = nil
+        featuresStatus = nil
+        wifiStatus = nil
+        otaStatus = nil
+        systemStats = nil
+        s3xyStats = nil
+        dasStats = nil
+        nagConfig = nil
+        mergedStats = [:]
+        canBuses = []
+        trendSamples = []
+        endpointPayloads = [:]
+        endpointErrors = [:]
+        endpointsUpdatedAt = nil
+        isShowingCachedData = false
+        cachedAt = nil
+        lastUpdated = nil
+        lastLabVisible = false
+        lastS3XYVisible = false
     }
 
     // MARK: - 刷新
 
     func refreshOnce() async {
         guard exclusiveOperationDepth == 0 else { return }
-        if phase != .online { phase = .connecting }
+        // 下拉刷新与轮询可能同时触发：旧响应会覆盖新响应，必须串行化。
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        // 只有首次连接才显示「连接中」；离线重试不再每 5 s 闪一次。
+        if phase == .idle { phase = .connecting }
         let currentClient = client
         tick += 1
         let includeSlow = tick % 2 == 0
@@ -321,6 +371,10 @@ final class AppEnvironment: ObservableObject {
         if let profile { profileStatus = profile }
         if let features { featuresStatus = features }
         if let s3xy { s3xyStats = s3xy }
+        if isS3XYEnabled && !showsS3XYTab {
+            showsS3XYTab = true
+            UserDefaults.standard.set(true, forKey: "p4can.tab.s3xy")
+        }
         if let ota { otaStatus = ota }
         if let wifi { wifiStatus = wifi }
         if let system { systemStats = system }
@@ -345,10 +399,14 @@ final class AppEnvironment: ObservableObject {
 
         if gotSnapshot || gotMeta {
             phase = .online
-            lastUpdated = Date()
-            if isShowingCachedData {
-                isShowingCachedData = false
-                cachedAt = nil
+            // 「已同步」只认快照：任一慢端点成功不代表挡位/扭矩是新的。
+            // 缓存标记也只在快照成功时清除，否则会出现「已同步 + 缓存数据」。
+            if gotSnapshot {
+                lastUpdated = Date()
+                if isShowingCachedData {
+                    isShowingCachedData = false
+                    cachedAt = nil
+                }
             }
             persistCacheIfDue()
             #if DEBUG
@@ -435,13 +493,16 @@ final class AppEnvironment: ObservableObject {
         if pushLiveActivity { refreshLiveActivity() }
     }
 
-    /// 追加扭矩采样（最多 120 点）。
+    /// 追加扭矩采样：按 180 s 时间窗（与「近 3 分钟」文案一致），最多 1 s 一点。
+    /// 原来按 120 点裁剪，500 ms 档实际只有 1 分钟；250 ms 档点数又会翻倍。
     private func appendTrendSample() {
         guard let torque = fastGroups["nag"]?["torque"]?.doubleValue else { return }
-        trendSamples.append(TrendSample(date: Date(), torqueNm: torque))
-        if trendSamples.count > 120 {
-            trendSamples.removeFirst(trendSamples.count - 120)
-        }
+        let now = Date()
+        if let last = trendSamples.last, now.timeIntervalSince(last.date) < 0.9 { return }
+        trendSamples.append(TrendSample(date: now, torqueNm: torque))
+        let cutoff = now.addingTimeInterval(-180)
+        let firstFresh = trendSamples.firstIndex { $0.date >= cutoff } ?? trendSamples.count
+        if firstFresh > 0 { trendSamples.removeFirst(firstFresh) }
     }
 
     // MARK: - 界面
@@ -506,9 +567,22 @@ final class AppEnvironment: ObservableObject {
         liveActivityEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.liveActivityDefaultsKey)
         if enabled {
-            liveActivity.start(deviceName: host, state: activityState())
             lastLiveActivityAttempt = Date()
-            toast = P4Toast(message: "已开启锁屏 / 灵动岛实时状态", style: .success)
+            // 创建结果要回读：系统关闭实时活动时开关不能显示「已开启」。
+            Task {
+                let ok = await liveActivity.start(deviceName: host, state: activityState())
+                if ok {
+                    toast = P4Toast(message: L10n.t("已开启锁屏 / 灵动岛实时状态", "Live Activity enabled"), style: .success)
+                } else {
+                    liveActivityEnabled = false
+                    UserDefaults.standard.set(false, forKey: Self.liveActivityDefaultsKey)
+                    toast = P4Toast(
+                        message: L10n.t("系统未允许实时活动：请在 设置 → P4管家 中开启「实时活动」",
+                                        "Live Activities are off. Enable them in Settings → P4管家."),
+                        style: .failure
+                    )
+                }
+            }
         } else {
             liveActivity.end()
             toast = P4Toast(message: "已关闭实时状态", style: .info)
@@ -540,14 +614,25 @@ final class AppEnvironment: ObservableObject {
 
     /// 已开启时同步内容；首次联网时自动拉起活动（带 10s 冷却避免失败重试风暴）。
     private func refreshLiveActivity() {
-        guard liveActivityEnabled, isOnline else { return }
+        guard liveActivityEnabled else { return }
+        // 离线：不要继续显示离线前的绿勾。持续 1 分钟后结束活动，恢复在线会自动重建。
+        if !isOnline {
+            if liveActivityOfflineSince == nil { liveActivityOfflineSince = Date() }
+            if let since = liveActivityOfflineSince,
+               Date().timeIntervalSince(since) > 60,
+               liveActivity.isActive {
+                liveActivity.end()
+            }
+            return
+        }
+        liveActivityOfflineSince = nil
         let state = activityState()
         guard !state.buses.isEmpty else { return }
         if liveActivity.isActive {
             liveActivity.update(state: state)
         } else if lastLiveActivityAttempt.map({ Date().timeIntervalSince($0) > 10 }) ?? true {
             lastLiveActivityAttempt = Date()
-            liveActivity.start(deviceName: host, state: state)
+            Task { await liveActivity.start(deviceName: host, state: state) }
         }
     }
 
@@ -578,7 +663,13 @@ final class AppEnvironment: ObservableObject {
     func loadAllEndpoints() async {
         guard !isScanningEndpoints else { return }
         isScanningEndpoints = true
-        defer { isScanningEndpoints = false }
+        // 30 个端点扫描期间必须让全局轮询停手：固件是单线程 WebServer，
+        // 并发读会把 8 s 超时打穿，扫描结果也会和快照互相覆盖。
+        exclusiveOperationDepth += 1
+        defer {
+            isScanningEndpoints = false
+            exclusiveOperationDepth = max(0, exclusiveOperationDepth - 1)
+        }
 
         let currentClient = client
         var payloads: [String: P4JSON] = [:]
@@ -663,40 +754,37 @@ final class AppEnvironment: ObservableObject {
     // MARK: - 命令
 
     /// 执行固件写接口：POST + query 参数，然后刷新。
+    /// 执行固件写接口：POST + query 参数，然后刷新。
+    /// - Returns: 是否真的把命令发出去了。忙时返回 false（调用方不要当成已提交）。
+    @discardableResult
     func command(
         _ label: String,
         path: String,
         query: [P4Param] = [],
         refresh: Bool = true
-    ) async {
-        guard !isBusy else { return }
+    ) async -> Bool {
+        guard !isBusy else {
+            // 以前这里直接 return，调用方与用户都以为点成功了。
+            toast = P4Toast(message: L10n.t("设备忙，请稍候再试", "Device busy — try again in a moment"), style: .info)
+            return false
+        }
         isBusy = true
         defer { isBusy = false }
+        var succeeded = false
         do {
             _ = try await client.post(path, query: query)
             toast = P4Toast(message: "已执行「\(label)」", style: .success)
             Haptics.success()
+            succeeded = true
         } catch {
             toast = P4Toast(message: "「\(label)」失败：\(Self.friendly(error))", style: .failure)
             Haptics.error()
         }
         if refresh { await refreshOnce() }
+        return succeeded
     }
 
-    func applyWiFi(ssid: String, password: String) async {
-        guard !ssid.isEmpty else {
-            toast = P4Toast(message: "请填写 Wi-Fi 名称", style: .failure)
-            return
-        }
-        var query = [P4Param("ssid", ssid)]
-        if !password.isEmpty { query.append(P4Param("password", password)) }
-        await command("Wi-Fi 配置", path: P4Route.wifiApply, query: query, refresh: false)
-        toast = P4Toast(
-            message: "已提交：设备 SoftAP 将以新 SSID 重启（IP 仍为 192.168.4.1）。请重新加入该热点。",
-            style: .info
-        )
-        await refreshOnce()
-    }
+
 
     /// OTA 上传入口。
     ///
@@ -716,6 +804,14 @@ final class AppEnvironment: ObservableObject {
         exclusiveOperationDepth = max(0, exclusiveOperationDepth - 1)
         otaUploading = false
         await refreshOnce()
+    }
+
+    /// 清掉已结束的 OTA 进度（进入升级页时调用；上传中不生效）。
+    func clearFinishedOTAProgress() {
+        guard !otaUploading else { return }
+        otaUploadPhase = .idle
+        otaUploadSent = 0
+        otaUploadTotal = 0
     }
 
     private func performUpload(named name: String, data: Data) async {
@@ -751,7 +847,6 @@ final class AppEnvironment: ObservableObject {
 
     /// 上传后确认：等设备重启（重启 = 写入成功），或读到设备的失败原因。
     private func confirmUpload(attemptBefore: Int64) async {
-        var sawDisconnect = false
         let deadline = Date().addingTimeInterval(120)
         while Date() < deadline {
             try? await Task.sleep(for: .milliseconds(1200))
@@ -774,15 +869,15 @@ final class AppEnvironment: ObservableObject {
                     toast = P4Toast(message: "固件写入完成，设备即将重启", style: .success)
                     return
                 }
-                if sawDisconnect || rebooted {
+                // 断线本身不能当成功依据：只有「重启后回到 idle 且 attempt 回落」才算数。
+                if rebooted {
                     otaUploadPhase = .done
                     toast = P4Toast(message: "固件已写入，设备已重启", style: .success)
                     return
                 }
                 if object["inProgress"]?.boolValue == true { continue }
             } catch {
-                // 连不上：设备正在重启。继续等它回来。
-                sawDisconnect = true
+                // 连不上：设备可能正在重启，继续等它回来；不据此判成功。
             }
         }
         otaUploadPhase = .failed

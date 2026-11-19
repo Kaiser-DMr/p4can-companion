@@ -842,8 +842,9 @@ struct DashboardView: View {
                     Spacer()
                     Text("在「系统」页上传 .ino.bin").font(.caption).foregroundStyle(.secondary)
                 }
-                if let error = environment.otaStatus?["error"]?.boolValue, error {
-                    Label(environment.otaStatus?["updateError"]?.stringValue ?? L10n.t("上次升级失败", "Last update failed"), systemImage: "exclamationmark.triangle")
+                // `error` 是字符串（失败原因），不是布尔；按非空判断，否则失败态永远不显示。
+                if let message = environment.otaStatus?["error"]?.stringValue, !message.isEmpty {
+                    Label(message, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.p4Err)
                 }
             }

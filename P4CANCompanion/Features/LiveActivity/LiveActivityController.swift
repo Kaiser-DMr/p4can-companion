@@ -28,8 +28,10 @@ final class LiveActivityController: @unchecked Sendable {
         ActivityAuthorizationInfo().areActivitiesEnabled
     }
 
-    func start(deviceName: String, state: CanActivityAttributes.ContentState) {
-        Task { await self.startInternal(deviceName: deviceName, state: state) }
+    /// - Returns: 是否真的创建了活动（系统关闭实时活动、达到上限时会失败）。
+    @discardableResult
+    func start(deviceName: String, state: CanActivityAttributes.ContentState) async -> Bool {
+        await startInternal(deviceName: deviceName, state: state)
     }
 
     func update(state: CanActivityAttributes.ContentState) {
@@ -37,7 +39,7 @@ final class LiveActivityController: @unchecked Sendable {
             let activity = self.takeCurrent()
             guard let activity else { return }
             await activity.update(
-                ActivityContent(state: state, staleDate: Date().addingTimeInterval(8 * 3600), relevanceScore: 100)
+                ActivityContent(state: state, staleDate: Date().addingTimeInterval(5 * 60), relevanceScore: 100)
             )
         }
     }
@@ -64,18 +66,21 @@ final class LiveActivityController: @unchecked Sendable {
     private func startInternal(
         deviceName: String,
         state: CanActivityAttributes.ContentState
-    ) async {
+    ) async -> Bool {
         await endInternal()
-        guard isSupported else { return }
+        guard isSupported else { return false }
         do {
             let activity = try Activity.request(
                 attributes: CanActivityAttributes(deviceName: deviceName),
-                content: ActivityContent(state: state, staleDate: Date().addingTimeInterval(8 * 3600), relevanceScore: 100),
+                // 数据每 0.25–1 s 刷新一次，8 小时才过期等于永不提示陈旧。
+                content: ActivityContent(state: state, staleDate: Date().addingTimeInterval(5 * 60), relevanceScore: 100),
                 pushType: nil
             )
             store(activity)
+            return true
         } catch {
             store(nil)
+            return false
         }
     }
 

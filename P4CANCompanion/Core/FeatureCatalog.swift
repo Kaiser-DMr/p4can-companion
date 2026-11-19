@@ -901,9 +901,9 @@ enum FeatureCatalog {
         FeatureModule(
             id: "window",
             title: "主驾车窗一键开",
-            summary: "仅 Model 3 配置可用，抓取并复用原厂车窗指令。",
+            summary: "仅 Model YL（三电机）配置可用，需车辆静止；抓取并复用原厂车窗指令。",
             titleEN: "Driver Window Test",
-            summaryEN: "Model YL only · PARK required.",
+            summaryEN: "Model YL (Triple YL) only · PARK required.",
             icon: "rectangle.split.3x1",
             section: .lab,
             statsPath: P4Route.driverWindowStats,

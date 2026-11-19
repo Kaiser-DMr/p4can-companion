@@ -166,8 +166,8 @@ struct SystemView: View {
                 return L10n.t("仅当车辆已被 Tesla 封禁或限制时开启。开启本身不会发送 TLSSC 恢复报文。",
                               "Enable only if this vehicle is already banned or restricted by Tesla. Enabling alone does not transmit TLSSC restore frames.")
             case .tlsscRestore:
-                return L10n.t("⚠️ 开启后可能导致车辆被封禁。除非车辆已经被封禁，否则不要开启。",
-                              "⚠️ Enabling may result in the vehicle being banned. Do NOT enable unless this vehicle is already banned.")
+                return L10n.t("仅在车辆已被封禁后使用：开启会发送 TLSSC 恢复覆盖。需先开启「封禁车辆」。",
+                              "Use only after the vehicle is already banned: this sends the TLSSC restore override. Enable Banned Car first.")
             }
         }
 
@@ -496,8 +496,15 @@ private struct BannedSection: View {
 
     private var banned: Bool { environment.featuresStatus?["banned"]?.boolValue ?? false }
     private var restore: Bool { environment.featuresStatus?["tlsscRestore"]?.boolValue ?? false }
-    private var bannedSupported: Bool { environment.featuresStatus?["bannedSupported"]?.boolValue ?? true }
-    private var restoreSupported: Bool { environment.featuresStatus?["tlsscRestoreSupported"]?.boolValue ?? true }
+    // 能力位缺失（冷启动/离线）时不能默认「支持」——危险开关不应在未知状态下可点。
+    private var bannedSupported: Bool {
+        environment.featuresStatus?["bannedSupported"]?.boolValue ?? false
+    }
+    /// 固件要求车辆已被封禁才允许开启 TLSSC 恢复，否则必回 409。
+    private var restoreSupported: Bool {
+        let capable = environment.featuresStatus?["tlsscRestoreSupported"]?.boolValue ?? false
+        return capable && banned
+    }
 
     var body: some View {
         Section {
@@ -511,8 +518,8 @@ private struct BannedSection: View {
             )
             dangerRow(
                 title: L10n.t("TLSSC 恢复", "TLSSC Restore"),
-                subtitle: L10n.t("对被封禁车辆尝试 TLSSC 恢复覆盖。",
-                                 "Try the TLSSC restore override on a banned vehicle."),
+                subtitle: L10n.t("对被封禁车辆尝试 TLSSC 恢复覆盖（需先开启上方开关）。",
+                                 "Try the TLSSC restore override on a banned vehicle (requires Banned Car above)."),
                 isOn: restore,
                 supported: restoreSupported,
                 id: .tlsscRestore
@@ -571,7 +578,7 @@ private struct BannedSection: View {
                 }
             ))
             .labelsHidden()
-            .disabled(!supported || environment.isBusy)
+            .disabled(!supported || environment.isBusy || !environment.isOnline)
             .accessibilityLabel(title)
         }
         .padding(.vertical, 2)
@@ -622,14 +629,17 @@ private struct AppSection: View {
             .font(.subheadline)
 
             TextField(L10n.t("例如 192.168.4.1", "e.g. 192.168.4.1"), text: $hostField)
-                .keyboardType(.decimalPad)
+                // 支持 host:port 与 http:// 前缀，decimalPad 打不出冒号与斜杠。
+                .keyboardType(.URL)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .onAppear { hostField = environment.host }
                 .accessibilityLabel(L10n.t("设备 IP 地址", "Device IP address"))
 
             Button(L10n.t("应用地址并连接", "Apply and connect")) {
-                environment.updateHost(hostField)
+                if environment.updateHost(hostField) {
+                    hostField = environment.host
+                }
             }
             .disabled(hostField.trimmingCharacters(in: .whitespaces) == environment.host)
 

@@ -128,7 +128,8 @@ enum P4Tone {
 enum P4BusState {
     static func symbol(for state: String?) -> String {
         guard let state else { return "questionmark.circle" }
-        let value = state.uppercased()
+        // 固件用 BUS-OFF（连字符），这里统一成空格再匹配。
+        let value = state.uppercased().replacingOccurrences(of: "-", with: " ")
         if value.contains("OFFLINE") || value.contains("BUS OFF") || value.contains("STOP") {
             return "xmark.octagon"
         }
@@ -140,7 +141,7 @@ enum P4BusState {
 
     static func color(for state: String?) -> Color {
         guard let state else { return .secondary }
-        let value = state.uppercased()
+        let value = state.uppercased().replacingOccurrences(of: "-", with: " ")
         if value.contains("OFFLINE") || value.contains("BUS OFF") || value.contains("STOP") {
             return .p4Err
         }

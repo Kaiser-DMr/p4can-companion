@@ -48,7 +48,13 @@ struct CanBusSnapshot: Identifiable, Sendable {
         }
     }
 
-    var isOnline: Bool { trafficOnline || ready }
+    /// 只有「RUNNING + 有流量」才算在线。
+    /// 之前用 `trafficOnline || ready`，BUS-OFF 时 ready 仍为 true，
+    /// 状态页会出现「绿点 + BUS-OFF + 3/3 在线」的矛盾。
+    var isOnline: Bool {
+        guard let state else { return trafficOnline }
+        return state == 1 && trafficOnline
+    }
 }
 
 /// 从 cantraffic 组（p4CanWriteStatus）解析三路总线。

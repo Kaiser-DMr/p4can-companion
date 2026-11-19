@@ -39,7 +39,8 @@ struct FirmwareUpdateView: View {
                     MetricRow(key: "receivedBytes", value: ota["receivedBytes"] ?? .null)
                     MetricRow(key: "totalBytes", value: ota["totalBytes"] ?? .null)
                     MetricRow(key: "attempt", value: ota["attempt"] ?? .null)
-                    if let error = ota["updateError"]?.stringValue, !error.isEmpty {
+                    // 固件把文案放在 `error`（字符串），`updateError` 是数字错误码。
+                    if let error = ota["error"]?.stringValue, !error.isEmpty {
                         Label(error, systemImage: "exclamationmark.triangle")
                             .font(.footnote)
                             .foregroundStyle(.p4Err)
@@ -187,6 +188,7 @@ struct FirmwareUpdateView: View {
         } message: {
             Text(confirmMessage)
         }
+        .onAppear { environment.clearFinishedOTAProgress() }
         .navigationTitle(L10n.t("固件升级", "Firmware Update"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
@@ -312,6 +314,15 @@ struct FirmwareUpdateView: View {
         }
         guard size >= 64 * 1024 else {
             return L10n.t("固件文件过小，可能不是有效的应用镜像", "The file is too small to be a valid firmware image")
+        }
+        // ESP32 应用镜像以 0xE9 开头；不校验会把改名的图片/别的板子的镜像送进刷写。
+        if let handle = try? FileHandle(forReadingFrom: url) {
+            let magic = try? handle.read(upToCount: 1)
+            try? handle.close()
+            guard magic?.first == 0xE9 else {
+                return L10n.t("这不是 ESP32 应用镜像（缺少 0xE9 标识），请选择 .ino.bin",
+                              "Not an ESP32 application image (missing 0xE9 magic); choose the .ino.bin")
+            }
         }
         guard size <= P4APIClient.maxFirmwareBytes else {
             return L10n.t("固件超过 8 MB，已拒绝", "Firmware exceeds 8 MB and was rejected")

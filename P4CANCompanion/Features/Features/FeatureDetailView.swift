@@ -30,6 +30,12 @@ struct FeatureDetailView: View {
 
     /// 车型能力位是否支持该模块（无声明视为支持）。
     private var capabilitySupported: Bool {
+        // vision / window 用通用键 "supported"，但 features/status 没有这个键，
+        // 真正的支持位在模块自己的 stats 里；否则缺省会被当成「支持」。
+        if module.supportKey == "supported" {
+            guard let stats else { return false }
+            return stats["supported"]?.boolValue ?? true
+        }
         guard let key = module.supportKey else { return true }
         return environment.capability(key) != false
     }

@@ -114,7 +114,9 @@ final class RootTabBarController: UITabBarController {
     private func applyTabSet() {
         var target: [UIViewController] = [overviewController, featuresController]
         if environment.isLabEnabled { target.append(labController) }
-        if environment.isS3XYEnabled { target.append(s3xyController) }
+        // 用「显示过就保持」的偏好，而不是 BLE 总开关本身：
+        // 在蓝牙页关掉总开关后，标签仍要在，否则再也点不回来。
+        if environment.showsS3XYTab { target.append(s3xyController) }
         target.append(systemController)
 
         let current = selectedViewController

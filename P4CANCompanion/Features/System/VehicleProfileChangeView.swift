@@ -149,7 +149,8 @@ struct VehicleProfileChangeView: View {
                         Label(L10n.t("保存车型并重启", "Save Profile & Reboot"), systemImage: "checkmark.circle")
                     }
                 }
-                .disabled(saving || confirming || selectedVehicle == nil)
+                .disabled(saving || confirming || selectedVehicle == nil
+                          || !environment.isOnline || isAlreadyCurrent)
             }
         }
         .listStyle(.insetGrouped)
@@ -212,6 +213,13 @@ struct VehicleProfileChangeView: View {
         }
     }
 
+    /// 选中的就是当前车型：再保存只会触发一次无意义重启。
+    private var isAlreadyCurrent: Bool {
+        guard let selected = selectedVehicle,
+              let current = environment.profileStatus?["profile"]?.intValue else { return false }
+        return selected.id == Int(current)
+    }
+
     private func save() async {
         guard let vehicle = selectedVehicle else { return }
         saving = true
@@ -243,6 +251,12 @@ struct VehicleProfileChangeView: View {
                     return
                 }
                 confirming = false
+                saving = false
+                // 已提交但没回读到时不要指向网络：设备可能正在应用新车型。
+                errorText = L10n.t("已提交，但设备尚未回读新车型（可能正在重启）；请回设置页确认。",
+                                   "Submitted, but the new profile has not been read back yet. It may still be rebooting — check Settings.")
+                Haptics.warning()
+                return
             }
             saving = false
             errorText = AppEnvironment.friendly(error)
@@ -252,7 +266,8 @@ struct VehicleProfileChangeView: View {
 
     /// 重启期间反复读取 profile/status，直到设备回来并报告目标车型。
     private func confirmApplied(_ profileID: Int) async -> Bool {
-        let deadline = Date().addingTimeInterval(20)
+        // 设备重启 + CAN 初始化常超过 20 s，窗口太短会把成功判成失败。
+        let deadline = Date().addingTimeInterval(45)
         while Date() < deadline {
             try? await Task.sleep(for: .milliseconds(1200))
             guard let status = try? await environment.api.get(P4Route.profileStatus),

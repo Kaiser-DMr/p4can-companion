@@ -541,10 +541,12 @@ struct FeaturesView: View {
         busyID = id
         gateOverrides[id] = enabled
         Task {
-            await environment.command(label, path: path, query: [P4Param("enabled", enabled ? "1" : "0")])
+            let ok = await environment.command(label, path: path, query: [P4Param("enabled", enabled ? "1" : "0")])
             await environment.refreshFeatures()
             gateOverrides[id] = nil
             busyID = nil
+            // 失败时保留 command 的失败 toast，不能再覆盖成「已开启」。
+            guard ok else { return }
             if id == "lab" {
                 environment.toast = P4Toast(
                     message: enabled

@@ -109,6 +109,8 @@ struct DiagnosticsView: View {
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
+                // OTA / 批量扫描期间让出连接，避免抢单线程固件。
+                if environment.isPollingPaused { continue }
                 await load()
             }
         }
