@@ -52,6 +52,9 @@ struct FeaturesView: View {
             if module.id == "headlight" || module.id == "rearFog" {
                 return environment.strobeSupported != false
             }
+            if ["preheat", "fsd", "serviceMode"].contains(module.id) {
+                return environment.newFeaturesSupported == true
+            }
             return true
         }
     }
@@ -140,6 +143,12 @@ struct FeaturesView: View {
                     HeadlightStrobeView()
                 } else if moduleID == "rearFog" {
                     RearFogStrobeView()
+                } else if moduleID == "preheat" {
+                    PreheatView()
+                } else if moduleID == "fsd" {
+                    FSDInjectionView()
+                } else if moduleID == "serviceMode" {
+                    ServiceModeView()
                 } else if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
                     FeatureDetailView(module: module)
                 }
@@ -364,6 +373,24 @@ struct FeaturesView: View {
                         features: environment.featuresStatus,
                         strobeActive: strobeActive[module.id]
                     )
+                }
+            } else if module.id == "preheat" {
+                NavigationLink {
+                    PreheatView()
+                } label: {
+                    FeatureRow(module: module, features: environment.featuresStatus)
+                }
+            } else if module.id == "fsd" {
+                NavigationLink {
+                    FSDInjectionView()
+                } label: {
+                    FeatureRow(module: module, features: environment.featuresStatus)
+                }
+            } else if module.id == "serviceMode" {
+                NavigationLink {
+                    ServiceModeView()
+                } label: {
+                    FeatureRow(module: module, features: environment.featuresStatus)
                 }
             } else {
                 NavigationLink {

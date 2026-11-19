@@ -425,6 +425,73 @@ enum FeatureCatalog {
             controls: []
         ),
 
+        // MARK: v3.35.2 新增
+
+        FeatureModule(
+            id: "preheat",
+            title: "电池预热",
+            summary: "充电前主动请求 BMS 加热电池，达到目标温度或电池已暖后自动关闭。",
+            titleEN: "Battery Preheat",
+            summaryEN: "Ask the BMS to heat the pack before charging; stops at the target or when warm.",
+            icon: "thermometer.sun.fill",
+            section: .body,
+            statsPath: P4Route.preheatStats,
+            supportKey: "preheatSupported",
+            controls: []
+        ),
+
+        FeatureModule(
+            id: "fsd",
+            title: "FSD 注入",
+            summary: "在 CHASSIS 上注入 FSD 可视化标志；可设定 AP 激活时暂停。",
+            titleEN: "FSD Injection",
+            summaryEN: "Inject the FSD visualisation flag on CHASSIS, optionally suspended during AP.",
+            icon: "wand.and.stars",
+            section: .advanced,
+            statsPath: P4Route.fsdStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
+            id: "serviceMode",
+            title: "Service Mode",
+            summary: "向车辆发送进入 Service Mode 的请求，或切换中国市场恢复帧。",
+            titleEN: "Service Mode",
+            summaryEN: "Request Service Mode on the vehicle, or toggle the China restore frames.",
+            icon: "wrench.and.screwdriver.fill",
+            section: .advanced,
+            statsPath: P4Route.serviceModeStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
+            id: "smartShift",
+            title: "SmartShift 自动换挡",
+            summary: "实验性自动换挡：刹车确认后由 BODY 发出挡位请求，含车速与障碍物门槛。",
+            titleEN: "SmartShift",
+            summaryEN: "Experimental automatic shifting with brake confirmation, speed and obstacle gates.",
+            icon: "gearshift.layout.sixspeed",
+            section: .lab,
+            statsPath: P4Route.smartShiftStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
+            id: "r79Timing",
+            title: "R79 时序捕获",
+            summary: "记录 R79 请求与控制器完成时序，导出 CSV 分析延迟与失败原因。",
+            titleEN: "R79 Timing Capture",
+            summaryEN: "Capture R79 request/completion timing and export a CSV.",
+            icon: "timer",
+            section: .lab,
+            statsPath: P4Route.r79TimingStatus,
+            supportKey: nil,
+            controls: []
+        ),
+
         FeatureModule(
             id: "summon",
             title: "召唤状态",

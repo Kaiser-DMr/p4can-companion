@@ -75,8 +75,12 @@ final class AppEnvironment: ObservableObject {
     /// 固件是否提供前后爆闪接口（v3.35.2 官方固件已移除这两个端点）。
     /// nil = 尚未探测或离线不确定；false 时功能列表隐藏两个灯光入口。
     @Published private(set) var strobeSupported: Bool?
+    /// 固件是否带 v3.35.2 新功能（预热 / FSD / Service Mode / SmartShift / R79 时序）。
+    /// nil = 尚未探测；只有确认存在时才展示这些入口，避免在 v3.29.3 上留下死模块。
+    @Published private(set) var newFeaturesSupported: Bool?
     /// 上次探测爆闪接口的时间：为 false 时每分钟复探一次，方便重新刷回带爆闪的固件后自动恢复入口。
     private var lastStrobeProbe: Date?
+    private var lastNewFeaturesProbe: Date?
 
     /// 三路 CAN 总线（CAN 1 BODY / CAN 2 CHASSIS / CAN 3 PARTY）。
     @Published private(set) var canBuses: [CanBusSnapshot] = []
@@ -363,6 +367,7 @@ final class AppEnvironment: ObservableObject {
         dasStats = nil
         nagConfig = nil
         strobeSupported = nil
+        newFeaturesSupported = nil
         mergedStats = [:]
         canBuses = []
         trendSamples = []
@@ -442,6 +447,10 @@ final class AppEnvironment: ObservableObject {
         if includeMeta, strobeSupported != true, features != nil {
             let due = lastStrobeProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeStrobeSupport(using: currentClient) }
+        }
+        if includeMeta, newFeaturesSupported != true, features != nil {
+            let due = lastNewFeaturesProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
+            if due { await probeNewFeatures(using: currentClient) }
         }
         if let s3xy { s3xyStats = s3xy }
         if isS3XYEnabled && !showsS3XYTab {
@@ -615,6 +624,19 @@ final class AppEnvironment: ObservableObject {
             if error.status == 404 { strobeSupported = false }
         } catch {
             // 离线/超时：保持未知，下一轮再试；不能把“没连上”当成“不支持”。
+        }
+    }
+
+    /// 探测固件是否带 v3.35.2 新功能。用预热接口做代表：200 即新版，404 即旧版。
+    private func probeNewFeatures(using client: P4APIClient) async {
+        lastNewFeaturesProbe = Date()
+        do {
+            _ = try await client.get(P4Route.preheatStats)
+            newFeaturesSupported = true
+        } catch let error as P4APIError {
+            if error.status == 404 { newFeaturesSupported = false }
+        } catch {
+            // 离线/超时：保持未知，下一轮再试。
         }
     }
 

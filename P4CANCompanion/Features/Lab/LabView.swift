@@ -9,7 +9,12 @@ struct LabView: View {
     @State private var path: [String] = []
 
     private var modules: [FeatureModule] {
-        FeatureCatalog.modules(in: .lab)
+        FeatureCatalog.modules(in: .lab).filter { module in
+            if ["smartShift", "r79Timing"].contains(module.id) {
+                return environment.newFeaturesSupported == true
+            }
+            return true
+        }
     }
 
     var body: some View {
@@ -32,6 +37,10 @@ struct LabView: View {
             .navigationDestination(for: String.self) { moduleID in
                 if moduleID == "modeh" {
                     ModeHView()
+                } else if moduleID == "smartShift" {
+                    SmartShiftView()
+                } else if moduleID == "r79Timing" {
+                    R79TimingView()
                 } else if let module = modules.first(where: { $0.id == moduleID }) {
                     FeatureDetailView(module: module)
                 }

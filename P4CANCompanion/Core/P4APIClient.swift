@@ -34,6 +34,21 @@ enum P4Route {
     static let featuresDoorCancel = "/api/features/door-cancel"
     static let featuresTLSSCRestore = "/api/features/tlssc-restore"
 
+    // v3.35.2 新增功能
+    static let preheatStats = "/api/preheat/stats"
+    static let preheatSet = "/api/preheat/set"
+    static let fsdStats = "/api/fsd/stats"
+    static let fsdUpdate = "/api/fsd/update"
+    static let serviceModeStats = "/api/service-mode/stats"
+    static let serviceModeEnter = "/api/service-mode/enter"
+    static let serviceModeRestore = "/api/service-mode/restore"
+    static let smartShiftStats = "/api/smartshift/stats"
+    static let smartShiftUpdate = "/api/smartshift/update"
+    static let r79TimingStatus = "/api/r79/timing/status"
+    static let r79TimingStart = "/api/r79/timing/start"
+    static let r79TimingStop = "/api/r79/timing/stop"
+    static let r79TimingCSV = "/api/r79/timing/csv"
+
     // NAG
     static let nagConfig = "/api/nag/config"
     static let nagStats = "/api/nag/stats"

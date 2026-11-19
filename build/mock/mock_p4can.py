@@ -161,6 +161,33 @@ PROFILE = {
     "bannedSupported": True,
 }
 
+PREHEAT = {
+    "supported": True, "enabled": False, "targetC": 40.0, "active": False,
+    "batteryWarm": False, "targetReached": False, "packSeen": True,
+    "packTempMinC": 18.5, "packTempMaxC": 20.1, "packTempAvgC": 19.3,
+    "bmsSeen": True, "bmsPreconditionAllowed": True, "bmsHeatingWorthwhile": True,
+    "heatingActive": False, "txOk": 0, "txFail": 0, "tripId": "0x347",
+    "evalAgeMs": 120, "autoOffReason": "NONE", "blocked": False,
+}
+FSD = {"enabled": False, "suspendDuringAp": True, "values": 0,
+       "mux0Fresh": True, "stock1": "0x00", "txOk": 0, "txFail": 0, "apBlocked": False}
+SERVICE = {"canEnter": True, "chinaRestore": False, "restoreTxOk": 0, "restoreTxFail": 0}
+SMARTSHIFT = {
+    "profileSupported": True, "executionEnabled": False, "protocol": "AUTO",
+    "state": "IDLE", "target": "NONE", "source": "NONE", "reason": "NONE",
+    "config": {"requireSeatbelt": True, "steeringFallback": False,
+               "parkSteeringFallback": False, "requireSteering": True,
+               "maxSpeedKph": 8, "hardCutSpeedKph": 12, "cooldownMs": 1500,
+               "obstacleThresholdCm": 120, "parkConfirmDeg": 90,
+               "driveReverseConfirmDeg": 90, "obstacleConfirmDeg": 90, "speedBus": 2},
+    "engine": {"sends": 0, "confirmations": 0, "failures": 0},
+    "templates": {"v12": {"ready": True}, "v13V14": {"ready": False}},
+}
+R79_TIMING = {"active": False, "allocationFailed": False, "expired": False,
+              "session": None, "count": 0, "capacity": 32768, "dropped": 0,
+              "elapsedMs": 0, "exporting": False, "driverErrorLost": 0,
+              "driverSnapshotFailures": 0}
+
 FEATURES = {
     "ok": True,
     "lab": STATE["lab"],
@@ -181,6 +208,7 @@ FEATURES = {
     "tlsscRestoreSupported": True,
     "bannedSupported": True,
     "s3xy": STATE["s3xy_bt"],
+    "preheatSupported": True,
 }
 
 NAG_CONFIG = {
@@ -582,6 +610,51 @@ def apply_post(path, qs):
     def val(k):
         return qs[k][0]
 
+    if path == "/api/preheat/set":
+        if has("enabled"):
+            PREHEAT["enabled"] = _bool(val("enabled"))
+        if has("targetC"):
+            PREHEAT["targetC"] = float(val("targetC"))
+        return None
+    if path == "/api/fsd/update":
+        if has("enabled"):
+            FSD["enabled"] = _bool(val("enabled"))
+        if has("values"):
+            FSD["values"] = int(val("values"))
+        if has("suspendDuringAp"):
+            FSD["suspendDuringAp"] = _bool(val("suspendDuringAp"))
+        return None
+    if path == "/api/service-mode/enter":
+        return None
+    if path == "/api/service-mode/restore":
+        if has("enabled"):
+            SERVICE["chinaRestore"] = _bool(val("enabled"))
+        return None
+    if path == "/api/smartshift/update":
+        for key in ("enabled", "requireSeatbelt", "steeringFallback",
+                    "parkSteeringFallback", "requireSteering"):
+            if has(key):
+                if key == "enabled":
+                    SMARTSHIFT["executionEnabled"] = _bool(val(key))
+                else:
+                    SMARTSHIFT["config"][key] = _bool(val(key))
+        if has("protocol"):
+            SMARTSHIFT["protocol"] = val("protocol")
+        if has("speedBus"):
+            SMARTSHIFT["config"]["speedBus"] = int(val("speedBus"))
+        for key in ("maxSpeedKph", "hardCutSpeedKph", "cooldownMs",
+                    "obstacleThresholdCm", "parkConfirmDeg",
+                    "driveReverseConfirmDeg", "obstacleConfirmDeg"):
+            if has(key):
+                SMARTSHIFT["config"][key] = int(val(key))
+        return None
+    if path == "/api/r79/timing/start":
+        R79_TIMING.update(active=True, expired=False, count=0, elapsedMs=0,
+                          session={"id": 1})
+        return None
+    if path == "/api/r79/timing/stop":
+        R79_TIMING.update(active=False, session={"id": 1})
+        return None
     if path == "/api/ulc/update":
         if has("confirm"):
             ULC["stalkConfirmEnabled"] = _bool(val("confirm"))
@@ -946,6 +1019,24 @@ class Handler(BaseHTTPRequestHandler):
                                        if k not in ("banned", "bannedSupported",
                                                     "tlsscRestore", "tlsscRestoreSupported")})
 
+        if path == "/api/preheat/stats":
+            return self.send_json(PREHEAT)
+        if path == "/api/fsd/stats":
+            return self.send_json(FSD)
+        if path == "/api/service-mode/stats":
+            return self.send_json(SERVICE)
+        if path == "/api/smartshift/stats":
+            return self.send_json(SMARTSHIFT)
+        if path == "/api/r79/timing/status":
+            return self.send_json(R79_TIMING)
+        if path == "/api/r79/timing/csv":
+            body = b"seq,relative_ms,result\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path in ("/api/headlight-strobe/config", "/api/headlight-strobe/stats"):
             return self.send_json(headlight_json())
         if path == "/api/rear-fog-strobe/stats":
