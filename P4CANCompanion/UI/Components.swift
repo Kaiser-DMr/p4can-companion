@@ -276,7 +276,9 @@ struct P4FlowLayout: Layout {
 
 // MARK: - 模块图标
 
-/// 模块图标：优先按 Assets 资源名查找（如 TLSSC 的红绿灯），否则回退 SF Symbol。
+/// 模块图标：优先按 Assets 资源名查找，否则回退 SF Symbol。
+/// 注意：SF Symbol 名写错时 `Image(systemName:)` 会静默返回空图，
+/// 新增图标后需对照 CoreGlyphs 的 name_availability 校验一次。
 ///
 /// `glyphSize` 统一由 `Theme.Icon` 推导，保证同一列表里的 emoji / 位图 / 符号三种来源
 /// 视觉大小一致（emoji 自带留白，需要比 SF Symbol 略大一号）。

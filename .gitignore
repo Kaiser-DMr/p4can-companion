@@ -28,6 +28,8 @@ build/screenshots/cache-*.png
 build/screenshots/rf-*.png
 build/preview/
 build/dd-device/
+build/dd-ipa/
+build/ipa-stage/
 build/firmware-analysis/
 # 本机真机调试脚本（含个人 UDID / Team id）
 build/device-run.sh

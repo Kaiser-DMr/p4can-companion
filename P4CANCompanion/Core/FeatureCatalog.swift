@@ -571,7 +571,7 @@ enum FeatureCatalog {
             summary: "AP 期间注入红绿灯与停车标志控制；高速与 NOA 闸门可按需放行。",
             titleEN: "TLSSC",
             summaryEN: "Traffic-light and stop-sign control during AP.",
-            icon: "trafficlight",
+            icon: "octagon.fill",
             section: .driving,
             statsPath: P4Route.summonStats,
             supportKey: nil,
