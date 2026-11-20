@@ -375,6 +375,20 @@ private struct SystemSection: View {
             appearanceRow
             refreshRow
 
+            if environment.newFeaturesSupported == true {
+                NavigationLink {
+                    CanGpioView()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("CAN GPIO 设置", "CAN GPIO"))
+                        Text(L10n.t("配置 TX / RX 引脚 · 重启生效",
+                                    "Configure TX / RX pins · reboot to apply"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             NavigationLink {
                 DiagnosticsView()
             } label: {
@@ -383,6 +397,20 @@ private struct SystemSection: View {
                     Text(L10n.t("计数器、启动抓包与系统日志", "Counters, boot capture and system logs"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+            }
+
+            if environment.newFeaturesSupported == true {
+                NavigationLink {
+                    ServiceModeView()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("Service Mode", "Service Mode"))
+                        Text(L10n.t("进入 Service Mode · 中国市场恢复帧",
+                                    "Service Mode entry and China restore frames"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 

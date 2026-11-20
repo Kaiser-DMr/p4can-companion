@@ -71,10 +71,10 @@ struct FeatureModule: Identifiable, Sendable {
         // 顺序即功能页的分组顺序：灯光放最前（外观类、最常演示），
         // 其后才是驾驶辅助、车身、实验室与高级。
         case lighting = "灯光"
-        case driving = "驾驶辅助"
+        case driving = "功能"
         case body = "车身与舒适"
         case lab = "实验室功能"
-        case advanced = "高级与兼容"
+        case advanced = "实验"
 
         /// 分组色板：决定图标瓦片底色，让「灯光/驾驶辅助/车身」一眼可分。
         var tint: Color {
@@ -90,10 +90,10 @@ struct FeatureModule: Identifiable, Sendable {
         var englishName: String {
             switch self {
             case .lighting: return "Lighting"
-            case .driving: return "Driving"
+            case .driving: return "Features"
             case .body: return "Body"
             case .lab: return "Lab"
-            case .advanced: return "Advanced"
+            case .advanced: return "Experimental"
             }
         }
 
@@ -279,7 +279,7 @@ enum FeatureCatalog {
             titleEN: "ISA Suppression",
             summaryEN: "Reduce ISA warning chimes during Autopilot.",
             icon: "speedometer",
-            section: .body,
+            section: .driving,
             statsPath: P4Route.isaSuppressionConfig,
             supportKey: nil,
             controls: [
@@ -348,7 +348,7 @@ enum FeatureCatalog {
             titleEN: "Auto Blinker",
             summaryEN: "Trigger a turn signal for a detected NOA lane change.",
             icon: "arrow.triangle.turn.up.right.diamond.fill",
-            section: .body,
+            section: .driving,
             statsPath: P4Route.blinkAStats,
             supportKey: "advancedEapSupported",
             controls: [
@@ -427,96 +427,7 @@ enum FeatureCatalog {
 
         // MARK: v3.35.2 新增
 
-        FeatureModule(
-            id: "preheat",
-            title: "电池预热",
-            summary: "充电前主动请求 BMS 加热电池，达到目标温度或电池已暖后自动关闭。",
-            titleEN: "Battery Preheat",
-            summaryEN: "Ask the BMS to heat the pack before charging; stops at the target or when warm.",
-            icon: "thermometer.sun.fill",
-            section: .body,
-            statsPath: P4Route.preheatStats,
-            supportKey: "preheatSupported",
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "fsd",
-            title: "FSD 注入",
-            summary: "在 CHASSIS 上注入 FSD 可视化标志；可设定 AP 激活时暂停。",
-            titleEN: "FSD Injection",
-            summaryEN: "Inject the FSD visualisation flag on CHASSIS, optionally suspended during AP.",
-            icon: "wand.and.stars",
-            section: .advanced,
-            statsPath: P4Route.fsdStats,
-            supportKey: nil,
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "serviceMode",
-            title: "Service Mode",
-            summary: "向车辆发送进入 Service Mode 的请求，或切换中国市场恢复帧。",
-            titleEN: "Service Mode",
-            summaryEN: "Request Service Mode on the vehicle, or toggle the China restore frames.",
-            icon: "wrench.and.screwdriver.fill",
-            section: .advanced,
-            statsPath: P4Route.serviceModeStats,
-            supportKey: nil,
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "canGpio",
-            title: "CAN GPIO 设置",
-            summary: "设置三路 CAN 的 TX/RX 引脚；保存会停总线并重启，需确认线束后再改。",
-            titleEN: "CAN GPIO Settings",
-            summaryEN: "Set TX/RX pins for all three CAN buses; saving stops CAN and reboots.",
-            icon: "point.3.connected.trianglepath.dotted",
-            section: .advanced,
-            statsPath: P4Route.systemCanGpio,
-            supportKey: nil,
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "smartShift",
-            title: "SmartShift 自动换挡",
-            summary: "实验性自动换挡：刹车确认后由 BODY 发出挡位请求，含车速与障碍物门槛。",
-            titleEN: "SmartShift",
-            summaryEN: "Experimental automatic shifting with brake confirmation, speed and obstacle gates.",
-            icon: "gearshift.layout.sixspeed",
-            section: .lab,
-            statsPath: P4Route.smartShiftStats,
-            supportKey: nil,
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "r79Timing",
-            title: "R79 时序捕获",
-            summary: "记录 R79 请求与控制器完成时序，导出 CSV 分析延迟与失败原因。",
-            titleEN: "R79 Timing Capture",
-            summaryEN: "Capture R79 request/completion timing and export a CSV.",
-            icon: "timer",
-            section: .lab,
-            statsPath: P4Route.r79TimingStatus,
-            supportKey: nil,
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "summon",
-            title: "召唤状态",
-            summary: "查看召唤会话、确认挡位、信号新鲜度与发送队列（只读）。",
-            titleEN: "Summon Status",
-            summaryEN: "View the current Summon session and status.",
-            icon: "dot.radiowaves.left.and.right",
-            section: .driving,
-            statsPath: P4Route.summonStats,
-            supportKey: nil,
-            controls: []
-        ),
+        
 
         FeatureModule(
             id: "r79",
@@ -525,7 +436,7 @@ enum FeatureCatalog {
             titleEN: "R79 / EU Unlock",
             summaryEN: "R79 mode, bit18 / bit19 and HW3 legacy policy.",
             icon: "gearshape.2",
-            section: .driving,
+            section: .advanced,
             statsPath: P4Route.r79Stats,
             supportKey: nil,
             controls: [
@@ -603,6 +514,63 @@ enum FeatureCatalog {
                 ),
             ]
         ),
+FeatureModule(
+            id: "fsd",
+            title: "FSD 注入",
+            summary: "在 CHASSIS 上注入 FSD 可视化标志；可设定 AP 激活时暂停。",
+            titleEN: "FSD Injection",
+            summaryEN: "Inject the FSD visualisation flag on CHASSIS, optionally suspended during AP.",
+            icon: "wand.and.stars",
+            section: .advanced,
+            statsPath: P4Route.fsdStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        
+
+        
+
+        FeatureModule(
+            id: "smartShift",
+            title: "SmartShift 自动换挡",
+            summary: "实验性自动换挡：刹车确认后由 BODY 发出挡位请求，含车速与障碍物门槛。",
+            titleEN: "SmartShift",
+            summaryEN: "Experimental automatic shifting with brake confirmation, speed and obstacle gates.",
+            icon: "gearshift.layout.sixspeed",
+            section: .advanced,
+            statsPath: P4Route.smartShiftStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
+            id: "r79Timing",
+            title: "R79 时序捕获",
+            summary: "记录 R79 请求与控制器完成时序，导出 CSV 分析延迟与失败原因。",
+            titleEN: "R79 Timing Capture",
+            summaryEN: "Capture R79 request/completion timing and export a CSV.",
+            icon: "timer",
+            section: .lab,
+            statsPath: P4Route.r79TimingStatus,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
+            id: "summon",
+            title: "召唤状态",
+            summary: "查看召唤会话、确认挡位、信号新鲜度与发送队列（只读）。",
+            titleEN: "Summon Status",
+            summaryEN: "View the current Summon session and status.",
+            icon: "dot.radiowaves.left.and.right",
+            section: .driving,
+            statsPath: P4Route.summonStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        
 
         FeatureModule(
             id: "country",
@@ -676,6 +644,38 @@ enum FeatureCatalog {
                 ),
             ]
         ),
+FeatureModule(
+            id: "alc",
+            title: "自动拨杆变道 (ALC)",
+            summary: "拨杆触发变道注入，可选择注入总线（CAN A / CAN B / 双路）。",
+            titleEN: "Auto Lane Change",
+            summaryEN: "Experimental 0x293 UI_autoLaneChange enable.",
+            icon: "road.lanes",
+            section: .driving,
+            statsPath: P4Route.alcStats,
+            supportKey: nil,
+            controls: [
+                FeatureControl(
+                    id: "alc.enabled", title: "启用自动变道", footnote: nil,
+                    kind: .toggle(key: "enabled", path: P4Route.alcUpdate, extra: []),
+                    readKey: "autoLaneChangeEnabled"
+                ),
+                FeatureControl(
+                    id: "alc.bus", title: "注入总线", footnote: "BOTH 会同时在两路发送",
+                    kind: .selectRead(
+                        key: "bus",
+                        readKey: "autoLaneChangeTargetBus",
+                        options: [
+                            .init(label: "CAN A", rawValue: "1"),
+                            .init(label: "CAN B", rawValue: "2"),
+                            .init(label: "BOTH", rawValue: "3"),
+                        ],
+                        path: P4Route.alcUpdate,
+                        extra: []
+                    )
+                ),
+            ]
+        ),
 
         FeatureModule(
             id: "ulc",
@@ -684,7 +684,7 @@ enum FeatureCatalog {
             titleEN: "Lane Change",
             summaryEN: "Confirmation, off-highway flag and blind-spot policy.",
             icon: "arrow.left.arrow.right",
-            section: .driving,
+            section: .advanced,
             statsPath: P4Route.ulcStats,
             supportKey: nil,
             controls: [
@@ -745,7 +745,7 @@ enum FeatureCatalog {
             titleEN: "Pedal Response",
             summaryEN: "Acceleration response mapping.",
             icon: "slider.horizontal.3",
-            section: .advanced,
+            section: .driving,
             statsPath: P4Route.pedalMapStats,
             supportKey: "pedalMapSupported",
             controls: [
@@ -822,7 +822,7 @@ enum FeatureCatalog {
             titleEN: "AP Accel / Regen",
             summaryEN: "Use Chill acceleration and chosen regen during AP.",
             icon: "car.side",
-            section: .advanced,
+            section: .driving,
             statsPath: P4Route.pedalMapStats,
             supportKey: "apDriveProfileSupported",
             controls: [
@@ -848,6 +848,18 @@ enum FeatureCatalog {
                     )
                 ),
             ]
+        ),
+FeatureModule(
+            id: "preheat",
+            title: "电池预热",
+            summary: "充电前主动请求 BMS 加热电池，达到目标温度或电池已暖后自动关闭。",
+            titleEN: "Battery Preheat",
+            summaryEN: "Ask the BMS to heat the pack before charging; stops at the target or when warm.",
+            icon: "thermometer.sun.fill",
+            section: .driving,
+            statsPath: P4Route.preheatStats,
+            supportKey: "preheatSupported",
+            controls: []
         ),
 
         FeatureModule(
@@ -945,38 +957,7 @@ enum FeatureCatalog {
             ]
         ),
 
-        FeatureModule(
-            id: "alc",
-            title: "自动拨杆变道 (ALC)",
-            summary: "拨杆触发变道注入，可选择注入总线（CAN A / CAN B / 双路）。",
-            titleEN: "Auto Lane Change",
-            summaryEN: "Experimental 0x293 UI_autoLaneChange enable.",
-            icon: "road.lanes",
-            section: .lab,
-            statsPath: P4Route.alcStats,
-            supportKey: nil,
-            controls: [
-                FeatureControl(
-                    id: "alc.enabled", title: "启用自动变道", footnote: nil,
-                    kind: .toggle(key: "enabled", path: P4Route.alcUpdate, extra: []),
-                    readKey: "autoLaneChangeEnabled"
-                ),
-                FeatureControl(
-                    id: "alc.bus", title: "注入总线", footnote: "BOTH 会同时在两路发送",
-                    kind: .selectRead(
-                        key: "bus",
-                        readKey: "autoLaneChangeTargetBus",
-                        options: [
-                            .init(label: "CAN A", rawValue: "1"),
-                            .init(label: "CAN B", rawValue: "2"),
-                            .init(label: "BOTH", rawValue: "3"),
-                        ],
-                        path: P4Route.alcUpdate,
-                        extra: []
-                    )
-                ),
-            ]
-        ),
+        
 
         FeatureModule(
             id: "window",
