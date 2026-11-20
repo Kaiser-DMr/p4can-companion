@@ -46,3 +46,4 @@ build/firmware-build/*.bin
 build/firmware-build/*.zip
 build/firmware-build/upstream-3.35.2/
 build/firmware-build/P4-CAN-Universal-v3.35.2/build/
+build/firmware-build/P4-CAN-Universal-v3.35.2-zh/build/
