@@ -183,6 +183,16 @@ SMARTSHIFT = {
     "engine": {"sends": 0, "confirmations": 0, "failures": 0},
     "templates": {"v12": {"ready": True}, "v13V14": {"ready": False}},
 }
+CAN_GPIO = {
+    "ok": True, "valid": True,
+    "active": [{"tx": 4, "rx": 5}, {"tx": 2, "rx": 3}, {"tx": 26, "rx": 27}],
+    "saved": [{"tx": 4, "rx": 5}, {"tx": 2, "rx": 3}, {"tx": 26, "rx": 27}],
+    "defaults": [{"tx": 20, "rx": 21}, {"tx": 22, "rx": 23}, {"tx": 26, "rx": 27}],
+    "allowedPins": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                    20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+                    37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54],
+    "rebootRequired": False, "canStopped": False, "error": "",
+}
 R79_TIMING = {"active": False, "allocationFailed": False, "expired": False,
               "session": None, "count": 0, "capacity": 32768, "dropped": 0,
               "elapsedMs": 0, "exporting": False, "driverErrorLost": 0,
@@ -610,6 +620,13 @@ def apply_post(path, qs):
     def val(k):
         return qs[k][0]
 
+    if path == "/api/system/can-gpio":
+        rows = []
+        for i in range(3):
+            tx = int(val(f"tx{i+1}")); rx = int(val(f"rx{i+1}"))
+            rows.append({"tx": tx, "rx": rx})
+        CAN_GPIO["saved"] = rows
+        return None
     if path == "/api/preheat/set":
         if has("enabled"):
             PREHEAT["enabled"] = _bool(val("enabled"))
@@ -1027,6 +1044,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(SERVICE)
         if path == "/api/smartshift/stats":
             return self.send_json(SMARTSHIFT)
+        if path == "/api/system/can-gpio":
+            return self.send_json(CAN_GPIO)
         if path == "/api/r79/timing/status":
             return self.send_json(R79_TIMING)
         if path == "/api/r79/timing/csv":

@@ -467,6 +467,19 @@ enum FeatureCatalog {
         ),
 
         FeatureModule(
+            id: "canGpio",
+            title: "CAN GPIO 设置",
+            summary: "设置三路 CAN 的 TX/RX 引脚；保存会停总线并重启，需确认线束后再改。",
+            titleEN: "CAN GPIO Settings",
+            summaryEN: "Set TX/RX pins for all three CAN buses; saving stops CAN and reboots.",
+            icon: "point.3.connected.trianglepath.dotted",
+            section: .advanced,
+            statsPath: P4Route.systemCanGpio,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
             id: "smartShift",
             title: "SmartShift 自动换挡",
             summary: "实验性自动换挡：刹车确认后由 BODY 发出挡位请求，含车速与障碍物门槛。",

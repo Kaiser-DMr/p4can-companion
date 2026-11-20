@@ -52,7 +52,7 @@ struct FeaturesView: View {
             if module.id == "headlight" || module.id == "rearFog" {
                 return environment.strobeSupported != false
             }
-            if ["preheat", "fsd", "serviceMode"].contains(module.id) {
+            if ["preheat", "fsd", "serviceMode", "canGpio"].contains(module.id) {
                 return environment.newFeaturesSupported == true
             }
             return true
@@ -149,6 +149,8 @@ struct FeaturesView: View {
                     FSDInjectionView()
                 } else if moduleID == "serviceMode" {
                     ServiceModeView()
+                } else if moduleID == "canGpio" {
+                    CanGpioView()
                 } else if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
                     FeatureDetailView(module: module)
                 }
@@ -389,6 +391,12 @@ struct FeaturesView: View {
             } else if module.id == "serviceMode" {
                 NavigationLink {
                     ServiceModeView()
+                } label: {
+                    FeatureRow(module: module, features: environment.featuresStatus)
+                }
+            } else if module.id == "canGpio" {
+                NavigationLink {
+                    CanGpioView()
                 } label: {
                     FeatureRow(module: module, features: environment.featuresStatus)
                 }

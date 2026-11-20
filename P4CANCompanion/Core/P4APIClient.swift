@@ -48,6 +48,7 @@ enum P4Route {
     static let r79TimingStart = "/api/r79/timing/start"
     static let r79TimingStop = "/api/r79/timing/stop"
     static let r79TimingCSV = "/api/r79/timing/csv"
+    static let systemCanGpio = "/api/system/can-gpio"
 
     // NAG
     static let nagConfig = "/api/nag/config"

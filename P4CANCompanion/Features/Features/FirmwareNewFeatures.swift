@@ -130,6 +130,7 @@ struct PreheatView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .navigationTitle(L10n.t("电池预热", "Battery Preheat"))
@@ -207,6 +208,7 @@ struct FSDInjectionView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .navigationTitle(L10n.t("FSD 注入", "FSD Injection"))
@@ -293,6 +295,7 @@ struct ServiceModeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .navigationTitle(L10n.t("Service Mode", "Service Mode"))
@@ -449,6 +452,7 @@ struct SmartShiftView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .navigationTitle(L10n.t("SmartShift 自动换挡", "SmartShift"))
@@ -588,6 +592,7 @@ struct R79TimingView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .navigationTitle(L10n.t("R79 时序捕获", "R79 Timing Capture"))
@@ -639,4 +644,157 @@ private struct FWActivityView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - CAN GPIO 设置
+
+struct CanGpioView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var draft: [Int] = [20, 21, 22, 23, 26, 27]
+    @State private var loaded = false
+    @State private var busy = false
+    @State private var confirmSave = false
+
+    private let keys = ["tx1", "rx1", "tx2", "rx2", "tx3", "rx3"]
+    private let labels = [
+        ("CAN 1 BODY", "TX"), ("CAN 1 BODY", "RX"),
+        ("CAN 2 CHASSIS", "TX"), ("CAN 2 CHASSIS", "RX"),
+        ("CAN 3 PARTY", "TX"), ("CAN 3 PARTY", "RX"),
+    ]
+
+    private var stats: P4JSON? { environment.endpointValue(P4Route.systemCanGpio) }
+    private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
+    private var allowedPins: [Int] {
+        (object["allowedPins"]?.arrayValue ?? []).compactMap { Int($0.intValue ?? -1) }
+    }
+
+    private func map(_ key: String) -> [[String: P4JSON]] {
+        (object[key]?.arrayValue ?? []).compactMap { $0.objectValue }
+    }
+
+    private func pinText(_ key: String, _ index: Int) -> String {
+        let rows = map(key)
+        guard rows.indices.contains(index) else { return "—" }
+        let tx = rows[index]["tx"]?.intValue ?? 0
+        let rx = rows[index]["rx"]?.intValue ?? 0
+        return "TX \(tx) / RX \(rx)"
+    }
+
+    var body: some View {
+        List {
+            Section(L10n.t("当前生效", "Active")) {
+                FWStatusRows(rows: [
+                    ("CAN 1 BODY", pinText("active", 0)),
+                    ("CAN 2 CHASSIS", pinText("active", 1)),
+                    ("CAN 3 PARTY", pinText("active", 2)),
+                ])
+            }
+
+            Section {
+                ForEach(0..<6, id: \.self) { index in
+                    Picker("\(labels[index].0) \(labels[index].1)", selection: Binding(
+                        get: { draft.indices.contains(index) ? draft[index] : 0 },
+                        set: { value in
+                            if draft.indices.contains(index) { draft[index] = value }
+                        }
+                    )) {
+                        ForEach(allowedPins, id: \.self) { pin in
+                            Text("GPIO \(pin)").tag(pin)
+                        }
+                    }
+                    .disabled(busy)
+                }
+            } header: {
+                Text(L10n.t("引脚", "Pins"))
+            } footer: {
+                Text(L10n.t("X179 线束：CHASSIS 2/3、BODY 4/5、PARTY 26/27；标准接线：20/21、22/23、26/27。保存会停止 CAN 并重启设备。",
+                            "X179 harness: CHASSIS 2/3, BODY 4/5, PARTY 26/27. Standard: 20/21, 22/23, 26/27. Saving stops CAN and reboots."))
+            }
+
+            Section {
+                Button(L10n.t("恢复默认引脚", "Restore defaults")) {
+                    loadDefaults()
+                }
+                .disabled(busy)
+
+                Button(role: .destructive) {
+                    confirmSave = true
+                } label: {
+                    Label(L10n.t("保存并重启", "Save and reboot"), systemImage: "externaldrive.badge.checkmark")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(busy || allowedPins.isEmpty)
+            }
+
+            Section(L10n.t("状态", "Status")) {
+                FWStatusRows(rows: [
+                    (L10n.t("映射有效", "Mapping valid"), object["valid"]?.boolValue == true ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                    (L10n.t("需要重启", "Reboot required"), object["rebootRequired"]?.boolValue == true ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                    (L10n.t("CAN 已停止", "CAN stopped"), object["canStopped"]?.boolValue == true ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                    (L10n.t("错误", "Error"), object["error"]?.stringValue ?? ""),
+                ])
+            }
+        }
+        .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Color.p4Background.ignoresSafeArea())
+        .navigationTitle(L10n.t("CAN GPIO 设置", "CAN GPIO"))
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) { ToastOverlay() }
+        .confirmationDialog(L10n.t("保存 GPIO 并重启？", "Save GPIO and reboot?"),
+                            isPresented: $confirmSave, titleVisibility: .visible) {
+            Button(L10n.t("保存并重启", "Save and reboot"), role: .destructive) { Task { await save() } }
+            Button(L10n.t("取消", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("设备会停止 CAN、写入引脚并重启；重启后请确认三路总线都有数据。",
+                        "The device stops CAN, writes the pins and reboots. Verify all three buses afterwards."))
+        }
+        .task { await poll() }
+        .onChange(of: stats) { _, _ in loadDraftsIfNeeded() }
+    }
+
+    private func loadDraftsIfNeeded() {
+        guard !loaded else { return }
+        let rows = map("saved").isEmpty ? map("active") : map("saved")
+        guard rows.count == 3 else { return }
+        var values: [Int] = []
+        for row in rows {
+            values.append(Int(row["tx"]?.intValue ?? 0))
+            values.append(Int(row["rx"]?.intValue ?? 0))
+        }
+        draft = values
+        loaded = true
+    }
+
+    private func loadDefaults() {
+        let rows = map("defaults")
+        guard rows.count == 3 else { return }
+        var values: [Int] = []
+        for row in rows {
+            values.append(Int(row["tx"]?.intValue ?? 20))
+            values.append(Int(row["rx"]?.intValue ?? 21))
+        }
+        draft = values
+        Haptics.impact()
+    }
+
+    private func save() async {
+        busy = true
+        defer { busy = false }
+        let query = zip(keys, draft).map { P4Param($0.0, String($0.1)) }
+        _ = await fwWrite(environment, path: P4Route.systemCanGpio, query: query, storeTo: P4Route.systemCanGpio)
+        environment.toast = P4Toast(message: L10n.t("GPIO 已保存，设备重启中…", "GPIO saved; device rebooting…"), style: .success)
+        Haptics.success()
+    }
+
+    private func poll() async {
+        await environment.refreshEndpoint(P4Route.systemCanGpio)
+        loadDraftsIfNeeded()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(2))
+            await environment.refreshEndpoint(P4Route.systemCanGpio)
+            loadDraftsIfNeeded()
+        }
+    }
 }
