@@ -78,9 +78,12 @@ final class AppEnvironment: ObservableObject {
     /// 固件是否带 v3.35.2 新功能（预热 / FSD / Service Mode / SmartShift / R79 时序）。
     /// nil = 尚未探测；只有确认存在时才展示这些入口，避免在 v3.29.3 上留下死模块。
     @Published private(set) var newFeaturesSupported: Bool?
+    /// 固件是否带 v3.35.3 的 Lighting Features（AP 强制远光 / 动态刹车灯）。
+    @Published private(set) var lightingSupported: Bool?
     /// 上次探测爆闪接口的时间：为 false 时每分钟复探一次，方便重新刷回带爆闪的固件后自动恢复入口。
     private var lastStrobeProbe: Date?
     private var lastNewFeaturesProbe: Date?
+    private var lastLightingProbe: Date?
 
     /// 三路 CAN 总线（CAN 1 BODY / CAN 2 CHASSIS / CAN 3 PARTY）。
     @Published private(set) var canBuses: [CanBusSnapshot] = []
@@ -368,6 +371,7 @@ final class AppEnvironment: ObservableObject {
         nagConfig = nil
         strobeSupported = nil
         newFeaturesSupported = nil
+        lightingSupported = nil
         mergedStats = [:]
         canBuses = []
         trendSamples = []
@@ -451,6 +455,10 @@ final class AppEnvironment: ObservableObject {
         if includeMeta, newFeaturesSupported != true, features != nil {
             let due = lastNewFeaturesProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeNewFeatures(using: currentClient) }
+        }
+        if includeMeta, lightingSupported != true, features != nil {
+            let due = lastLightingProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
+            if due { await probeLighting(using: currentClient) }
         }
         if let s3xy { s3xyStats = s3xy }
         if isS3XYEnabled && !showsS3XYTab {
@@ -635,6 +643,19 @@ final class AppEnvironment: ObservableObject {
             newFeaturesSupported = true
         } catch let error as P4APIError {
             if error.status == 404 { newFeaturesSupported = false }
+        } catch {
+            // 离线/超时：保持未知，下一轮再试。
+        }
+    }
+
+    /// 探测 v3.35.3 的 Lighting Features。
+    private func probeLighting(using client: P4APIClient) async {
+        lastLightingProbe = Date()
+        do {
+            _ = try await client.get(P4Route.lightingStats)
+            lightingSupported = true
+        } catch let error as P4APIError {
+            if error.status == 404 { lightingSupported = false }
         } catch {
             // 离线/超时：保持未知，下一轮再试。
         }

@@ -798,3 +798,85 @@ struct CanGpioView: View {
         }
     }
 }
+
+// MARK: - Lighting Features（v3.35.3）
+
+struct LightingFeaturesView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var busy = false
+
+    private var stats: P4JSON? { environment.endpointValue(P4Route.lightingStats) }
+    private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
+    private var apForced: Bool { object["apForcedHighBeam"]?.boolValue ?? false }
+    private var brakeMode: Int { Int(object["dynamicBrakeMode"]?.intValue ?? 0) }
+    private var stalkSupported: Bool { object["stalkSupported"]?.boolValue ?? false }
+
+    private var statusText: String {
+        if object["running"]?.boolValue == true { return L10n.t("AP 强制远光中", "AP forced high beam active") }
+        if !stalkSupported { return L10n.t("需要拨杆车型", "Requires a stalk profile") }
+        if apForced { return L10n.t("已授权 · AP 内推拨杆启动", "Enabled · push the stalk in AP to start") }
+        return L10n.t("就绪", "Ready")
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Toggle(L10n.t("AP 强制远光", "AP forced high beam"),
+                       isOn: Binding(get: { apForced }, set: { value in
+                           Task { await update("apForcedHighBeam", value ? "1" : "0") }
+                       }))
+                    .disabled(busy || !stalkSupported)
+
+                Picker(L10n.t("动态刹车灯", "Dynamic brake light"), selection: Binding(
+                    get: { brakeMode },
+                    set: { value in Task { await update("dynamicBrakeMode", String(value)) } }
+                )) {
+                    Text(L10n.t("关闭", "Off")).tag(0)
+                    Text(L10n.t("轻踩", "Light press")).tag(1)
+                    Text(L10n.t("重踩", "Hard press")).tag(2)
+                }
+                .disabled(busy)
+            } header: {
+                Text(L10n.t("控制", "Controls"))
+            } footer: {
+                Text(L10n.t("AP 强制远光只在拨杆车型可用：开启后在 AP 中把拨杆向外推一次启动，再推一次停止并恢复自适应远光。",
+                            "AP forced high beam is stalk-only: enable, push the stalk away once during AP to start, again to stop and restore adaptive high beam."))
+            }
+
+            Section(L10n.t("状态", "Status")) {
+                FWStatusRows(rows: [
+                    (L10n.t("状态", "State"), statusText),
+                    (L10n.t("AP 激活", "AP active"), object["apActive"]?.boolValue == true ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                    (L10n.t("拨杆车型", "Stalk profile"), stalkSupported ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                    (L10n.t("发送 / 失败", "TX / fail"),
+                     "\(object["txOk"]?.intValue ?? 0) / \(object["txFail"]?.intValue ?? 0)"),
+                ])
+            }
+        }
+        .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Color.p4Background.ignoresSafeArea())
+        .navigationTitle(L10n.t("灯光功能", "Lighting Features"))
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) { ToastOverlay() }
+        .task { await poll() }
+    }
+
+    private func update(_ key: String, _ value: String) async {
+        busy = true
+        defer { busy = false }
+        _ = await fwWrite(environment, path: P4Route.lightingUpdate,
+                          query: [P4Param(key, value)],
+                          storeTo: P4Route.lightingStats)
+        Haptics.impact()
+    }
+
+    private func poll() async {
+        await environment.refreshEndpoint(P4Route.lightingStats)
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            await environment.refreshEndpoint(P4Route.lightingStats)
+        }
+    }
+}

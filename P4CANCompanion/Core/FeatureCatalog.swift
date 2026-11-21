@@ -849,6 +849,19 @@ FeatureModule(
                 ),
             ]
         ),
+        FeatureModule(
+            id: "lighting",
+            title: "灯光功能",
+            summary: "AP 期间强制远光（需拨杆车型）与动态刹车灯（轻踩 / 重踩）。",
+            titleEN: "Lighting Features",
+            summaryEN: "AP forced high beam (stalk profiles) and dynamic brake lights.",
+            icon: "headlight.high.beam.fill",
+            section: .driving,
+            statsPath: P4Route.lightingStats,
+            supportKey: nil,
+            controls: []
+        ),
+
 FeatureModule(
             id: "preheat",
             title: "电池预热",

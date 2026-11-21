@@ -183,6 +183,9 @@ SMARTSHIFT = {
     "engine": {"sends": 0, "confirmations": 0, "failures": 0},
     "templates": {"v12": {"ready": True}, "v13V14": {"ready": False}},
 }
+LIGHTING = {"ok": True, "apForcedHighBeam": False, "dynamicBrakeMode": 0,
+            "running": False, "apActive": False, "stalkSupported": True,
+            "txOk": 0, "txFail": 0}
 CAN_GPIO = {
     "ok": True, "valid": True,
     "active": [{"tx": 4, "rx": 5}, {"tx": 2, "rx": 3}, {"tx": 26, "rx": 27}],
@@ -620,6 +623,12 @@ def apply_post(path, qs):
     def val(k):
         return qs[k][0]
 
+    if path == "/api/lighting/update":
+        if has("apForcedHighBeam"):
+            LIGHTING["apForcedHighBeam"] = _bool(val("apForcedHighBeam"))
+        if has("dynamicBrakeMode"):
+            LIGHTING["dynamicBrakeMode"] = int(val("dynamicBrakeMode"))
+        return None
     if path == "/api/system/can-gpio":
         rows = []
         for i in range(3):
@@ -1044,6 +1053,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(SERVICE)
         if path == "/api/smartshift/stats":
             return self.send_json(SMARTSHIFT)
+        if path == "/api/lighting/stats":
+            if FW_VARIANT.startswith("3.35.2") and not FW_VARIANT.startswith("3.35.3"):
+                return self.send_json({"ok": False, "error": "not found"}, status=404)
+            return self.send_json(LIGHTING)
         if path == "/api/system/can-gpio":
             return self.send_json(CAN_GPIO)
         if path == "/api/r79/timing/status":
