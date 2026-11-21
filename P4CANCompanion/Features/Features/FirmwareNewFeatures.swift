@@ -804,12 +804,14 @@ struct CanGpioView: View {
 struct LightingFeaturesView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var busy = false
+    @State private var attempted = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.lightingStats) }
     private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
     private var apForced: Bool { object["apForcedHighBeam"]?.boolValue ?? false }
     private var brakeMode: Int { Int(object["dynamicBrakeMode"]?.intValue ?? 0) }
     private var stalkSupported: Bool { object["stalkSupported"]?.boolValue ?? false }
+    private var unavailable: Bool { attempted && stats == nil }
 
     private var statusText: String {
         if object["running"]?.boolValue == true { return L10n.t("AP 强制远光中", "AP forced high beam active") }
@@ -820,12 +822,22 @@ struct LightingFeaturesView: View {
 
     var body: some View {
         List {
+            if unavailable {
+                Section {
+                    Label(L10n.t("当前固件不包含灯光功能（需要 v3.35.3 及以上）。",
+                                 "This firmware does not include Lighting Features (v3.35.3+ required)."),
+                          systemImage: "nosign")
+                        .font(.footnote)
+                        .foregroundStyle(.p4Warn)
+                }
+            }
+
             Section {
                 Toggle(L10n.t("AP 强制远光", "AP forced high beam"),
                        isOn: Binding(get: { apForced }, set: { value in
                            Task { await update("apForcedHighBeam", value ? "1" : "0") }
                        }))
-                    .disabled(busy || !stalkSupported)
+                    .disabled(busy || !stalkSupported || unavailable)
 
                 Picker(L10n.t("动态刹车灯", "Dynamic brake light"), selection: Binding(
                     get: { brakeMode },
@@ -835,7 +847,7 @@ struct LightingFeaturesView: View {
                     Text(L10n.t("轻踩", "Light press")).tag(1)
                     Text(L10n.t("重踩", "Hard press")).tag(2)
                 }
-                .disabled(busy)
+                .disabled(busy || unavailable)
             } header: {
                 Text(L10n.t("控制", "Controls"))
             } footer: {
@@ -874,6 +886,7 @@ struct LightingFeaturesView: View {
 
     private func poll() async {
         await environment.refreshEndpoint(P4Route.lightingStats)
+        attempted = true
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             await environment.refreshEndpoint(P4Route.lightingStats)

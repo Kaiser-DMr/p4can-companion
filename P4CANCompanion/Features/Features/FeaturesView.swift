@@ -53,7 +53,9 @@ struct FeaturesView: View {
                 return environment.strobeSupported != false
             }
             if module.id == "lighting" {
-                return environment.lightingSupported == true
+                // 3.35.2 起先展示入口；3.35.2 上点进去会明确提示需要 3.35.3，
+                // 而不是整行消失让人以为 App 没更新。
+                return environment.newFeaturesSupported == true
             }
             if ["preheat", "fsd", "serviceMode", "canGpio"].contains(module.id) {
                 return environment.newFeaturesSupported == true
