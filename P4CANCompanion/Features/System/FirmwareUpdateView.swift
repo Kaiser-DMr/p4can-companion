@@ -150,13 +150,7 @@ struct FirmwareUpdateView: View {
             // 用于在没有真机的情况下跑通 OTA 全链路（mock 的 /update 会回同样的状态 JSON）。
             guard let path = ProcessInfo.processInfo.environment["P4CAN_OTA_FILE"] else { return }
             try? await Task.sleep(for: .seconds(1))
-            let url = URL(fileURLWithPath: path)
-            if let problem = validate(url) {
-                environment.toast = P4Toast(message: problem, style: .failure)
-                return
-            }
-            inspect(url)
-            pickedURL = url
+            handlePicked(URL(fileURLWithPath: path))
             if ProcessInfo.processInfo.environment["P4CAN_OTA_CONFIRM"] == "1" {
                 confirmsUpload = true
             } else {
@@ -194,17 +188,13 @@ struct FirmwareUpdateView: View {
         .overlay(alignment: .bottom) { ToastOverlay() }
         .fileImporter(
             isPresented: $showsImporter,
-            allowedContentTypes: [.data],
+            // .bin 在不同文件提供商里的 UTI 不一致，用 .item 保证可选；
+            // 真正的合法性由 validate() 的后缀/魔数/大小检查负责。
+            allowedContentTypes: [.item],
             onCompletion: { result in
                 switch result {
                 case .success(let url):
-                    if let problem = validate(url) {
-                        pickedURL = nil
-                        environment.toast = P4Toast(message: problem, style: .failure)
-                    } else {
-                        inspect(url)
-                        pickedURL = url
-                    }
+                    handlePicked(url)
                 case .failure(let error):
                     environment.toast = P4Toast(
                         message: L10n.t("选择文件失败：\(error.localizedDescription)",
@@ -249,6 +239,38 @@ struct FirmwareUpdateView: View {
         return L10n.t(
             "文件：\(name)（\(size)）\n当前固件：\(firmwareText)\n刷写过程中请勿断电；完成后设备会自动重启，连接会短暂中断。",
             "File: \(name) (\(size))\nCurrent firmware: \(firmwareText)\nDo not cut power while flashing. The device reboots afterwards and the link drops briefly."
+        )
+    }
+
+    /// 文件 App 返回的是 security-scoped URL，回调结束后可能立即失效；
+    /// 先复制到临时目录，后续校验/算 SHA/上传都读本地副本。
+    private func handlePicked(_ url: URL) {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent(url.lastPathComponent)
+        try? FileManager.default.removeItem(at: destination)
+
+        var localURL = url
+        do {
+            try FileManager.default.copyItem(at: url, to: destination)
+            localURL = destination
+        } catch {
+            // 有的提供商返回的就是本地 URL，复制失败时继续用原 URL 尝试。
+        }
+
+        if let problem = validate(localURL) {
+            pickedURL = nil
+            environment.toast = P4Toast(message: problem, style: .failure)
+            return
+        }
+        inspect(localURL)
+        pickedURL = localURL
+        environment.toast = P4Toast(
+            message: L10n.t("已选择 \(localURL.lastPathComponent)",
+                            "Selected \(localURL.lastPathComponent)"),
+            style: .info
         )
     }
 
