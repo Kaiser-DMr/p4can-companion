@@ -256,11 +256,15 @@ struct ServiceModeView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var busy = false
     @State private var confirmEnter = false
+    @State private var intervalDraft = "150"
+    @State private var intervalLoaded = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.serviceModeStats) }
     private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
     private var canEnter: Bool { object["canEnter"]?.boolValue ?? false }
     private var chinaRestore: Bool { object["chinaRestore"]?.boolValue ?? false }
+    private var restoreForce: Bool { object["restoreForce"]?.boolValue ?? false }
+    private var restoreInterval: Int { Int(object["restoreIntervalMs"]?.intValue ?? 150) }
 
     var body: some View {
         List {
@@ -278,6 +282,27 @@ struct ServiceModeView: View {
                 Toggle(L10n.t("中国市场恢复帧", "China restore frames"),
                        isOn: Binding(get: { chinaRestore }, set: { value in Task { await setRestore(value) } }))
                     .disabled(busy)
+
+                Toggle(L10n.t("强制注入 0x331", "Force 0x331 injection"),
+                       isOn: Binding(get: { restoreForce }, set: { value in
+                           Task { await setForce(value, interval: restoreInterval) }
+                       }))
+                    .disabled(busy)
+
+                HStack {
+                    Text(L10n.t("注入间隔（毫秒）", "Interval (ms)"))
+                    Spacer()
+                    TextField("150", text: $intervalDraft)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 96)
+                        .textFieldStyle(.roundedBorder)
+                    Button(L10n.t("保存", "Save")) {
+                        Task { await setForce(restoreForce, interval: Int(intervalDraft) ?? 150) }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(busy)
+                }
             } header: {
                 Text(L10n.t("控制", "Controls"))
             } footer: {
@@ -289,6 +314,8 @@ struct ServiceModeView: View {
                 FWStatusRows(rows: [
                     (L10n.t("可进入", "Can enter"), canEnter ? L10n.t("是", "Yes") : L10n.t("否", "No")),
                     (L10n.t("恢复帧", "Restore frames"), chinaRestore ? L10n.t("开", "On") : L10n.t("关", "Off")),
+                    (L10n.t("强制注入", "Force injection"), restoreForce ? L10n.t("开", "On") : L10n.t("关", "Off")),
+                    (L10n.t("注入间隔", "Interval"), "\(restoreInterval) ms"),
                     (L10n.t("恢复发送 / 失败", "Restore TX / fail"),
                      "\(object["restoreTxOk"]?.intValue ?? 0) / \(object["restoreTxFail"]?.intValue ?? 0)"),
                 ])
@@ -318,6 +345,17 @@ struct ServiceModeView: View {
         Haptics.success()
     }
 
+    private func setForce(_ enabled: Bool, interval: Int) async {
+        busy = true
+        defer { busy = false }
+        let clamped = min(max(interval, 10), 60000)
+        _ = await fwWrite(environment, path: P4Route.serviceModeForce, query: [
+            P4Param("enabled", enabled ? "1" : "0"),
+            P4Param("intervalMs", String(clamped)),
+        ], storeTo: P4Route.serviceModeStats)
+        Haptics.impact()
+    }
+
     private func setRestore(_ value: Bool) async {
         busy = true
         defer { busy = false }
@@ -329,6 +367,10 @@ struct ServiceModeView: View {
 
     private func poll() async {
         await environment.refreshEndpoint(P4Route.serviceModeStats)
+        if !intervalLoaded, stats != nil {
+            intervalDraft = String(restoreInterval)
+            intervalLoaded = true
+        }
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             await environment.refreshEndpoint(P4Route.serviceModeStats)
@@ -812,6 +854,11 @@ struct LightingFeaturesView: View {
     private var brakeMode: Int { Int(object["dynamicBrakeMode"]?.intValue ?? 0) }
     private var stalkSupported: Bool { object["stalkSupported"]?.boolValue ?? false }
     private var unavailable: Bool { attempted && stats == nil }
+    private var hasStrobe: Bool { object["highBeamStrobe"] != nil || object["rearFogStrobe"] != nil }
+    private var highBeamStrobe: Bool { object["highBeamStrobe"]?.boolValue ?? false }
+    private var rearFogStrobe: Bool { object["rearFogStrobe"]?.boolValue ?? false }
+    private var highBeamRunning: Bool { object["highBeamStrobeRunning"]?.boolValue ?? false }
+    private var rearFogRunning: Bool { object["rearFogStrobeRunning"]?.boolValue ?? false }
 
     private var statusText: String {
         if object["running"]?.boolValue == true { return L10n.t("AP 强制远光中", "AP forced high beam active") }
@@ -829,6 +876,27 @@ struct LightingFeaturesView: View {
                           systemImage: "nosign")
                         .font(.footnote)
                         .foregroundStyle(.p4Warn)
+                }
+            }
+
+            if hasStrobe {
+                Section {
+                    Toggle(L10n.t("前大灯爆闪", "High beam strobe"),
+                           isOn: Binding(get: { highBeamStrobe }, set: { value in
+                               Task { await update("highBeamStrobe", value ? "1" : "0") }
+                           }))
+                        .disabled(busy || !stalkSupported || unavailable)
+
+                    Toggle(L10n.t("后雾灯爆闪", "Rear fog strobe"),
+                           isOn: Binding(get: { rearFogStrobe }, set: { value in
+                               Task { await update("rearFogStrobe", value ? "1" : "0") }
+                           }))
+                        .disabled(busy || unavailable)
+                } header: {
+                    Text(L10n.t("爆闪", "Strobe"))
+                } footer: {
+                    Text(L10n.t("前大灯爆闪需要拨杆车型；开启后在 AP 中推拨杆触发。后雾灯爆闪直接脉冲 0x273。",
+                                "High beam strobe requires a stalk profile; trigger it with the stalk in AP. Rear fog strobe pulses 0x273."))
                 }
             }
 
@@ -860,6 +928,8 @@ struct LightingFeaturesView: View {
                     (L10n.t("状态", "State"), statusText),
                     (L10n.t("AP 激活", "AP active"), object["apActive"]?.boolValue == true ? L10n.t("是", "Yes") : L10n.t("否", "No")),
                     (L10n.t("拨杆车型", "Stalk profile"), stalkSupported ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                    (L10n.t("前大灯爆闪运行", "High beam strobe"), highBeamRunning ? L10n.t("运行中", "Running") : L10n.t("—", "—")),
+                    (L10n.t("后雾灯爆闪运行", "Rear fog strobe"), rearFogRunning ? L10n.t("运行中", "Running") : L10n.t("—", "—")),
                     (L10n.t("发送 / 失败", "TX / fail"),
                      "\(object["txOk"]?.intValue ?? 0) / \(object["txFail"]?.intValue ?? 0)"),
                 ])
@@ -890,6 +960,222 @@ struct LightingFeaturesView: View {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             await environment.refreshEndpoint(P4Route.lightingStats)
+        }
+    }
+}
+
+// MARK: - Developer Test（v3.35.6）
+
+struct DeveloperTestView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var busy = false
+
+    private let fields = [
+        "UI_showLaneGraph",
+        "UI_showTrackLabels",
+        "UI_apply2021_1341_DDAW",
+        "UI_apply2021_1958_ISA",
+        "UI_apply2021_646_ELKS",
+        "UI_regulatoryLKA",
+    ]
+
+    private var stats: P4JSON? { environment.endpointValue(P4Route.developerTestStats) }
+    private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
+    private var enabled: Bool { object["enabled"]?.boolValue ?? false }
+    private var values: Int { Int(object["values"]?.intValue ?? 0) }
+
+    var body: some View {
+        List {
+            Section {
+                Toggle(L10n.t("启用 Developer Test", "Enable Developer Test"),
+                       isOn: Binding(get: { enabled }, set: { value in Task { await update(enabled: value) } }))
+                    .disabled(busy)
+
+                ForEach(Array(fields.enumerated()), id: \.offset) { index, name in
+                    Toggle(name, isOn: Binding(
+                        get: { (values & (1 << index)) != 0 },
+                        set: { value in Task { await update(bit: index, on: value) } }
+                    ))
+                    .disabled(busy || !enabled)
+                }
+            } header: {
+                Text(L10n.t("0x3FD 信号覆盖", "0x3FD overrides"))
+            } footer: {
+                Text(L10n.t("关闭总开关时保留原厂值；开启后每路强制为 1 或 0。仅用于测试。",
+                            "When disabled the stock values are kept; when enabled each bit is forced to 1 or 0. Testing only."))
+            }
+
+            Section(L10n.t("CHASSIS 读值", "CHASSIS stock")) {
+                ForEach(Array(fields.enumerated()), id: \.offset) { index, name in
+                    FWStatusRows(rows: [
+                        (name, object["stock\(index)"]?.intValue.map { String($0) } ?? "—")
+                    ])
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Color.p4Background.ignoresSafeArea())
+        .navigationTitle(L10n.t("Developer Test", "Developer Test"))
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) { ToastOverlay() }
+        .task { await poll() }
+    }
+
+    private func update(enabled newEnabled: Bool? = nil, bit: Int? = nil, on: Bool? = nil) async {
+        busy = true
+        defer { busy = false }
+        let e = newEnabled ?? enabled
+        var mask = values
+        if let bit, let on {
+            if on { mask |= (1 << bit) } else { mask &= ~(1 << bit) }
+        }
+        _ = await fwWrite(environment, path: P4Route.developerTestUpdate, query: [
+            P4Param("enabled", e ? "1" : "0"),
+            P4Param("values", String(mask)),
+        ], storeTo: P4Route.developerTestStats)
+        Haptics.impact()
+    }
+
+    private func poll() async {
+        await environment.refreshEndpoint(P4Route.developerTestStats)
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            await environment.refreshEndpoint(P4Route.developerTestStats)
+        }
+    }
+}
+
+// MARK: - 召唤版本标识（v3.35.6）
+
+struct SummonVersionView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var busy = false
+
+    private var stats: P4JSON? { environment.endpointValue(P4Route.summonVersionStats) }
+    private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
+    private var enabled: Bool { object["enabled"]?.boolValue ?? false }
+    private var value: Int { Int(object["value"]?.intValue ?? 1) }
+
+    var body: some View {
+        List {
+            Section {
+                Toggle(L10n.t("覆盖 APP_summonVersionIdentifier", "Override APP_summonVersionIdentifier"),
+                       isOn: Binding(get: { enabled }, set: { v in Task { await update(enabled: v) } }))
+                    .disabled(busy)
+
+                Picker(L10n.t("注入值", "Value"), selection: Binding(
+                    get: { value },
+                    set: { v in Task { await update(value: v) } }
+                )) {
+                    Text("1").tag(1)
+                    Text("2").tag(2)
+                }
+                .disabled(busy || !enabled)
+            } header: {
+                Text(L10n.t("CHASSIS 0x259", "CHASSIS 0x259"))
+            } footer: {
+                Text(L10n.t("只在 P 档或召唤期间注入；关闭时保留原厂值。",
+                            "Injected only while parked or summoning; stock value is kept when disabled."))
+            }
+
+            Section(L10n.t("状态", "Status")) {
+                FWStatusRows(rows: [
+                    (L10n.t("开关", "Enabled"), enabled ? L10n.t("开", "On") : L10n.t("关", "Off")),
+                    (L10n.t("原厂值", "Stock"), object["stock"]?.intValue.map { String($0) } ?? "—"),
+                    (L10n.t("门控", "Gate"), object["gateAllowed"]?.boolValue == true
+                        ? L10n.t("允许注入", "Allowed") : L10n.t("等待 P 档/召唤", "Waiting for P/summon")),
+                ])
+            }
+        }
+        .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Color.p4Background.ignoresSafeArea())
+        .navigationTitle(L10n.t("召唤版本标识", "Summon Version"))
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) { ToastOverlay() }
+        .task { await poll() }
+    }
+
+    private func update(enabled newEnabled: Bool? = nil, value newValue: Int? = nil) async {
+        busy = true
+        defer { busy = false }
+        let e = newEnabled ?? enabled
+        let v = newValue ?? value
+        _ = await fwWrite(environment, path: P4Route.summonVersionUpdate, query: [
+            P4Param("enabled", e ? "1" : "0"),
+            P4Param("value", String(v)),
+        ], storeTo: P4Route.summonVersionStats)
+        Haptics.impact()
+    }
+
+    private func poll() async {
+        await environment.refreshEndpoint(P4Route.summonVersionStats)
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            await environment.refreshEndpoint(P4Route.summonVersionStats)
+        }
+    }
+}
+
+// MARK: - 网页语言（v3.35.6）
+
+struct DashboardLanguageView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var busy = false
+
+    private var stats: P4JSON? { environment.endpointValue(P4Route.dashboardLanguage) }
+    private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
+    private var language: String { object["language"]?.stringValue ?? "zh-CN" }
+
+    private let options: [(String, String)] = [
+        ("zh-CN", "简体中文"),
+        ("zh-TW", "繁體中文"),
+        ("en", "English"),
+    ]
+
+    var body: some View {
+        List {
+            Section {
+                Picker(L10n.t("网页语言", "Dashboard language"), selection: Binding(
+                    get: { language },
+                    set: { value in Task { await setLanguage(value) } }
+                )) {
+                    ForEach(options, id: \.0) { code, label in
+                        Text(label).tag(code)
+                    }
+                }
+                .disabled(busy)
+            } footer: {
+                Text(L10n.t("只切换设备网页（192.168.4.1）的语言，不改变 App 语言。",
+                            "Changes the device dashboard language only, not the App language."))
+            }
+        }
+        .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Color.p4Background.ignoresSafeArea())
+        .navigationTitle(L10n.t("语言", "Language"))
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) { ToastOverlay() }
+        .task { await poll() }
+    }
+
+    private func setLanguage(_ code: String) async {
+        busy = true
+        defer { busy = false }
+        _ = await fwWrite(environment, path: P4Route.dashboardLanguage,
+                          query: [P4Param("language", code)], storeTo: P4Route.dashboardLanguage)
+        Haptics.impact()
+    }
+
+    private func poll() async {
+        await environment.refreshEndpoint(P4Route.dashboardLanguage)
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(2))
+            await environment.refreshEndpoint(P4Route.dashboardLanguage)
         }
     }
 }

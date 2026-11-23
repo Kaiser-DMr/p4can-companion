@@ -51,6 +51,12 @@ enum P4Route {
     static let systemCanGpio = "/api/system/can-gpio"
     static let lightingStats = "/api/lighting/stats"
     static let lightingUpdate = "/api/lighting/update"
+    static let developerTestStats = "/api/developer-test/stats"
+    static let developerTestUpdate = "/api/developer-test/update"
+    static let dashboardLanguage = "/api/dashboard/language"
+    static let summonVersionStats = "/api/summon-version/stats"
+    static let summonVersionUpdate = "/api/summon-version/update"
+    static let serviceModeForce = "/api/service-mode/force"
 
     // NAG
     static let nagConfig = "/api/nag/config"

@@ -47,7 +47,7 @@ struct FeaturesView: View {
     /// 功能模块（不含车型卡片与实验室专属工具）
     private var modules: [FeatureModule] {
         FeatureCatalog.modules.filter { module in
-            guard module.section != .lab, module.id != "profile" else { return false }
+            guard module.id != "profile" else { return false }
             // v3.35.2 起官方固件移除了爆闪接口：探测到 404 后不再展示这两个入口。
             if module.id == "headlight" || module.id == "rearFog" {
                 return environment.strobeSupported != false
@@ -56,6 +56,9 @@ struct FeaturesView: View {
                 // 3.35.2 起先展示入口；3.35.2 上点进去会明确提示需要 3.35.3，
                 // 而不是整行消失让人以为 App 没更新。
                 return environment.newFeaturesSupported == true
+            }
+            if ["devTest", "summonVersion"].contains(module.id) {
+                return environment.v356Supported == true
             }
             if ["preheat", "fsd", "serviceMode", "canGpio"].contains(module.id) {
                 return environment.newFeaturesSupported == true
@@ -67,7 +70,7 @@ struct FeaturesView: View {
     /// 全量行（含已置顶的）：搜索、置顶解析与深链滚动共用。
     private var allEntries: [Entry] {
         modules.map { Entry(id: $0.id, kind: .module($0)) }
-            + [Entry(id: "s3xy", kind: .s3xy), Entry(id: "lab", kind: .lab)]
+            + [Entry(id: "s3xy", kind: .s3xy)]
     }
 
     /// 搜索与调试锚点使用的扁平行列表。
@@ -158,6 +161,12 @@ struct FeaturesView: View {
                     CanGpioView()
                 } else if moduleID == "lighting" {
                     LightingFeaturesView()
+                } else if moduleID == "devTest" {
+                    DeveloperTestView()
+                } else if moduleID == "summonVersion" {
+                    SummonVersionView()
+                } else if moduleID == "modeh" {
+                    ModeHView()
                 } else if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
                     FeatureDetailView(module: module)
                 }
@@ -413,6 +422,24 @@ struct FeaturesView: View {
                 } label: {
                     FeatureRow(module: module, features: environment.featuresStatus)
                 }
+            } else if module.id == "devTest" {
+                NavigationLink {
+                    DeveloperTestView()
+                } label: {
+                    FeatureRow(module: module, features: environment.featuresStatus)
+                }
+            } else if module.id == "summonVersion" {
+                NavigationLink {
+                    SummonVersionView()
+                } label: {
+                    FeatureRow(module: module, features: environment.featuresStatus)
+                }
+            } else if module.id == "modeh" {
+                NavigationLink {
+                    ModeHView()
+                } label: {
+                    FeatureRow(module: module, features: environment.featuresStatus)
+                }
             } else {
                 NavigationLink {
                     FeatureDetailView(module: module)
@@ -489,8 +516,8 @@ struct FeaturesView: View {
             Text(L10n.t("灯光类功能会实际控制车辆灯光，请只在安全环境使用；爆闪期间可随时停止。",
                         "Lighting features drive the real lamps. Use them only in a safe environment; you can stop a strobe at any time."))
         } else if group.id == groups.last?.id {
-            Text(L10n.t("开关状态全部读取自设备；LAB Menu 打开后底部才出现「实验室」标签。长按功能可置顶。",
-                        "All switch states come from the device. The Lab tab appears only after LAB Menu is on. Long-press to pin."))
+            Text(L10n.t("开关状态全部读取自设备；实验室功能已合并到本页。长按功能可置顶。",
+                        "All switch states come from the device. Lab features are merged into this page. Long-press to pin."))
         }
     }
 

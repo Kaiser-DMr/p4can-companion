@@ -73,8 +73,8 @@ struct FeatureModule: Identifiable, Sendable {
         case lighting = "灯光"
         case driving = "功能"
         case body = "车身与舒适"
-        case lab = "实验室功能"
         case advanced = "实验"
+        case lab = "实验室功能"
 
         /// 分组色板：决定图标瓦片底色，让「灯光/驾驶辅助/车身」一眼可分。
         var tint: Color {
@@ -188,6 +188,10 @@ enum FeatureCatalog {
                 FeatureControl(
                     id: "nag.pauseAtZero", title: "零速暂停", footnote: "停车时停止注入",
                     kind: .toggle(key: "pauseAtZeroSpeed", path: P4Route.nagUpdate, extra: [])
+                ),
+                FeatureControl(
+                    id: "nag.pauseLaneChange", title: "变道时暂停", footnote: "AP 自动变道时暂停扭矩注入",
+                    kind: .toggle(key: "pauseDuringLaneChange", path: P4Route.nagUpdate, extra: [])
                 ),
                 FeatureControl(
                     id: "nag.tsl9Sequence", title: "TSL9 时序", footnote: nil,
@@ -801,6 +805,32 @@ FeatureModule(
                 ),
             ]
         ),
+        FeatureModule(
+            id: "devTest",
+            title: "Developer Test",
+            summary: "覆盖 CHASSIS 0x3FD 的六路 UI 信号，仅用于测试。",
+            titleEN: "Developer Test",
+            summaryEN: "Override six UI signals on CHASSIS 0x3FD for testing.",
+            icon: "wrench.adjustable.fill",
+            section: .advanced,
+            statsPath: P4Route.developerTestStats,
+            supportKey: nil,
+            controls: []
+        ),
+
+        FeatureModule(
+            id: "summonVersion",
+            title: "召唤版本标识",
+            summary: "覆盖 0x259 的 APP_summonVersionIdentifier，仅在 P 档或召唤时注入。",
+            titleEN: "Summon Version",
+            summaryEN: "Override APP_summonVersionIdentifier on 0x259 while parked or summoning.",
+            icon: "car.side.arrowtriangle.up",
+            section: .advanced,
+            statsPath: P4Route.summonVersionStats,
+            supportKey: nil,
+            controls: []
+        ),
+
 
         FeatureModule(
             id: "profile",

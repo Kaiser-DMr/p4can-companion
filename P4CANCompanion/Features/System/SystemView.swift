@@ -361,6 +361,20 @@ private struct SystemSection: View {
                 Text(L10n.t("固件", "Firmware"))
             }
 
+            if environment.v356Supported == true {
+                NavigationLink {
+                    DashboardLanguageView()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("语言", "Language"))
+                        Text(L10n.t("设备网页语言 · EN / 简中 / 繁中",
+                                    "Dashboard language · EN / Simplified / Traditional"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             NavigationLink {
                 WirelessView()
             } label: {

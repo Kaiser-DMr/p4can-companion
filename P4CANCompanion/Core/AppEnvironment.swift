@@ -80,10 +80,13 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var newFeaturesSupported: Bool?
     /// 固件是否带 v3.35.3 的 Lighting Features（AP 强制远光 / 动态刹车灯）。
     @Published private(set) var lightingSupported: Bool?
+    /// 固件是否带 v3.35.6 功能（Developer Test / 语言 / 召唤版本）。
+    @Published private(set) var v356Supported: Bool?
     /// 上次探测爆闪接口的时间：为 false 时每分钟复探一次，方便重新刷回带爆闪的固件后自动恢复入口。
     private var lastStrobeProbe: Date?
     private var lastNewFeaturesProbe: Date?
     private var lastLightingProbe: Date?
+    private var lastV356Probe: Date?
 
     /// 三路 CAN 总线（CAN 1 BODY / CAN 2 CHASSIS / CAN 3 PARTY）。
     @Published private(set) var canBuses: [CanBusSnapshot] = []
@@ -372,6 +375,7 @@ final class AppEnvironment: ObservableObject {
         strobeSupported = nil
         newFeaturesSupported = nil
         lightingSupported = nil
+        v356Supported = nil
         mergedStats = [:]
         canBuses = []
         trendSamples = []
@@ -459,6 +463,10 @@ final class AppEnvironment: ObservableObject {
         if includeMeta, lightingSupported != true, features != nil {
             let due = lastLightingProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeLighting(using: currentClient) }
+        }
+        if includeMeta, v356Supported != true, features != nil {
+            let due = lastV356Probe.map { Date().timeIntervalSince($0) > 60 } ?? true
+            if due { await probeV356(using: currentClient) }
         }
         if let s3xy { s3xyStats = s3xy }
         if isS3XYEnabled && !showsS3XYTab {
@@ -656,6 +664,19 @@ final class AppEnvironment: ObservableObject {
             lightingSupported = true
         } catch let error as P4APIError {
             if error.status == 404 { lightingSupported = false }
+        } catch {
+            // 离线/超时：保持未知，下一轮再试。
+        }
+    }
+
+    /// 探测 v3.35.6 功能（Developer Test / 语言 / 召唤版本）。
+    private func probeV356(using client: P4APIClient) async {
+        lastV356Probe = Date()
+        do {
+            _ = try await client.get(P4Route.developerTestStats)
+            v356Supported = true
+        } catch let error as P4APIError {
+            if error.status == 404 { v356Supported = false }
         } catch {
             // 离线/超时：保持未知，下一轮再试。
         }

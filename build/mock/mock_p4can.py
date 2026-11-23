@@ -171,7 +171,8 @@ PREHEAT = {
 }
 FSD = {"enabled": False, "suspendDuringAp": True, "values": 0,
        "mux0Fresh": True, "stock1": "0x00", "txOk": 0, "txFail": 0, "apBlocked": False}
-SERVICE = {"canEnter": True, "chinaRestore": False, "restoreTxOk": 0, "restoreTxFail": 0}
+SERVICE = {"canEnter": True, "chinaRestore": False, "restoreTxOk": 0, "restoreTxFail": 0,
+           "restoreForce": False, "restoreIntervalMs": 150}
 SMARTSHIFT = {
     "profileSupported": True, "executionEnabled": False, "protocol": "AUTO",
     "state": "IDLE", "target": "NONE", "source": "NONE", "reason": "NONE",
@@ -183,7 +184,13 @@ SMARTSHIFT = {
     "engine": {"sends": 0, "confirmations": 0, "failures": 0},
     "templates": {"v12": {"ready": True}, "v13V14": {"ready": False}},
 }
-LIGHTING = {"ok": True, "apForcedHighBeam": False, "dynamicBrakeMode": 0,
+DEVTEST = {"enabled": False, "values": 0, "stock0": 0, "stock1": 1,
+           "stock2": 0, "stock3": 1, "stock4": 0, "stock5": 1}
+LANGUAGE = {"language": "zh-CN"}
+SUMMON_VERSION = {"enabled": False, "value": 1, "stock": 1, "gateAllowed": True}
+LIGHTING = {"ok": True, "highBeamStrobe": False, "rearFogStrobe": False,
+            "highBeamStrobeRunning": False, "rearFogStrobeRunning": False,
+            "apForcedHighBeam": False, "dynamicBrakeMode": 0,
             "running": False, "apActive": False, "stalkSupported": True,
             "txOk": 0, "txFail": 0}
 CAN_GPIO = {
@@ -623,6 +630,28 @@ def apply_post(path, qs):
     def val(k):
         return qs[k][0]
 
+    if path == "/api/developer-test/update":
+        if has("enabled"):
+            DEVTEST["enabled"] = _bool(val("enabled"))
+        if has("values"):
+            DEVTEST["values"] = int(val("values"))
+        return None
+    if path == "/api/dashboard/language":
+        if has("language"):
+            LANGUAGE["language"] = val("language")
+        return None
+    if path == "/api/summon-version/update":
+        if has("enabled"):
+            SUMMON_VERSION["enabled"] = _bool(val("enabled"))
+        if has("value"):
+            SUMMON_VERSION["value"] = int(val("value"))
+        return None
+    if path == "/api/service-mode/force":
+        if has("enabled"):
+            SERVICE["restoreForce"] = _bool(val("enabled"))
+        if has("intervalMs"):
+            SERVICE["restoreIntervalMs"] = int(val("intervalMs"))
+        return None
     if path == "/api/lighting/update":
         if has("apForcedHighBeam"):
             LIGHTING["apForcedHighBeam"] = _bool(val("apForcedHighBeam"))
@@ -1053,6 +1082,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(SERVICE)
         if path == "/api/smartshift/stats":
             return self.send_json(SMARTSHIFT)
+        if path == "/api/developer-test/stats":
+            return self.send_json(DEVTEST)
+        if path == "/api/dashboard/language":
+            return self.send_json(LANGUAGE)
+        if path == "/api/summon-version/stats":
+            return self.send_json(SUMMON_VERSION)
         if path == "/api/lighting/stats":
             if FW_VARIANT.startswith("3.35.2") and not FW_VARIANT.startswith("3.35.3"):
                 return self.send_json({"ok": False, "error": "not found"}, status=404)

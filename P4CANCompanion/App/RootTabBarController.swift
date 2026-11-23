@@ -14,7 +14,6 @@ final class RootTabBarController: UITabBarController {
 
     private var overviewController: UIViewController!
     private var featuresController: UIViewController!
-    private var labController: UIViewController!
     private var s3xyController: UIViewController!
     private var systemController: UIViewController!
     #if DEBUG
@@ -61,13 +60,6 @@ final class RootTabBarController: UITabBarController {
             accessibilityLabel: L10n.t("功能开关列表", "Feature list"),
             tag: 1
         )
-        labController = makeHosting(
-            LabView(),
-            title: L10n.t("实验室", "Lab"),
-            image: "flask",
-            accessibilityLabel: L10n.t("实验室功能", "Lab features"),
-            tag: 4
-        )
         systemController = makeHosting(
             SystemView(),
             title: L10n.t("系统", "Settings"),
@@ -113,7 +105,6 @@ final class RootTabBarController: UITabBarController {
     /// 依据「蓝牙开关」与「LAB 是否启用」重建标签栏，并尽量保持当前选中页不变。
     private func applyTabSet() {
         var target: [UIViewController] = [overviewController, featuresController]
-        if environment.isLabEnabled { target.append(labController) }
         // 用「显示过就保持」的偏好，而不是 BLE 总开关本身：
         // 在蓝牙页关掉总开关后，标签仍要在，否则再也点不回来。
         if environment.showsS3XYTab { target.append(s3xyController) }
@@ -158,8 +149,6 @@ final class RootTabBarController: UITabBarController {
         overviewController?.tabBarItem.accessibilityLabel = L10n.t("设备状态总览", "Device status")
         featuresController?.tabBarItem.title = L10n.t("功能", "Features")
         featuresController?.tabBarItem.accessibilityLabel = L10n.t("功能开关列表", "Feature list")
-        labController?.tabBarItem.title = L10n.t("实验室", "Lab")
-        labController?.tabBarItem.accessibilityLabel = L10n.t("实验室功能", "Lab features")
         s3xyController?.tabBarItem.title = L10n.t("蓝牙", "Bluetooth")
         s3xyController?.tabBarItem.accessibilityLabel = L10n.t("S3XY 蓝牙设备管理", "S3XY Bluetooth devices")
         systemController?.tabBarItem.title = L10n.t("系统", "Settings")
