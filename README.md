@@ -1,97 +1,223 @@
-# P4管家
+# P4管家 · P4CAN Companion
 
-P4-CAN Universal（ESP32-P4 车载 CAN 控制器）的原生 iOS 控制台。UIKit + SwiftUI + SnapKit 混合实现，不是网页套壳。
+[简体中文](#简体中文) | [English](#english)
 
-![平台](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![版本](https://img.shields.io/badge/version-3.16%20(37)-green)
+原生 iOS / iPadOS / macOS 控制台，用于 **P4-CAN Universal（ESP32-P4 三路 CAN 控制器）**。
+SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
-**下载：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) —— `P4CAN-Companion-v3.20-adhoc.ipa`（iPhone，需自签）/ `P4CAN-Companion-mac-v3.20.zip`（Mac 解压即用）
+> 本项目与 Tesla, Inc. 无关联。CAN 注入有风险，请只在驻车或封闭场地使用，并遵守当地法律。
 
-## 功能
+![status](docs/screenshots/status.png)
+![features](docs/screenshots/features.png)
+![lighting](docs/screenshots/lighting.png)
+
+---
+
+## 简体中文
+
+### 功能
+
+底部四个标签：**状态 / 功能 / 蓝牙 / 系统**。
 
 | 模块 | 内容 |
 |---|---|
-| **状态** | 设备在线/固件/内存、三路 CAN（BODY / CHASSIS / PARTY）收发与 Bus-Off、扭矩趋势、电池（固件提供才显示）、锁屏与灵动岛实时活动 |
-| **功能** | 固件功能总入口，按分类分组：**灯光**（前大灯爆闪 / 后雾灯爆闪，点进去即是操作页：状态 + 触发在上，参数在下）→ 驾驶辅助 → 车身与舒适 → 高级与兼容（含 S3XY、LAB Menu）；支持搜索、长按置顶（顶部「常用」，最多 6 个），灯光组行尾显示「爆闪中」实时状态 |
-| **蓝牙** | 由「功能 → S3XY」开关控制标签显隐；S3XY 设备扫描/配对/连接、单击-双击-长按动作绑定、自动重连、日志导出 |
-| **设置** | 车型卡片与**更改车型**（保存后设备重启）、无线、外观、刷新间隔、诊断/恢复、**OTA（选包→SHA-256 校验→确认→字节进度→重启确认→记录上次刷写）**、三级重置、封禁车辆、App 语言与设备地址、一键复制诊断信息 / 导出诊断包（zip：摘要 + 网络日志 + 快照）、固件变更记录、**快捷指令**（前大灯爆闪 / 后雾灯爆闪） |
-| **实验室** | LAB Menu 打开后出现：R79 AP 控制 / R79 状态 / 召唤心跳 / ALC / 主驾车窗 / CAN 研究捕获 / 驾驶员监控捕获 / Mode H 调参（含实时引擎） |
+| **状态** | 设备在线、固件版本、内存、三路 CAN（BODY / CHASSIS / PARTY）收发与 Bus-Off、扭矩趋势、电池信息（固件提供时）、锁屏/灵动岛实时活动 |
+| **功能** | 按固件新版结构分组：**灯光**（前大灯爆闪 / 后雾灯爆闪）→ **功能**（NAG、ISA、DMS、限速、BlinkA、召唤、TLSSC、ALC、踏板、AP 加速/回收、灯光功能、电池预热）→ **实验**（R79、FSD、SmartShift、地区、Lane Change、常驻 AP、Developer Test、召唤版本）→ **实验室功能**（R79 AP、召唤心跳、车窗、研究捕获、DMS 捕获、Mode H、R79 时序）。支持搜索、长按置顶 |
+| **蓝牙** | S3XY 按键扫描/配对/连接、单击/双击/长按动作绑定、自动重连、日志导出 |
+| **系统** | 车型卡片与更改车型、语言（设备网页 EN/简中/繁中）、无线、外观、刷新间隔、CAN GPIO、诊断/恢复、OTA 升级（SHA-256 校验）、重启、两级重置、恢复出厂、Service Mode、诊断导出 |
 
-## 架构
+新功能页面按固件能力自动显示，不会在旧固件上留下死入口：
 
-```
-P4CANCompanion/
-├── App/            AppDelegate · SceneDelegate · RootTabBarController（iOS 用 Tab，Mac 用侧边栏）
-├── Core/           P4APIClient（async/await）· AppEnvironment（单一状态源）· FeatureCatalog（模块与控件 schema）
-├── UI/             Theme（8pt 栅格/语义色/图标尺寸）· Components（ModuleIconTile/NavRow/KpiTile/StatusChip）· GlassSurface
-├── Features/       Overview / Features / S3XY / System / Lab / LiveActivity / Connect
-├── SwiftPieces/    第三方组件（FilterRail，MIT + Commons Clause，版权头保留）
-└── Vendor/         SnapKit 5.7.1 源码（内置，避免 SPM 依赖）
-P4CANWidget/        Live Activity / 桌面小组件扩展
-Support/            Info.plist
-```
+- **灯光功能**：AP 强制远光、动态刹车灯（关/轻踩/重踩）、官方远光/后雾爆闪开关与运行状态
+- **Developer Test**：CHASSIS 0x3FD 六路 UI 信号覆盖 + 原厂读值
+- **召唤版本标识**：0x259 `APP_summonVersionIdentifier`，P 档/召唤门控
+- **语言**：写 `/api/dashboard/language`，只改设备网页语言，不改 App
+- **Service Mode**：进入维护模式、中国市场恢复帧、TLSSC 0x331 强制注入与间隔（10–60000 ms）
+- **NAG 高级参数**：新增「变道时暂停」
 
-关键设计：
+### 固件兼容
 
-- **只显示设备真实状态**：任何控件读不到字段就显示「读取中…」并禁用，不猜默认值；写入后回读校验，未生效会明确提示。
-- **契约对齐固件**：所有写接口都是 `POST /api/xxx?k=v`，字段名逐条对照 `web_api.h`。
-- **状态单一来源**：`AppEnvironment` 按设置里的 250 / 500 / 1000 ms 并行轮询快照，慢变端点每 4 拍刷新。
-- **LAB 显隐跟网页一致**：设置 → 功能 → LAB Menu 打开后，底部才出现「实验室」标签；关闭即隐藏。
-
-## 安全边界
-
-- 只与用户配置的 P4-CAN 地址通信：ATS 仅开 `NSAllowsLocalNetworking`，并**拒绝所有 HTTP 3xx 跳转**，防止被伪造热点带离设备；
-- 设备地址只接受 `http(s)://host[:port]` 或 `host[:port]`，拒绝账号、路径、查询串与脚本 scheme；
-- 网络日志对 `password` / `secret` 等参数打码；日志只存在内存（最多 300 条），不上传；
-- OTA 只接受应用升级版 `.bin`、拒绝 `.merged.bin` 与超过 8 MB 的文件，multipart 文件名做注入清洗；
-- JSON 响应限制 4 MB、日志下载限制 32 MB；
-- 无第三方统计 / 广告 SDK，不收集任何遥测数据。
-
-> 设备侧限制：固件 API 无鉴权、仅 HTTP。请修改默认 AP 密码，并只在可信网络下操作；这是当前固件契约，App 无法单独修复。
-
-## 构建
-
-```bash
-# iOS（模拟器）
-xcodebuild -scheme P4CANCompanion \
-  -destination 'generic/platform=iOS Simulator' -configuration Debug build
-
-# iOS（真机，需在 Xcode 里选自己的 Team）
-xcodebuild -scheme P4CANCompanion -destination 'generic/platform=iOS' -configuration Release build
-
-# Mac（Catalyst）
-xcodebuild -scheme P4CANCompanion -destination 'platform=macOS,variant=Mac Catalyst' -configuration Release build
-```
-
-> 若在沙箱环境中命令行编译，Swift 宏插件服务器会被拦截，需追加 `OTHER_SWIFT_FLAGS='-Xfrontend -disable-sandbox'`。
-> 在 Xcode GUI 里直接 Cmd+R 不受影响。
-
-## 本地联调
-
-```bash
-cd build/mock && P4CAN_MOCK_PORT=8099 python3 mock_p4can.py
-# 启动 App 时指向 mock：
-SIMCTL_CHILD_P4CAN_HOST=127.0.0.1:8099 xcrun simctl launch booted com.p4can.companion
-```
-
-`build/mock/mock_p4can.py` 按固件真实字段实现了 20+ 个端点，写接口会真实改变状态，可用于回归。
-
-## 文档
-
-| 文件 | 内容 |
+| 固件 | 支持情况 |
 |---|---|
-| `实现方案.md` | 架构、数据层、页面结构与版本演进 |
-| `build/IPA-安装说明.md` | 每个版本的变更与 IPA 安装方式 |
-| `build/图标设计.md` | App 图标设计（三套外观、Liquid Glass 材质） |
-| `build/SwiftPieces-接入.md` | MCP 接入、组件选型与改造记录 |
-| `build/灯光爆闪-方案.md` | 爆闪可行性、接口契约与风险 |
-| `build/固件补丁-灯光爆闪.md` | 固件参考补丁与接入步骤 |
+| 官方 v3.29.3 | 基础功能；无爆闪接口时自动隐藏爆闪入口 |
+| 自编 v3.29.3 + 爆闪（fix5） | 独立的前/后爆闪页 |
+| 自编 v3.35.3-strobe1-zh | 3.35.3 全部功能 + 独立爆闪页 + 中文 Dashboard |
+| 官方 v3.35.6 | 灯光页内远光/后雾爆闪、Developer Test、语言、Service 强制注入、召唤版本 |
 
-## 相关
+所有页面通过 `supportKey` 或端点探测（404 即隐藏）适配，不写死车型；Model 3 / Y / YL 通用。
 
-- 固件源码：<https://github.com/06066060606060/P4can-universal-unlock>
-- 组件库：SwiftPieces（`https://swiftpieces.com`，`FilterRail` 采用 MIT + Commons Clause，允许随 App 分发，不得单独转售组件）
+### GPIO
 
-## 免责声明
+固件默认（标准接线）：
 
-本项目用于个人车辆的诊断与配置。所有 CAN 写入都可能影响车辆行为：请在封闭场地测试，遵守当地法规，因使用造成的后果由使用者自行承担。
+| 总线 | TX | RX |
+|---|---|---|
+| CAN 1 BODY | 20 | 21 |
+| CAN 2 CHASSIS | 22 | 23 |
+| CAN 3 PARTY | 26 | 27 |
+
+X179 线束：
+
+| 总线 | TX | RX |
+|---|---|---|
+| BODY | 4 | 5 |
+| CHASSIS | 2 | 3 |
+| PARTY | 26 | 27 |
+
+如果线束是反接版本，交换 BODY/CHASSIS：`BODY 2/3、CHASSIS 4/5`。
+GPIO 存在独立 NVS（`p4gpio`），**跨 OTA 保留**；刷完新固件先确认三路 RX 再动车。
+
+### 构建 App
+
+要求：Xcode 16+、iOS 17+ / macOS 14+（Mac Catalyst）。
+
+```bash
+git clone https://github.com/Kaiser-DMr/p4can-companion.git
+cd p4can-companion
+open P4CANCompanion.xcodeproj
+```
+
+- Scheme：`P4CANCompanion`
+- 无 SPM / CocoaPods 依赖；SnapKit 已内置
+- 真机安装需要在 Signing & Capabilities 选择自己的 Team
+- Release 构建可导出 ad-hoc IPA，用 AltStore / Sideloadly 自签安装
+
+### 构建固件
+
+固件源码在 `build/firmware-build/`：
+
+- `P4-CAN-Universal-v3.35.3/`：英文 + 爆闪
+- `P4-CAN-Universal-v3.35.3-zh/`：中文 Dashboard + 爆闪
+- `3.35.3-爆闪移植.md`：移植点、产物哈希、GPIO 说明
+
+```bash
+cd build/firmware-build/P4-CAN-Universal-v3.35.3-zh
+arduino-cli compile \
+  --fqbn "esp32:esp32:esp32p4:ChipVariant=postv3,FlashSize=32M,PartitionScheme=app3M_fat9M_16MB,PSRAM=enabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio" \
+  --output-dir ../../out-3353-zh .
+```
+
+- P4 v1.x 用 `ChipVariant=prev3`
+- 中文页面：替换 `dashboard_source.html` 后运行 `python3 tools/build_dashboard.py`
+- 官方 v3.35.6 源码未公开，App 通过 `/api/lighting/*` 等接口兼容官方包
+
+### 安全
+
+- 本项目会直接向车辆 CAN 总线注入报文，可能导致车辆报错、功能异常或损坏；风险自负
+- 只在驻车或封闭道路测试；不要在公共道路使用爆闪、强制远光等功能
+- 不绕过任何法律法规或车辆安全机制
+- 无任何明示或暗示担保
+
+### 许可
+
+GNU GPL v3.0，见 [LICENSE](LICENSE)。固件部分基于
+[P4can-universal-unlock](https://github.com/06066060606060/P4can-universal-unlock)（GPL-3.0）；
+第三方组件见 [NOTICE.md](NOTICE.md)。
+
+---
+
+## English
+
+Native iOS / iPadOS / macOS companion for the **P4-CAN Universal** (ESP32-P4 three-bus CAN controller).
+Built with SwiftUI + UIKit — not a web wrapper. Every value comes from the device HTTP API, and writes are read back for confirmation.
+
+> Not affiliated with Tesla, Inc. CAN injection is risky. Use only while parked or on a closed course, and follow local laws.
+
+### Features
+
+Four tabs: **Status / Features / Bluetooth / Settings**.
+
+| Tab | Contents |
+|---|---|
+| **Status** | Device online state, firmware, memory, three CAN buses (BODY / CHASSIS / PARTY) with RX/TX and bus-off counters, torque trend, battery info when provided, Live Activity |
+| **Features** | Grouped like the current firmware UI: **Lighting** (headlight / rear fog strobe) → **Features** (NAG, ISA, DMS, vision speed, BlinkA, Summon, TLSSC, ALC, pedal, AP accel/regen, Lighting Features, battery preheat) → **Experimental** (R79, FSD, SmartShift, country, lane change, continuous AP, Developer Test, Summon Version) → **Lab** (R79 AP, summon heartbeat, window, research capture, DMS capture, Mode H, R79 timing). Search and long-press pinning |
+| **Bluetooth** | S3XY button scan/pair/connect, single/double/long-press action mapping, auto-reconnect, log export |
+| **Settings** | Vehicle profile and change profile, language (dashboard EN/简体/繁體), wireless, appearance, refresh interval, CAN GPIO, diagnostics/recovery, OTA with SHA-256, reboot, resets, factory reset, Service Mode, diagnostics export |
+
+New pages appear only when the firmware supports them:
+
+- **Lighting Features**: AP forced high beam, dynamic brake light (off/light/hard), official high-beam and rear-fog strobe toggles with running state
+- **Developer Test**: six CHASSIS 0x3FD UI overrides plus stock readback
+- **Summon Version**: 0x259 `APP_summonVersionIdentifier`, gated to P/summon
+- **Language**: writes `/api/dashboard/language`; changes the device dashboard only
+- **Service Mode**: enter service mode, China restore frames, TLSSC 0x331 force injection with 10–60000 ms interval
+- **NAG advanced**: new “pause during lane change” toggle
+
+### Firmware compatibility
+
+| Firmware | Support |
+|---|---|
+| Official v3.29.3 | Core features; strobe entries hidden when endpoints are absent |
+| Custom v3.29.3 + strobe (fix5) | Dedicated headlight / rear fog strobe pages |
+| Custom v3.35.3-strobe1-zh | All v3.35.3 features + strobe pages + Chinese dashboard |
+| Official v3.35.6 | Lighting-page strobes, Developer Test, language, Service force injection, Summon Version |
+
+Pages are gated by `supportKey` or endpoint probes (404 hides the entry). No hard-coded vehicle model; Model 3 / Y / YL are supported through capability bits.
+
+### GPIO
+
+Firmware defaults (standard wiring):
+
+| Bus | TX | RX |
+|---|---|---|
+| CAN 1 BODY | 20 | 21 |
+| CAN 2 CHASSIS | 22 | 23 |
+| CAN 3 PARTY | 26 | 27 |
+
+X179 harness:
+
+| Bus | TX | RX |
+|---|---|---|
+| BODY | 4 | 5 |
+| CHASSIS | 2 | 3 |
+| PARTY | 26 | 27 |
+
+For the reversed X179 harness, swap BODY/CHASSIS: `BODY 2/3, CHASSIS 4/5`.
+GPIO lives in a separate NVS namespace (`p4gpio`) and **survives OTA**. Verify all three buses after flashing before driving.
+
+### Build the app
+
+Requirements: Xcode 16+, iOS 17+ / macOS 14+ (Mac Catalyst).
+
+```bash
+git clone https://github.com/Kaiser-DMr/p4can-companion.git
+cd p4can-companion
+open P4CANCompanion.xcodeproj
+```
+
+- Scheme: `P4CANCompanion`
+- No SPM / CocoaPods dependencies; SnapKit is vendored
+- Select your own Team for on-device builds
+- Export an ad-hoc IPA for AltStore / Sideloadly
+
+### Build the firmware
+
+Firmware sources live under `build/firmware-build/`:
+
+- `P4-CAN-Universal-v3.35.3/`: English + strobe
+- `P4-CAN-Universal-v3.35.3-zh/`: Chinese dashboard + strobe
+- `3.35.3-爆闪移植.md`: patch points, artifact hashes, GPIO notes
+
+```bash
+cd build/firmware-build/P4-CAN-Universal-v3.35.3-zh
+arduino-cli compile \
+  --fqbn "esp32:esp32:esp32p4:ChipVariant=postv3,FlashSize=32M,PartitionScheme=app3M_fat9M_16MB,PSRAM=enabled,USBMode=hwcdc,CDCOnBoot=cdc,FlashMode=qio" \
+  --output-dir ../../out-3353-zh .
+```
+
+- Use `ChipVariant=prev3` for P4 v1.x
+- Chinese dashboard: replace `dashboard_source.html`, then run `python3 tools/build_dashboard.py`
+- Official v3.35.6 source is not public; the app targets its `/api/lighting/*` and related endpoints
+
+### Safety
+
+- This project injects CAN frames into the vehicle. It can cause faults, break features, or damage hardware. Use at your own risk.
+- Test only while parked or on a closed course. Do not use strobe or forced-high-beam features on public roads.
+- Do not use it to bypass laws or vehicle safety systems.
+- No warranty of any kind.
+
+### License
+
+GNU GPL v3.0 — see [LICENSE](LICENSE). Firmware is based on
+[P4can-universal-unlock](https://github.com/06066060606060/P4can-universal-unlock) (GPL-3.0).
+Third-party notices are in [NOTICE.md](NOTICE.md).
