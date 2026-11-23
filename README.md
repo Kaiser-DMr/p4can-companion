@@ -5,6 +5,12 @@
 原生 iOS / iPadOS / macOS 控制台，用于 **P4-CAN Universal（ESP32-P4 三路 CAN 控制器）**。
 SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
+![platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
+![version](https://img.shields.io/badge/version-3.44%20(65)-green)
+![license](https://img.shields.io/badge/license-GPL--3.0-orange)
+
+**下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
+
 > 本项目与 Tesla, Inc. 无关联。CAN 注入有风险，请只在驻车或封闭场地使用，并遵守当地法律。
 
 ![status](docs/screenshots/status.png)
