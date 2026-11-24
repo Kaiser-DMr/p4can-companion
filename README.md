@@ -6,7 +6,7 @@
 SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
 ![platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![version](https://img.shields.io/badge/version-3.45%20(66)-green)
+![version](https://img.shields.io/badge/version-3.46%20(67)-green)
 ![license](https://img.shields.io/badge/license-GPL--3.0-orange)
 
 **下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
@@ -48,6 +48,7 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 | 官方 v3.29.3 | 基础功能；无爆闪接口时自动隐藏爆闪入口 |
 | 自编 v3.29.3 + 爆闪（fix5） | 独立的前/后爆闪页 |
 | 自编 v3.35.3-strobe1-zh | 3.35.3 全部功能 + 独立爆闪页 + 中文 Dashboard |
+| 自编 v3.35.3-eapnr1-zh | 上一行 + EAP/TLSSC 免重启补发（参考 P4can-No-Reboot） |
 | 官方 v3.35.6 | 灯光页内远光/后雾爆闪、Developer Test、语言、Service 强制注入、召唤版本 |
 
 所有页面通过 `supportKey` 或端点探测（404 即隐藏）适配，不写死车型；Model 3 / Y / YL 通用。
@@ -156,6 +157,7 @@ New pages appear only when the firmware supports them:
 | Official v3.29.3 | Core features; strobe entries hidden when endpoints are absent |
 | Custom v3.29.3 + strobe (fix5) | Dedicated headlight / rear fog strobe pages |
 | Custom v3.35.3-strobe1-zh | All v3.35.3 features + strobe pages + Chinese dashboard |
+| Custom v3.35.3-eapnr1-zh | Above + EAP/TLSSC no-reboot replay (from P4can-No-Reboot) |
 | Official v3.35.6 | Lighting-page strobes, Developer Test, language, Service force injection, Summon Version |
 
 Pages are gated by `supportKey` or endpoint probes (404 hides the entry). No hard-coded vehicle model; Model 3 / Y / YL are supported through capability bits.

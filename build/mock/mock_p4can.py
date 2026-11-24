@@ -172,7 +172,10 @@ PREHEAT = {
 FSD = {"enabled": False, "suspendDuringAp": True, "values": 0,
        "mux0Fresh": True, "stock1": "0x00", "txOk": 0, "txFail": 0, "apBlocked": False}
 SERVICE = {"canEnter": True, "chinaRestore": False, "restoreTxOk": 0, "restoreTxFail": 0,
-           "restoreForce": False, "restoreIntervalMs": 150}
+           "restoreForce": False, "restoreIntervalMs": 150,
+           "eapNr": {"enabled": True, "prereq": False, "cacheValid": True,
+                     "cacheHex": "1B0000000000", "stockRx": 12, "replayOk": 0,
+                     "replayFail": 0, "replayBusy": 0, "burst": 0}}
 SMARTSHIFT = {
     "profileSupported": True, "executionEnabled": False, "protocol": "AUTO",
     "state": "IDLE", "target": "NONE", "source": "NONE", "reason": "NONE",
@@ -645,6 +648,10 @@ def apply_post(path, qs):
             SUMMON_VERSION["enabled"] = _bool(val("enabled"))
         if has("value"):
             SUMMON_VERSION["value"] = int(val("value"))
+        return None
+    if path == "/api/service-mode/eapnr":
+        if has("enabled"):
+            SERVICE["eapNr"]["enabled"] = _bool(val("enabled"))
         return None
     if path == "/api/service-mode/force":
         if has("enabled"):

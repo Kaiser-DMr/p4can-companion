@@ -57,6 +57,7 @@ enum P4Route {
     static let summonVersionStats = "/api/summon-version/stats"
     static let summonVersionUpdate = "/api/summon-version/update"
     static let serviceModeForce = "/api/service-mode/force"
+    static let serviceModeEapNr = "/api/service-mode/eapnr"
 
     // NAG
     static let nagConfig = "/api/nag/config"

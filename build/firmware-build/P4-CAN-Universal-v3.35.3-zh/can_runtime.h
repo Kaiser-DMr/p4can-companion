@@ -381,6 +381,7 @@ static void p4CanDrainExtra() {
     fsdSettingsObserve(frame.bus,frame.can_id,frame.can_dlc,frame.data,fsdEpoch,fsdMs);
     fsdSettingsExtra(frame,fsdEpoch,fsdMs);
     chinaRestoreEcho(frame.bus,frame.can_id,frame.can_dlc,frame.data,fsdEpoch,fsdMs);
+    if(frame.can_id==0x331u) eapNrObserve331(frame);
     if (p4CanOnline[p4CanBusExtra()]) p4CanExtraFresh = true;
     researchCaptureObserve(RESEARCH_CAPTURE_BUS_EXTRA, frame.can_id, frame.can_dlc, frame.data);
     driverMonitorCaptureObserve(2, frame.can_id, frame.can_dlc, frame.data);
@@ -724,6 +725,7 @@ static void canTaskTwai(void* arg) {
       }
       if(!f.extd && !f.rtr) lightingObserve(p4CanBusB(),f.identifier,f.data_length_code,f.data,countryRxEpoch,stockRxMs);
       if(!f.extd && !f.rtr) chinaRestoreEcho(p4CanBusB(),f.identifier,f.data_length_code,f.data,countryRxEpoch,stockRxMs);
+      if(!f.extd && !f.rtr && f.identifier==0x331u) eapNrObserve331(f);
       if(!f.extd && !f.rtr) fsdSettingsObserve(p4CanBusB(),f.identifier,f.data_length_code,f.data,countryRxEpoch,stockRxMs);
       // Keep the supervisor heartbeat alive even under sustained CAN B traffic.
       const uint32_t frameNow = (uint32_t)millis();
@@ -877,6 +879,7 @@ static void canTaskTwai(void* arg) {
       twaiReadQueueStatus();
     }
     blinkATxTick();
+    eapNrTick();
     headlightStrobeTick();
     rearFogStrobeTick();
 

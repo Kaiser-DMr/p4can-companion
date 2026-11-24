@@ -4602,9 +4602,11 @@ static void httpDasTelemetryStats() {
 static void httpServiceSettingsStats(){
   portENTER_CRITICAL(&serviceSettingsMux);const bool enabled=chinaRestoreEnabled;const uint32_t ok=chinaRestoreTxOk,fail=chinaRestoreTxFail;portEXIT_CRITICAL(&serviceSettingsMux);
   String json;JsonWriterArduino jw(json);jw.boolean("ok",true);jw.boolean("chinaRestore",enabled);jw.u32("restoreTxOk",ok);jw.u32("restoreTxFail",fail);
+  jw.raw("eapNr", eapNrStatsJson());
   jw.boolean("canEnter",!canTxAdministrativeHold&&!canUsbPassive()&&p4CanAllRunning());jw.finish();server.send(200,"application/json",json);
 }
 static void httpServiceSettingsEnter(){if(serviceSettingsEnter()!=ESP_OK){server.send(409,"application/json","{\"error\":\"tx-unavailable\"}");return;}httpServiceSettingsStats();}
+static void httpServiceSettingsEapNr(){bool enabled;if(!httpBoolArg("enabled",enabled)){server.send(400,"application/json","{\"error\":\"invalid-enabled\"}");return;}const char*note=nullptr;if(!eapNrSetEnabled(enabled,note)){server.send(503,"application/json",String("{\"error\":\"")+note+"\"}");return;}httpServiceSettingsStats();}
 static void httpServiceSettingsRestore(){bool enabled;if(!httpBoolArg("enabled",enabled)){server.send(400,"application/json","{\"error\":\"invalid-enabled\"}");return;}if(!serviceSettingsSetRestore(enabled)){server.send(503,"application/json","{\"error\":\"save-failed-or-busy\"}");return;}httpServiceSettingsStats();}
 
 #include "automatic_shift/gear_shift_web.h"
@@ -6903,6 +6905,7 @@ static void webTask(void *arg) {
     server.on("/api/service-mode/stats",HTTP_GET,httpServiceSettingsStats);
     server.on("/api/service-mode/enter",HTTP_POST,httpServiceSettingsEnter);
     server.on("/api/service-mode/restore",HTTP_POST,httpServiceSettingsRestore);
+    server.on("/api/service-mode/eapnr",HTTP_POST,httpServiceSettingsEapNr);
     server.on("/api/smartshift/stats",HTTP_GET,httpGearShiftStatus);
     server.on("/api/smartshift/update",HTTP_POST,httpGearShiftConfig);
     server.on("/api/fsd/stats", HTTP_GET, httpFsdSettingsStats);

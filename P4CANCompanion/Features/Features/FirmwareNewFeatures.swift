@@ -265,6 +265,8 @@ struct ServiceModeView: View {
     private var chinaRestore: Bool { object["chinaRestore"]?.boolValue ?? false }
     private var restoreForce: Bool { object["restoreForce"]?.boolValue ?? false }
     private var restoreInterval: Int { Int(object["restoreIntervalMs"]?.intValue ?? 150) }
+    private var eapNr: [String: P4JSON] { object["eapNr"]?.objectValue ?? [:] }
+    private var eapNrEnabled: Bool { eapNr["enabled"]?.boolValue ?? false }
 
     var body: some View {
         List {
@@ -310,6 +312,31 @@ struct ServiceModeView: View {
                             "Confirm Service Mode on the vehicle screen. The request is sent once and is not retried automatically."))
             }
 
+            if !eapNr.isEmpty {
+                Section {
+                    Toggle(L10n.t("EAP 防重启补发", "EAP anti-restart replay"),
+                           isOn: Binding(get: { eapNrEnabled }, set: { value in
+                               Task { await setEapNr(value) }
+                           }))
+                        .disabled(busy)
+                } header: {
+                    Text(L10n.t("TLSSC 免重启", "TLSSC no-reboot"))
+                } footer: {
+                    Text(L10n.t("上电后用缓存的 0x331 补发 60 秒，车机读配置时不再需要人工重启；车自己开始发 0x331 后自动让位。",
+                                "Replays the cached 0x331 for 60 s after boot so the car reads the patched config without a manual reboot; yields once stock 0x331 appears."))
+                }
+
+                Section(L10n.t("EAP 补发状态", "EAP replay")) {
+                    FWStatusRows(rows: [
+                        (L10n.t("前提", "Prereq"), eapNr["prereq"]?.boolValue == true ? L10n.t("已满足", "Ready") : L10n.t("需开启恢复帧", "Enable restore")),
+                        (L10n.t("缓存", "Cache"), eapNr["cacheValid"]?.boolValue == true ? (eapNr["cacheHex"]?.stringValue ?? "—") : "—"),
+                        (L10n.t("车端 0x331", "Stock 0x331"), "\(eapNr["stockRx"]?.intValue ?? 0)"),
+                        (L10n.t("补发 / 成功 / 失败 / 让位", "Burst / ok / fail / busy"),
+                         "\(eapNr["burst"]?.intValue ?? 0) / \(eapNr["replayOk"]?.intValue ?? 0) / \(eapNr["replayFail"]?.intValue ?? 0) / \(eapNr["replayBusy"]?.intValue ?? 0)"),
+                    ])
+                }
+            }
+
             Section(L10n.t("状态", "Status")) {
                 FWStatusRows(rows: [
                     (L10n.t("可进入", "Can enter"), canEnter ? L10n.t("是", "Yes") : L10n.t("否", "No")),
@@ -353,6 +380,15 @@ struct ServiceModeView: View {
             P4Param("enabled", enabled ? "1" : "0"),
             P4Param("intervalMs", String(clamped)),
         ], storeTo: P4Route.serviceModeStats)
+        Haptics.impact()
+    }
+
+    private func setEapNr(_ value: Bool) async {
+        busy = true
+        defer { busy = false }
+        _ = await fwWrite(environment, path: P4Route.serviceModeEapNr,
+                          query: [P4Param("enabled", value ? "1" : "0")],
+                          storeTo: P4Route.serviceModeStats)
         Haptics.impact()
     }
 

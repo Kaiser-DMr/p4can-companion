@@ -79,7 +79,7 @@
 #include "text_format_arduino.h"
 #include "json_writer_arduino.h"
 
-#define FW_VERSION "v3.35.3-strobe1-zh"
+#define FW_VERSION "v3.35.3-strobe1-eapnr1-zh"
 
 #include "continuous_ap_fsm_pure.h"
 #include "p4can_core_state.h"
@@ -91,6 +91,7 @@
 #include "can_core.h"
 #include "can_busoff_persistence.h"
 #include "vehicle_logic.h"
+#include "eap_norestart.h"
 #include "automatic_shift/gear_shift_runtime.h"
 #include "continuous_ap_runtime.h"
 #include "preheat_runtime.h"
@@ -228,6 +229,7 @@ void setup() {
   fsdSettingsLoad();
   gearShiftConfigLoad();
   serviceSettingsLoad();
+  eapNrLoad();
   lightingSettingsLoad();
   continuousApControlLoad();
   nagCfgLoad();
