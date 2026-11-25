@@ -235,6 +235,11 @@ final class P4APIClient: Sendable {
         )
     }
 
+    /// 带 delegate 的 URLSession 不会自行释放：切换设备地址时旧客户端被丢弃，必须显式作废。
+    deinit {
+        session.finishTasksAndInvalidate()
+    }
+
     /// 校验用户输入：只允许 http(s)://host[:port] 或 host[:port]，
     /// 不允许账号、路径、查询串、片段与空白字符。
     static func validatedHost(_ raw: String) -> String? {

@@ -917,6 +917,11 @@ def apply_post(path, qs):
                 NAG_CONFIG[k] = int(val(k), 0)
         return None
 
+    if path == "/api/nag/mode":
+        # 固件 httpNagSetMode 读取参数 m（0 / 1 / 3 / 7）
+        NAG_CONFIG["mode"] = int(val("m"))
+        return None
+
     if path == "/api/nag/h-profile/update":
         hp = STATS["/api/nag/h-profile/stats"]
         for k in ("peakMinNm", "peakMaxNm", "carrierMinNm", "carrierMaxNm",

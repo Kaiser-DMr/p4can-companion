@@ -105,7 +105,8 @@ final class LiveActivityController: @unchecked Sendable {
     var isActive: Bool { false }
     var isSupported: Bool { false }
 
-    func start(deviceName: String, state: CanActivityAttributes.ContentState) {}
+    @discardableResult
+    func start(deviceName: String, state: CanActivityAttributes.ContentState) async -> Bool { false }
     func update(state: CanActivityAttributes.ContentState) {}
     func end() {}
 }

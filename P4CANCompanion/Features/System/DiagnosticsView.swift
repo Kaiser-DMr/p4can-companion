@@ -25,7 +25,7 @@ struct DiagnosticsView: View {
     var body: some View {
         List {
             Section {
-                if let stats {
+                if stats != nil {
                     ForEach(Self.systemKeys.filter { object[$0] != nil }, id: \.self) { key in
                         MetricRow(key: key, value: object[key] ?? .null)
                     }

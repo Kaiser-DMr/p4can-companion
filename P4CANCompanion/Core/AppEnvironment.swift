@@ -197,15 +197,23 @@ final class AppEnvironment: ObservableObject {
         }
         guard !endpointInFlight.contains(path) else { return endpointValues[path] }
         endpointInFlight.insert(path)
-        defer { endpointInFlight.remove(path) }
+        let currentClient = client
+        defer { if isCurrent(currentClient) { endpointInFlight.remove(path) } }
         do {
-            let value = try await api.get(path)
+            let value = try await currentClient.get(path)
+            guard isCurrent(currentClient) else { return nil }
             storeEndpoint(path, value)
             return value
         } catch {
+            guard isCurrent(currentClient) else { return nil }
             endpointErrors[path] = AppEnvironment.friendly(error)
             return nil
         }
+    }
+
+    /// 请求发出后设备地址可能已切换：旧地址的迟到回包不能写进新设备的状态。
+    private func isCurrent(_ requestClient: P4APIClient) -> Bool {
+        requestClient === client
     }
 
     /// 是否处于独占操作（OTA / 批量扫描）——页面级轮询应据此暂停。
@@ -384,6 +392,12 @@ final class AppEnvironment: ObservableObject {
         lightingSupported = nil
         v356Supported = nil
         dashboardLanguageSupported = nil
+        // 探测时间也要清空，否则新设备要等 60 s 冷却才会被探测，期间新版功能入口全部隐藏。
+        lastStrobeProbe = nil
+        lastNewFeaturesProbe = nil
+        lastLightingProbe = nil
+        lastV356Probe = nil
+        lastLanguageProbe = nil
         deviceFamily = .unknown
         DeviceRoute.family = .unknown
         mergedStats = [:]
@@ -453,6 +467,7 @@ final class AppEnvironment: ObservableObject {
         let system = await systemTask
         let das = await dasTask
         let nagCfg = await nagConfigTask
+        guard isCurrent(currentClient) else { return }
 
         if let snapshot {
             if let fast = snapshot["fast"]?.objectValue { fastGroups = fast }
@@ -482,6 +497,7 @@ final class AppEnvironment: ObservableObject {
             let due = lastLanguageProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeDashboardLanguage(using: currentClient) }
         }
+        guard isCurrent(currentClient) else { return }
         if let s3xy { s3xyStats = s3xy }
         if isS3XYEnabled && !showsS3XYTab {
             showsS3XYTab = true
@@ -531,6 +547,7 @@ final class AppEnvironment: ObservableObject {
             #endif
         } else {
             let reason = await Self.probeReason(client: currentClient)
+            guard isCurrent(currentClient) else { return }
             phase = .offline(reason: reason)
             restoreCacheIfNeeded()
         }
@@ -645,79 +662,71 @@ final class AppEnvironment: ObservableObject {
 
     /// 单独拉取车型状态（更改车型、从后台返回时使用）。
     func refreshProfile() async {
-        guard let profile = try? await client.get(P4Route.profileStatus) else { return }
+        let currentClient = client
+        guard let profile = try? await currentClient.get(P4Route.profileStatus),
+              isCurrent(currentClient) else { return }
         profileStatus = profile
         rebuildDerived()
     }
 
-    /// 探测固件是否提供前后爆闪接口。
-    private func probeStrobeSupport(using client: P4APIClient) async {
-        lastStrobeProbe = Date()
+    /// 用代表接口探测固件能力：200 → true，404 → false；
+    /// 离线、超时或地址已切换 → nil（保持未知，不能把“没连上”当成“不支持”）。
+    private func probeEndpoint(_ path: String, using client: P4APIClient) async -> Bool? {
         do {
-            _ = try await client.get(P4Route.headlightStrobeStats)
-            strobeSupported = true
+            _ = try await client.get(path)
+            return isCurrent(client) ? true : nil
         } catch let error as P4APIError {
-            if error.status == 404 { strobeSupported = false }
+            return isCurrent(client) && error.status == 404 ? false : nil
         } catch {
-            // 离线/超时：保持未知，下一轮再试；不能把“没连上”当成“不支持”。
+            return nil
         }
     }
 
-    /// 探测固件是否带 v3.35.2 新功能。用预热接口做代表：200 即新版，404 即旧版。
+    /// 探测固件是否提供前后爆闪接口（v3.35.2 起官方固件移除）。
+    private func probeStrobeSupport(using client: P4APIClient) async {
+        lastStrobeProbe = Date()
+        if let result = await probeEndpoint(P4Route.headlightStrobeStats, using: client) {
+            strobeSupported = result
+        }
+    }
+
+    /// 探测固件是否带 v3.35.2 新功能，以预热接口为代表。
     private func probeNewFeatures(using client: P4APIClient) async {
         lastNewFeaturesProbe = Date()
-        do {
-            _ = try await client.get(P4Route.preheatStats)
-            newFeaturesSupported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { newFeaturesSupported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.preheatStats, using: client) {
+            newFeaturesSupported = result
         }
     }
 
     /// 探测 v3.35.3 的 Lighting Features。
     private func probeLighting(using client: P4APIClient) async {
         lastLightingProbe = Date()
-        do {
-            _ = try await client.get(P4Route.lightingStats)
-            lightingSupported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { lightingSupported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.lightingStats, using: client) {
+            lightingSupported = result
         }
     }
 
     /// 探测 v3.35.6 功能（Developer Test / 语言 / 召唤版本）。
     private func probeV356(using client: P4APIClient) async {
         lastV356Probe = Date()
-        do {
-            _ = try await client.get(P4Route.developerTestStats)
-            v356Supported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { v356Supported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.developerTestStats, using: client) {
+            v356Supported = result
         }
     }
 
     /// 探测网页语言接口；3.35.8 起 Developer Test 被移除，语言不能再跟着它判断。
     private func probeDashboardLanguage(using client: P4APIClient) async {
         lastLanguageProbe = Date()
-        do {
-            _ = try await client.get(P4Route.dashboardLanguage)
-            dashboardLanguageSupported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { dashboardLanguageSupported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.dashboardLanguage, using: client) {
+            dashboardLanguageSupported = result
         }
     }
 
     /// 单独拉取功能闸门（LAB Menu / S3XY / 封禁方案），用于开关后立即刷新标签栏。
     func refreshFeatures() async {
-        guard let features = try? await client.get(P4Route.featuresStatus) else { return }
+        let currentClient = client
+        guard let features = try? await currentClient.get(P4Route.featuresStatus),
+              isCurrent(currentClient) else { return }
         featuresStatus = features
         rebuildDerived()
         let visible = isLabEnabled
@@ -874,6 +883,7 @@ final class AppEnvironment: ObservableObject {
                 for await item in group { collected.append(item) }
                 return collected
             }
+            guard isCurrent(currentClient) else { return }
             for (path, value, error) in results {
                 if let value { payloads[path] = value }
                 if let error { errors[path] = error }
@@ -943,7 +953,6 @@ final class AppEnvironment: ObservableObject {
     // MARK: - 命令
 
     /// 执行固件写接口：POST + query 参数，然后刷新。
-    /// 执行固件写接口：POST + query 参数，然后刷新。
     /// - Returns: 是否真的把命令发出去了。忙时返回 false（调用方不要当成已提交）。
     @discardableResult
     func command(
@@ -1006,7 +1015,7 @@ final class AppEnvironment: ObservableObject {
     private func performUpload(named name: String, data: Data) async {
         let attemptBefore = otaStatus?["attempt"]?.intValue ?? 0
         do {
-            let json = try await client.uploadFirmware(fileName: name, data: data) { @Sendable sent, total in
+            let json = try await client.uploadFirmware(fileName: name, data: data) { @Sendable [weak self] sent, total in
                 Task { @MainActor [weak self] in
                     self?.otaUploadSent = sent
                     self?.otaUploadTotal = max(total, 1)
@@ -1137,7 +1146,9 @@ final class AppEnvironment: ObservableObject {
             lines.append("当前显示缓存 · \(cachedAt.formatted(date: .abbreviated, time: .standard))")
         }
         for bus in buses {
-            lines.append("· \(bus.displayName) \(bus.stateText) rx=\(bus.rxCount) tx=\(bus.txAccepted)")
+            let rx = bus.rxCount.map(String.init) ?? "—"
+            let tx = bus.txAccepted.map(String.init) ?? "—"
+            lines.append("· \(bus.displayName) \(bus.stateText) rx=\(rx) tx=\(tx)")
         }
         if let ota = otaStatus?.objectValue {
             let stage = ota["stage"]?.stringValue ?? "-"

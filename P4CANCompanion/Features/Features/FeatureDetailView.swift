@@ -276,11 +276,16 @@ struct FeatureDetailView: View {
         }
     }
 
-    /// 控件是否适用于当前固件：3.35.8 新增的 blockTxInPark 在旧固件上不存在时整行隐藏，
-    /// 而不是留一个永远「读取中」的占位行。
+    /// 只在部分固件版本存在的控件：设备没有上报对应字段时整行隐藏，
+    /// 而不是留一个永远「读取中」、提交还会被固件拒绝的占位行。
+    private static let firmwareOptionalKeys: [String: String] = [
+        "r79ap.blockPark": "blockTxInPark",
+        "nag.pauseLaneChange": "pauseDuringLaneChange",
+    ]
+
     private func isControlAvailable(_ control: FeatureControl) -> Bool {
-        if control.id == "r79ap.blockPark" { return stats?["blockTxInPark"] != nil }
-        return true
+        guard let key = Self.firmwareOptionalKeys[control.id] else { return true }
+        return statsObject(for: control)?[key] != nil
     }
 
     private func load() async {
