@@ -113,24 +113,6 @@ enum P4Palette {
     static let gray = Color(uiColor: .systemGray)
 }
 
-extension UIImage {
-    /// UIKit 页面用的行图标：与 SwiftUI `SettingsIcon` 同尺寸、同圆角的实心彩色方块 + 白色字形。
-    static func p4Tile(systemName: String, color: UIColor, size: CGFloat = Theme.RowIcon.size) -> UIImage? {
-        let pointSize = size * Theme.RowIcon.glyph / Theme.RowIcon.size
-        let configuration = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .semibold)
-        guard let symbol = UIImage(systemName: systemName, withConfiguration: configuration)?
-            .withTintColor(.white, renderingMode: .alwaysOriginal) else { return nil }
-        let rect = CGRect(x: 0, y: 0, width: size, height: size)
-        return UIGraphicsImageRenderer(size: rect.size).image { _ in
-            color.setFill()
-            UIBezierPath(roundedRect: rect, cornerRadius: size * Theme.RowIcon.corner / Theme.RowIcon.size).fill()
-            let glyph = symbol.size
-            symbol.draw(in: CGRect(x: (size - glyph.width) / 2, y: (size - glyph.height) / 2,
-                                   width: glyph.width, height: glyph.height))
-        }
-    }
-}
-
 /// 语义色调：颜色与默认图标一处定义，保证全 App 一致。
 enum P4Tone {
     case ok

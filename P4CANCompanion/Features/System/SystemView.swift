@@ -40,8 +40,8 @@ struct SystemView: View {
                 }
                 .listStyle(.insetGrouped)
                 .p4ListStyle()
-                .navigationTitle(L10n.t("设置", "Settings"))
-                .overlay(alignment: .bottom) { ToastOverlay() }
+                .contentMargins(.top, Theme.spacing(0.5), for: .scrollContent)
+                .p4RootPage(L10n.t("系统", "Settings"))
                 .onAppear { AppEnvironmentActions.shared.environment = environment }
                 .task {
                     #if DEBUG
@@ -824,7 +824,7 @@ private struct LogsSection: View {
             get: { exportedURL.map { ShareURLWrapper(url: $0) } },
             set: { if $0 == nil { exportedURL = nil } }
         )) { wrapper in
-            ActivityShareSheet(items: [wrapper.url])
+            P4ShareSheet(items: [wrapper.url])
         }
     }
 
@@ -858,17 +858,6 @@ private struct LogsSection: View {
 private struct ShareURLWrapper: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
-}
-
-/// UIActivityViewController 的 SwiftUI 包装（Modal 提供系统滑动关闭路径）。
-private struct ActivityShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - 关于

@@ -11,7 +11,6 @@ struct FeaturesView: View {
     /// 详情页导航栈（DEBUG 下可由 P4CAN_MODULE 直接深链到某个模块）。
     @State private var path: [String] = []
     @State private var query = ""
-    @FocusState private var searchFocused: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var isaEnabled: Bool?
@@ -129,22 +128,20 @@ struct FeaturesView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(spacing: 0) {
-                header
-                list
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 页面底色铺到状态栏 / 导航栏下方，避免系统默认的白色背景从上边缘透出来。
-            .background(Color.p4Background.ignoresSafeArea())
-            .navigationTitle(L10n.t("功能", "Features"))
-            // 导航栏不再使用系统默认（浅色模式下为纯白）材质，与页面底色保持一致。
-            .toolbarBackground(Color.p4Background, for: .navigationBar)
-            .navigationDestination(for: String.self) { moduleID in
-                if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
-                    destination(for: module)
+            list
+                .searchable(
+                    text: $query,
+                    placement: .navigationBarDrawer(displayMode: .automatic),
+                    prompt: L10n.t("搜索功能（如 灯光 / 踏板 / TLSSC）", "Search features (e.g. light / pedal / TLSSC)")
+                )
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .p4RootPage(L10n.t("功能", "Features"))
+                .navigationDestination(for: String.self) { moduleID in
+                    if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
+                        destination(for: module)
+                    }
                 }
-            }
-            .overlay(alignment: .bottom) { ToastOverlay() }
         }
         .task {
             await loadConfigToggles()
@@ -172,62 +169,6 @@ struct FeaturesView: View {
             }
             #endif
         }
-    }
-
-    // MARK: - 顶部：搜索
-
-    private var header: some View {
-        searchField
-            .padding(.top, Theme.spacing(0.5))
-            .padding(.bottom, Theme.spacing(1.5))
-            .background(Color.p4Background)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: Theme.spacing(0.75)) {
-            Image(systemName: "magnifyingglass")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            TextField(
-                L10n.t("搜索功能（如 灯光 / 踏板 / TLSSC）", "Search features (e.g. light / pedal / TLSSC)"),
-                text: $query
-            )
-            .textFieldStyle(.plain)
-            .font(.subheadline)
-            .focused($searchFocused)
-            .submitLabel(.search)
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
-            .onSubmit { searchFocused = false }
-            .accessibilityLabel(L10n.t("搜索功能", "Search features"))
-            if isSearching {
-                Button {
-                    Haptics.impact()
-                    query = ""
-                    searchFocused = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.t("清除搜索", "Clear search"))
-            }
-        }
-        .padding(.horizontal, Theme.spacing(1.5))
-        // 用垂直内边距 + 最小高度代替固定高度：大字号下输入框随文字长高。
-        .padding(.vertical, Theme.spacing(1))
-        .frame(minHeight: 42)
-        .background(Capsule().fill(Color(uiColor: .tertiarySystemFill)))
-        .overlay(
-            Capsule()
-                .strokeBorder(Color.accentColor.opacity(searchFocused ? 0.5 : 0), lineWidth: 1)
-                .animation(.easeOut(duration: 0.15), value: searchFocused)
-        )
-        .contentShape(Capsule())
-        .onTapGesture { searchFocused = true }
-        .padding(.horizontal, Theme.spacing(2))
     }
 
     // MARK: - 列表
@@ -466,7 +407,7 @@ struct FeaturesView: View {
     private func sectionHeader(title: String, count: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title)
-                .font(.title3.weight(.bold))
+                .font(.headline)
                 .foregroundStyle(.primary)
             Text("\(count)")
                 .font(.subheadline.weight(.medium))

@@ -39,7 +39,8 @@ struct DashboardView: View {
                         Color.clear.frame(height: 1).id("p4bottom")
                     }
                     .padding(.horizontal, Theme.spacing(2))
-                    .padding(.vertical, Theme.spacing(2))
+                    .padding(.top, Theme.spacing(1))
+                    .padding(.bottom, Theme.spacing(2))
                     // 宽度只由容器决定：iPhone 上等于屏幕宽，iPad / Mac 窗口上封顶到 720 并居中。
                     // 用 containerRelativeFrame 而不是 frame(maxWidth:)，是因为后者允许子视图
                     // 用「理想宽度」把内容撑出屏幕（大字号时曾出现 484 > 393 的横向溢出）。
@@ -62,11 +63,7 @@ struct DashboardView: View {
                     }
                 }
                 #endif
-                .overlay(alignment: .bottom) { ToastOverlay() }
-                .navigationTitle(L10n.t("设备状态", "Status"))
-                // 根标签页统一使用大标题（与功能/系统页一致）；详情页才用 inline。
-                .navigationBarTitleDisplayMode(.large)
-                .toolbarBackground(Color.p4Background, for: .navigationBar)
+                .p4RootPage(L10n.t("状态", "Status"))
                 .sheet(isPresented: $showsGuide) { ConnectionGuideView() }
             }
         }
