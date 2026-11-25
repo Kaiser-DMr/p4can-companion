@@ -15,6 +15,8 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 
 **下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
 
+**App 内一键爆闪固件 / Strobe firmware：** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 中文 + 前后爆闪（含免重启版），App 直接触发。
+
 > 本项目与 Tesla, Inc. 无关联。CAN 注入有风险，请只在驻车或封闭场地使用，并遵守当地法律。
 
 ![status](docs/screenshots/status.png)
@@ -62,8 +64,8 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 |---|---|
 | 官方 v3.29.3 | 基础功能；无爆闪接口时自动隐藏爆闪入口 |
 | 自编 v3.29.3 + 爆闪（fix5） | 独立的前/后爆闪页 |
-| 自编 v3.35.3-strobe1-zh | 3.35.3 全部功能 + 独立爆闪页 + 中文 Dashboard |
-| 自编 v3.35.3-eapnr1-zh | 上一行 + EAP/TLSSC 免重启补发（参考 P4can-No-Reboot） |
+| 自编 v3.35.3-strobe1-zh | 3.35.3 全部功能 + 独立爆闪页 + 中文 Dashboard + App 一键触发 — [下载](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) |
+| 自编 v3.35.3-eapnr1-zh | 上一行 + EAP/TLSSC 免重启补发（参考 P4can-No-Reboot） — [下载](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) |
 | 官方 v3.35.6 | 灯光页内远光/后雾爆闪、Developer Test、语言、Service 强制注入、召唤版本 |
 | 官方 v3.35.8 | 语言（EN / 简中 / 繁中）、灯光爆闪与动态刹车灯、R79 驻车/召唤暂停、内置 0x331 缓存补发（TLSSC 免重启）；Service Mode 可看补发计数 |
 | 官方 T2CAN v3.30.x | 两路 CAN、车型含 Model S/X、NAG/ISA/DMS/TLSSC/ALC/踏板/预热/R79/ULC/FSD/Service Mode；自动隐藏 P4 专属项 |
@@ -186,8 +188,8 @@ New pages appear only when the firmware supports them:
 |---|---|
 | Official v3.29.3 | Core features; strobe entries hidden when endpoints are absent |
 | Custom v3.29.3 + strobe (fix5) | Dedicated headlight / rear fog strobe pages |
-| Custom v3.35.3-strobe1-zh | All v3.35.3 features + strobe pages + Chinese dashboard |
-| Custom v3.35.3-eapnr1-zh | Above + EAP/TLSSC no-reboot replay (from P4can-No-Reboot) |
+| Custom v3.35.3-strobe1-zh | All v3.35.3 features + strobe pages + Chinese dashboard + one-tap app trigger — [download](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) |
+| Custom v3.35.3-eapnr1-zh | Above + EAP/TLSSC no-reboot replay (from P4can-No-Reboot) — [download](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) |
 | Official v3.35.6 | Lighting-page strobes, Developer Test, language, Service force injection, Summon Version |
 | Official v3.35.8 | Language (EN / Simplified / Traditional), lighting strobes and dynamic brake lights, R79 park/summon pause, built-in 0x331 cached replay (TLSSC no-reboot); Service Mode shows replay counters |
 | Official T2CAN v3.30.x | Two CAN buses, Model S/X profile, NAG/ISA/DMS/TLSSC/ALC/pedal/preheat/R79/ULC/FSD/Service Mode; P4-only pages hidden automatically |
