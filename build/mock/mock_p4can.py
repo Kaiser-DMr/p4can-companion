@@ -339,7 +339,7 @@ SYSTEM = {
     # 固件当前不支持 SOC；这里仅用于演示 App 的"有字段就显示"能力
     "batterySoc": 68,
     "rangeKm": 312,
-    "fwVersion": "v3.29.3 (mock)",
+    "fwVersion": f"v{FW_VARIANT} (mock)",
     "canHarness": "X179",
     "canPins": "4/5, 2/3, 26/27",
     "freeHeap": 184320,
@@ -433,6 +433,7 @@ STATS = {
     },
     "/api/r79/ap-control/stats": {
         "enabled": True, "allowManualDriving": False, "mode": 1, "delaySeconds": 5,
+        "blockTxInPark": False,
         "apActive": True, "gateAllowed": True, "gateReason": "AP_ACTIVE", "remainingMs": 0,
     },
     "/api/pedalmap/stats": {
@@ -757,6 +758,8 @@ def apply_post(path, qs):
         R79AP["mode"] = int(val("mode"))
         R79AP["delaySeconds"] = int(val("delaySeconds"))
         R79AP["allowManualDriving"] = _bool(val("allowManualDriving"))
+        if has("blockTxInPark"):
+            R79AP["blockTxInPark"] = _bool(val("blockTxInPark"))
         return None
 
     if path == "/api/blinkA/delay":
@@ -1076,6 +1079,10 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith(("/api/headlight-strobe/", "/api/rear-fog-strobe/",
                                 "/api/features/banned", "/api/features/tlssc-restore")):
                 return self.send_json({"ok": False, "error": "not found"}, status=404)
+            if FW_VARIANT.startswith(("3.35.7", "3.35.8")):
+                if path.startswith(("/api/developer-test/", "/api/summon-version/",
+                                    "/api/service-mode/force")):
+                    return self.send_json({"ok": False, "error": "not found"}, status=404)
             if path == "/api/features/status":
                 return self.send_json({k: v for k, v in FEATURES.items()
                                        if k not in ("banned", "bannedSupported",
@@ -1086,6 +1093,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/fsd/stats":
             return self.send_json(FSD)
         if path == "/api/service-mode/stats":
+            if FW_VARIANT.startswith(("3.35.7", "3.35.8")):
+                return self.send_json({k: v for k, v in SERVICE.items()
+                                       if k not in ("restoreForce", "restoreIntervalMs", "eapNr")})
             return self.send_json(SERVICE)
         if path == "/api/smartshift/stats":
             return self.send_json(SMARTSHIFT)

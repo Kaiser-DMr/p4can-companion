@@ -23,6 +23,24 @@ struct FirmwareChangelogView: View {
     private var entries: [Entry] {
         [
             Entry(
+                id: "v3358",
+                version: "v3.35.8 · 官方",
+                title: L10n.t("多语言与界面收拢", "Multilingual and consolidated UI"),
+                date: "2026-11-24",
+                notes: [
+                    L10n.t("仪表板支持 EN / 简中 / 繁中，语言设置独立于 App",
+                           "Dashboard supports EN / Simplified / Traditional Chinese; language is independent of the app"),
+                    L10n.t("Developer Test 合并进 FSD 可视化面板；打开后会阻断 AP",
+                           "Developer Test folded into the FSD visualisation panel; enabling it blocks AP"),
+                    L10n.t("R79 AP 控制新增「驻车 / 召唤时暂停其他功能」（blockTxInPark）",
+                           "R79 AP control adds “pause other features while parked / summoning” (blockTxInPark)"),
+                    L10n.t("移除 3.35.6 的六路 0x3FD 覆盖、召唤版本标识与服务模式强制注入接口",
+                           "Removes the 3.35.6 six-signal 0x3FD overrides, summon version and service-mode force endpoints"),
+                    L10n.t("TLSSC 恢复会开启 EAP 完整版；服务模式入口在系统页底部单独列出",
+                           "TLSSC restore enables full EAP; the service-mode entry now sits at the bottom of System"),
+                ]
+            ),
+            Entry(
                 id: "rear-fog",
                 version: "v3.29.3 · 后雾灯补丁",
                 title: L10n.t("后雾灯爆闪（0x273）", "Rear fog strobe (0x273)"),

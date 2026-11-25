@@ -265,6 +265,8 @@ struct ServiceModeView: View {
     private var chinaRestore: Bool { object["chinaRestore"]?.boolValue ?? false }
     private var restoreForce: Bool { object["restoreForce"]?.boolValue ?? false }
     private var restoreInterval: Int { Int(object["restoreIntervalMs"]?.intValue ?? 150) }
+    /// 3.35.7 起固件移除了 /api/service-mode/force，只有 3.35.6 会返回这两个字段。
+    private var hasForce: Bool { object["restoreForce"] != nil || object["restoreIntervalMs"] != nil }
     private var eapNr: [String: P4JSON] { object["eapNr"]?.objectValue ?? [:] }
     private var eapNrEnabled: Bool { eapNr["enabled"]?.boolValue ?? false }
 
@@ -281,35 +283,37 @@ struct ServiceModeView: View {
                 .tint(.p4Warn)
                 .disabled(!canEnter || busy)
 
-                Toggle(L10n.t("中国市场恢复帧", "China restore frames"),
+                Toggle(L10n.t("恢复红绿灯 / 停车标志辅助（TLSSC）", "Restore Traffic Light & Stop Sign Control"),
                        isOn: Binding(get: { chinaRestore }, set: { value in Task { await setRestore(value) } }))
                     .disabled(busy)
 
-                Toggle(L10n.t("强制注入 0x331", "Force 0x331 injection"),
-                       isOn: Binding(get: { restoreForce }, set: { value in
-                           Task { await setForce(value, interval: restoreInterval) }
-                       }))
-                    .disabled(busy)
+                if hasForce {
+                    Toggle(L10n.t("强制注入 0x331", "Force 0x331 injection"),
+                           isOn: Binding(get: { restoreForce }, set: { value in
+                               Task { await setForce(value, interval: restoreInterval) }
+                           }))
+                        .disabled(busy)
 
-                HStack {
-                    Text(L10n.t("注入间隔（毫秒）", "Interval (ms)"))
-                    Spacer()
-                    TextField("150", text: $intervalDraft)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 96)
-                        .textFieldStyle(.roundedBorder)
-                    Button(L10n.t("保存", "Save")) {
-                        Task { await setForce(restoreForce, interval: Int(intervalDraft) ?? 150) }
+                    HStack {
+                        Text(L10n.t("注入间隔（毫秒）", "Interval (ms)"))
+                        Spacer()
+                        TextField("150", text: $intervalDraft)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 96)
+                            .textFieldStyle(.roundedBorder)
+                        Button(L10n.t("保存", "Save")) {
+                            Task { await setForce(restoreForce, interval: Int(intervalDraft) ?? 150) }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(busy)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(busy)
                 }
             } header: {
                 Text(L10n.t("控制", "Controls"))
             } footer: {
-                Text(L10n.t("进入后需要在车机屏幕上确认；固件只发一次请求，不会自动重试。",
-                            "Confirm Service Mode on the vehicle screen. The request is sent once and is not retried automatically."))
+                Text(L10n.t("进入后需要在车机屏幕上确认；固件只发一次请求，不会自动重试。TLSSC 恢复会开启 EAP 完整版，可能影响车辆账号安全，平时不要开启。",
+                            "Confirm Service Mode on the vehicle screen. The request is sent once. TLSSC restore enables full EAP and may affect your vehicle account; leave it off in daily use."))
             }
 
             if !eapNr.isEmpty {
@@ -338,14 +342,7 @@ struct ServiceModeView: View {
             }
 
             Section(L10n.t("状态", "Status")) {
-                FWStatusRows(rows: [
-                    (L10n.t("可进入", "Can enter"), canEnter ? L10n.t("是", "Yes") : L10n.t("否", "No")),
-                    (L10n.t("恢复帧", "Restore frames"), chinaRestore ? L10n.t("开", "On") : L10n.t("关", "Off")),
-                    (L10n.t("强制注入", "Force injection"), restoreForce ? L10n.t("开", "On") : L10n.t("关", "Off")),
-                    (L10n.t("注入间隔", "Interval"), "\(restoreInterval) ms"),
-                    (L10n.t("恢复发送 / 失败", "Restore TX / fail"),
-                     "\(object["restoreTxOk"]?.intValue ?? 0) / \(object["restoreTxFail"]?.intValue ?? 0)"),
-                ])
+                FWStatusRows(rows: statusRows)
             }
         }
         .listStyle(.insetGrouped)
@@ -363,6 +360,20 @@ struct ServiceModeView: View {
             Text(L10n.t("车辆需在驻车状态，进入后还要在车机屏幕上确认。", "Park the car first; you still confirm on the vehicle screen."))
         }
         .task { await poll() }
+    }
+
+    private var statusRows: [(String, String)] {
+        var rows: [(String, String)] = [
+            (L10n.t("可进入", "Can enter"), canEnter ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+            (L10n.t("恢复帧", "Restore frames"), chinaRestore ? L10n.t("开", "On") : L10n.t("关", "Off")),
+        ]
+        if hasForce {
+            rows.append((L10n.t("强制注入", "Force injection"), restoreForce ? L10n.t("开", "On") : L10n.t("关", "Off")))
+            rows.append((L10n.t("注入间隔", "Interval"), "\(restoreInterval) ms"))
+        }
+        rows.append((L10n.t("恢复发送 / 失败", "Restore TX / fail"),
+                     "\(object["restoreTxOk"]?.intValue ?? 0) / \(object["restoreTxFail"]?.intValue ?? 0)"))
+        return rows
     }
 
     private func enter() async {
@@ -931,8 +942,8 @@ struct LightingFeaturesView: View {
                 } header: {
                     Text(L10n.t("爆闪", "Strobe"))
                 } footer: {
-                    Text(L10n.t("前大灯爆闪需要拨杆车型；开启后在 AP 中推拨杆触发。后雾灯爆闪直接脉冲 0x273。",
-                                "High beam strobe requires a stalk profile; trigger it with the stalk in AP. Rear fog strobe pulses 0x273."))
+                    Text(L10n.t("前大灯爆闪：AP 中用拨杆快速往自己拉三次开始，再拉一次停止，亮灭各 70 ms。后雾灯爆闪：按住右滚轮，把左滚轮向下转，连闪 20 次。",
+                                "High beam strobe: pull the stalk toward you three times in AP to start, once to stop, 70 ms on/off. Rear fog strobe: hold the right scroll wheel and scroll the left wheel down; it flashes 20 times."))
                 }
             }
 
@@ -949,14 +960,14 @@ struct LightingFeaturesView: View {
                 )) {
                     Text(L10n.t("关闭", "Off")).tag(0)
                     Text(L10n.t("轻踩", "Light press")).tag(1)
-                    Text(L10n.t("重踩", "Hard press")).tag(2)
+                    Text(L10n.t("深踩", "Deep press")).tag(2)
                 }
                 .disabled(busy || unavailable)
             } header: {
                 Text(L10n.t("控制", "Controls"))
             } footer: {
-                Text(L10n.t("AP 强制远光只在拨杆车型可用：开启后在 AP 中把拨杆向外推一次启动，再推一次停止并恢复自适应远光。",
-                            "AP forced high beam is stalk-only: enable, push the stalk away once during AP to start, again to stop and restore adaptive high beam."))
+                Text(L10n.t("AP 强制远光只在拨杆车型可用：AP 中把拨杆向前推一次开远光，再推一次关掉并恢复自适应远光。",
+                            "AP forced high beam is stalk-only: push the stalk forward once in AP to turn high beam on, again to turn it off and restore adaptive high beam."))
             }
 
             Section(L10n.t("状态", "Status")) {

@@ -161,7 +161,6 @@ struct DashboardView: View {
                 StatusChip(text: "CAN \(onlineBusCount)/\(max(environment.canBuses.count, 1))", systemImage: "cable.connector", tone: busTone)
                 StatusChip(text: "\(L10n.t("蓝牙", "BT")) \(bluetoothText)",
                            systemImage: "dot.radiowaves.left.and.right", tone: bluetoothTone)
-                StatusChip(text: "LAB \(labText)", systemImage: "flask", tone: labTone)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -616,16 +615,6 @@ struct DashboardView: View {
     private var bluetoothTone: P4Tone {
         guard let on = environment.s3xyStats?["bluetoothEnabled"]?.boolValue else { return .neutral }
         return on ? .ok : .neutral
-    }
-
-    private var labText: String {
-        guard let on = environment.featuresStatus?["lab"]?.boolValue else { return "—" }
-        return on ? L10n.t("开", "ON") : L10n.t("关", "OFF")
-    }
-
-    private var labTone: P4Tone {
-        guard let on = environment.featuresStatus?["lab"]?.boolValue else { return .neutral }
-        return on ? .info : .neutral
     }
 
     // MARK: - 5. 扭矩趋势

@@ -69,12 +69,11 @@ struct FeatureControl: Identifiable, Sendable {
 struct FeatureModule: Identifiable, Sendable {
     enum Section: String, CaseIterable, Sendable {
         // 顺序即功能页的分组顺序：灯光放最前（外观类、最常演示），
-        // 其后才是驾驶辅助、车身、实验室与高级。
+        // 实验室工具已并入「功能」，不再单独分组。
         case lighting = "灯光"
         case driving = "功能"
         case body = "车身与舒适"
         case advanced = "实验"
-        case lab = "实验室功能"
 
         /// 分组色板：决定图标瓦片底色，让「灯光/驾驶辅助/车身」一眼可分。
         var tint: Color {
@@ -82,7 +81,6 @@ struct FeatureModule: Identifiable, Sendable {
             case .lighting: return .p4Warn
             case .driving: return .p4Info
             case .body: return .p4OK
-            case .lab: return .purple
             case .advanced: return .secondary
             }
         }
@@ -92,7 +90,6 @@ struct FeatureModule: Identifiable, Sendable {
             case .lighting: return "Lighting"
             case .driving: return "Features"
             case .body: return "Body"
-            case .lab: return "Lab"
             case .advanced: return "Experimental"
             }
         }
@@ -103,7 +100,6 @@ struct FeatureModule: Identifiable, Sendable {
             case .lighting: return "💡"
             case .driving: return "🚗"
             case .body: return "🚪"
-            case .lab: return "🧪"
             case .advanced: return "⚙️"
             }
         }
@@ -136,10 +132,31 @@ struct FeatureModule: Identifiable, Sendable {
 enum FeatureCatalog {
 
     static let modules: [FeatureModule] = [
-
-        // MARK: 驾驶辅助
-
-        FeatureModule(
+FeatureModule(
+            id: "headlight",
+            title: "前大灯爆闪",
+            summary: "远光灯按设定次数与间隔快速闪烁，结束后恢复触发前的灯光状态。",
+            titleEN: "Headlight Strobe",
+            summaryEN: "Flash the high beams a set number of times, then restore the previous light state.",
+            icon: "light.beacon.max.fill",
+            section: .lighting,
+            statsPath: P4Route.headlightStrobeStats,
+            supportKey: nil,
+            controls: []
+        ),
+FeatureModule(
+            id: "rearFog",
+            title: "后雾灯爆闪",
+            summary: "注入 0x273 的后雾灯位：开始后连续闪烁，单次最长 30 秒，结束自动恢复。",
+            titleEN: "Rear Fog Strobe",
+            summaryEN: "Pulse the rear fog lamp via 0x273 for up to 30 seconds, then restore automatically.",
+            icon: "cloud.fog.fill",
+            section: .lighting,
+            statsPath: P4Route.rearFogStrobeStats,
+            supportKey: nil,
+            controls: []
+        ),
+FeatureModule(
             id: "nag",
             title: "NAG 抑制（Nag Killer）",
             summary: "扭矩表 / TSL9 两种注入方式，含 Mode A/B/C/H 波形与右手滚轮注入。",
@@ -275,8 +292,7 @@ enum FeatureCatalog {
                 ),
             ]
         ),
-
-        FeatureModule(
+FeatureModule(
             id: "isa",
             title: "ISA 限速提示抑制",
             summary: "抑制智能限速提示音（依当地法规自行决定）。",
@@ -293,28 +309,7 @@ enum FeatureCatalog {
                 ),
             ]
         ),
-
-        // MARK: 实验室功能
-
-        FeatureModule(
-            id: "dms",
-            title: "禁用驾驶员监控",
-            summary: "AP 期间请求关闭座舱摄像头监控（需要车型支持）。",
-            titleEN: "Disable Driver Monitoring",
-            summaryEN: "Request cabin-camera monitoring off during Autopilot.",
-            icon: "eye.slash",
-            section: .driving,
-            statsPath: P4Route.dmsConfig,
-            supportKey: "dmsNagSupported",
-            controls: [
-                FeatureControl(
-                    id: "dms.enabled", title: "禁用 DMS 提醒", footnote: "需要车型支持",
-                    kind: .toggle(key: "enabled", path: P4Route.dmsConfig, extra: [])
-                ),
-            ]
-        ),
-
-        FeatureModule(
+FeatureModule(
             id: "vision",
             title: "视觉限速控制",
             summary: "禁用视觉限速控制注入，可选择 Chassis 或 Body 总线。",
@@ -344,8 +339,24 @@ enum FeatureCatalog {
                 ),
             ]
         ),
-
-        FeatureModule(
+FeatureModule(
+            id: "dms",
+            title: "禁用驾驶员监控",
+            summary: "AP 期间请求关闭座舱摄像头监控（需要车型支持）。",
+            titleEN: "Disable Driver Monitoring",
+            summaryEN: "Request cabin-camera monitoring off during Autopilot.",
+            icon: "eye.slash",
+            section: .driving,
+            statsPath: P4Route.dmsConfig,
+            supportKey: "dmsNagSupported",
+            controls: [
+                FeatureControl(
+                    id: "dms.enabled", title: "禁用 DMS 提醒", footnote: "需要车型支持",
+                    kind: .toggle(key: "enabled", path: P4Route.dmsConfig, extra: [])
+                ),
+            ]
+        ),
+FeatureModule(
             id: "blink",
             title: "自动转向灯 (BlinkA)",
             summary: "NOA 变道自动打灯，含稳定期、取消暂停与发送模式。",
@@ -402,38 +413,443 @@ enum FeatureCatalog {
                 ),
             ]
         ),
-
-        FeatureModule(
-            id: "headlight",
-            title: "前大灯爆闪",
-            summary: "远光灯按设定次数与间隔快速闪烁，结束后恢复触发前的灯光状态。",
-            titleEN: "Headlight Strobe",
-            summaryEN: "Flash the high beams a set number of times, then restore the previous light state.",
-            icon: "light.beacon.max.fill",
-            section: .lighting,
-            statsPath: P4Route.headlightStrobeStats,
+FeatureModule(
+            id: "summon",
+            title: "召唤状态",
+            summary: "查看召唤会话、确认挡位、信号新鲜度与发送队列（只读）。",
+            titleEN: "Summon Status",
+            summaryEN: "View the current Summon session and status.",
+            icon: "dot.radiowaves.left.and.right",
+            section: .driving,
+            statsPath: P4Route.summonStats,
             supportKey: nil,
             controls: []
         ),
-
-        FeatureModule(
-            id: "rearFog",
-            title: "后雾灯爆闪",
-            summary: "注入 0x273 的后雾灯位：开始后连续闪烁，单次最长 30 秒，结束自动恢复。",
-            titleEN: "Rear Fog Strobe",
-            summaryEN: "Pulse the rear fog lamp via 0x273 for up to 30 seconds, then restore automatically.",
-            icon: "cloud.fog.fill",
-            section: .lighting,
-            statsPath: P4Route.rearFogStrobeStats,
+FeatureModule(
+            id: "tlssc",
+            title: "TLSSC 交通灯 / 停车标志",
+            summary: "AP 期间注入红绿灯与停车标志控制；高速与 NOA 闸门可按需放行。",
+            titleEN: "TLSSC",
+            summaryEN: "Traffic-light and stop-sign control during AP.",
+            icon: "octagon.fill",
+            section: .driving,
+            statsPath: P4Route.summonStats,
+            supportKey: nil,
+            controls: [
+                FeatureControl(
+                    id: "summon.tlssc", title: "启用 TLSSC 注入", footnote: "独立 enable / disable 端点",
+                    kind: .endpointToggle(
+                        readKey: "tlssc",
+                        on: P4Route.summonTLSSCEnable,
+                        off: P4Route.summonTLSSCDisable
+                    )
+                ),
+                FeatureControl(
+                    id: "summon.highwayGate", title: "高速闸门", footnote: "确认进入封闭道路后暂停 TLSSC",
+                    kind: .toggle(key: "enabled", path: P4Route.summonTLSSCHighwayGate, extra: []),
+                    readKey: "tlsscHighwayGateEnabled"
+                ),
+                FeatureControl(
+                    id: "summon.noaBlock", title: "NOA 中阻断 TLSSC", footnote: "NOA 启动后释放覆盖",
+                    kind: .toggle(key: "enabled", path: P4Route.summonTLSSCNoABlock, extra: []),
+                    readKey: "tlsscBlockInNoa"
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "alc",
+            title: "自动拨杆变道 (ALC)",
+            summary: "拨杆触发变道注入，可选择注入总线（CAN A / CAN B / 双路）。",
+            titleEN: "Auto Lane Change",
+            summaryEN: "Experimental 0x293 UI_autoLaneChange enable.",
+            icon: "road.lanes",
+            section: .driving,
+            statsPath: P4Route.alcStats,
+            supportKey: nil,
+            controls: [
+                FeatureControl(
+                    id: "alc.enabled", title: "启用自动变道", footnote: nil,
+                    kind: .toggle(key: "enabled", path: P4Route.alcUpdate, extra: []),
+                    readKey: "autoLaneChangeEnabled"
+                ),
+                FeatureControl(
+                    id: "alc.bus", title: "注入总线", footnote: "BOTH 会同时在两路发送",
+                    kind: .selectRead(
+                        key: "bus",
+                        readKey: "autoLaneChangeTargetBus",
+                        options: [
+                            .init(label: "CAN A", rawValue: "1"),
+                            .init(label: "CAN B", rawValue: "2"),
+                            .init(label: "BOTH", rawValue: "3"),
+                        ],
+                        path: P4Route.alcUpdate,
+                        extra: []
+                    )
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "pedal",
+            title: "踏板映射 (Pedal Map)",
+            summary: "切换踏板/加速曲线档位，需 0x334 路由支持。",
+            titleEN: "Pedal Response",
+            summaryEN: "Acceleration response mapping.",
+            icon: "slider.horizontal.3",
+            section: .driving,
+            statsPath: P4Route.pedalMapStats,
+            supportKey: "pedalMapSupported",
+            controls: [
+                FeatureControl(
+                    id: "pedal.mode", title: "踏板档位", footnote: nil,
+                    kind: .select(
+                        key: "mode",
+                        options: [
+                            .init(label: "原厂", rawValue: "STOCK"),
+                            .init(label: "CHILL", rawValue: "CHILL"),
+                            .init(label: "SPORT", rawValue: "SPORT"),
+                            .init(label: "PERFORMANCE", rawValue: "PERFORMANCE"),
+                        ],
+                        path: P4Route.pedalMapSet,
+                        extra: []
+                    ),
+                    readKey: "targetName"
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "apDrive",
+            title: "AP 加速 / 回收",
+            summary: "AP 期间使用 CHILL 加速与所选能量回收档位；退出 AP 后恢复手动驾驶响应。",
+            titleEN: "AP Accel / Regen",
+            summaryEN: "Use Chill acceleration and chosen regen during AP.",
+            icon: "car.side",
+            section: .driving,
+            statsPath: P4Route.pedalMapStats,
+            supportKey: "apDriveProfileSupported",
+            controls: [
+                FeatureControl(
+                    id: "apDrive.enabled", title: "启用 AP 加速 / 回收",
+                    footnote: "需要支持的 0x334 路由",
+                    kind: .toggle(key: "enabled", path: P4Route.featuresAPDriveProfile, extra: []),
+                    readKey: "apDriveProfileEnabled"
+                ),
+                FeatureControl(
+                    id: "apDrive.regen", title: "能量回收档位",
+                    footnote: "随下一帧整车 CAN 生效；手动踏板目标仍保留在内存",
+                    kind: .selectRead(
+                        key: "regen",
+                        readKey: "apDriveProfileRegenName",
+                        options: [
+                            .init(label: "标准 · 20", rawValue: "STANDARD", submitValue: "20"),
+                            .init(label: "减弱 · 10", rawValue: "REDUCED", submitValue: "10"),
+                            .init(label: "最小 · 1", rawValue: "MINIMAL", submitValue: "1"),
+                        ],
+                        path: P4Route.featuresAPDriveProfile,
+                        extra: []
+                    )
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "lighting",
+            title: "灯光功能",
+            summary: "AP 期间强制远光（需拨杆车型）与动态刹车灯（轻踩 / 重踩）。",
+            titleEN: "Lighting Features",
+            summaryEN: "AP forced high beam (stalk profiles) and dynamic brake lights.",
+            icon: "headlight.high.beam.fill",
+            section: .driving,
+            statsPath: P4Route.lightingStats,
             supportKey: nil,
             controls: []
         ),
-
-        // MARK: v3.35.2 新增
-
-        
-
-        FeatureModule(
+FeatureModule(
+            id: "preheat",
+            title: "电池预热",
+            summary: "充电前主动请求 BMS 加热电池，达到目标温度或电池已暖后自动关闭。",
+            titleEN: "Battery Preheat",
+            summaryEN: "Ask the BMS to heat the pack before charging; stops at the target or when warm.",
+            icon: "thermometer.sun.fill",
+            section: .driving,
+            statsPath: P4Route.preheatStats,
+            supportKey: "preheatSupported",
+            controls: []
+        ),
+FeatureModule(
+            id: "r79ap",
+            title: "R79 AP 控制",
+            summary: "AP 期间阻断或延迟 R79 注入；3.35.8 起可让驻车 / 召唤时暂停其他功能。",
+            titleEN: "R79 AP Control",
+            summaryEN: "Set R79 behavior during AP and manual driving.",
+            icon: "car.circle",
+            section: .driving,
+            statsPath: P4Route.r79APControlStats,
+            supportKey: nil,
+            controls: [
+                FeatureControl(
+                    id: "r79ap.enabled", title: "启用 AP 控制", footnote: "五个参数需一次提交",
+                    kind: .toggle(
+                        key: "enabled", path: P4Route.r79APControlUpdate,
+                        extra: ["mode", "delaySeconds", "allowManualDriving", "blockTxInPark?"]
+                    )
+                ),
+                FeatureControl(
+                    id: "r79ap.mode", title: "AP 策略", footnote: nil,
+                    kind: .select(
+                        key: "mode",
+                        options: [
+                            .init(label: "AP 期间阻断", rawValue: "0"),
+                            .init(label: "AP 之后延迟", rawValue: "1"),
+                        ],
+                        path: P4Route.r79APControlUpdate,
+                        extra: ["enabled", "delaySeconds", "allowManualDriving", "blockTxInPark?"]
+                    )
+                ),
+                FeatureControl(
+                    id: "r79ap.delay", title: "延迟秒数", footnote: "2–10 秒",
+                    kind: .number(
+                        key: "delaySeconds", range: 2...10, step: 1, unit: "秒",
+                        path: P4Route.r79APControlUpdate,
+                        extra: ["enabled", "mode", "allowManualDriving", "blockTxInPark?"]
+                    )
+                ),
+                FeatureControl(
+                    id: "r79ap.manual", title: "允许人工介入", footnote: nil,
+                    kind: .toggle(
+                        key: "allowManualDriving", path: P4Route.r79APControlUpdate,
+                        extra: ["enabled", "mode", "delaySeconds", "blockTxInPark?"]
+                    )
+                ),
+                FeatureControl(
+                    id: "r79ap.blockPark", title: "驻车 / 召唤时暂停其他功能",
+                    footnote: "3.35.8 新增；P 档或召唤时暂停额外功能，避免互相干扰",
+                    kind: .toggle(
+                        key: "blockTxInPark", path: P4Route.r79APControlUpdate,
+                        extra: ["enabled", "mode", "delaySeconds", "allowManualDriving"]
+                    )
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "r79status",
+            title: "R79 状态",
+            summary: "只读查看当前 R79 发送器的策略、MUX1 收发计数与静默状态。",
+            titleEN: "R79 Status",
+            summaryEN: "Read-only status of the selected R79 transmitter.",
+            icon: "antenna.radiowaves.left.and.right",
+            section: .driving,
+            statsPath: P4Route.r79Stats,
+            supportKey: nil,
+            controls: []
+        ),
+FeatureModule(
+            id: "heartbeat",
+            title: "召唤心跳覆盖",
+            summary: "维持召唤会话心跳（本次会话有效，重启后关闭）。",
+            titleEN: "Summon Heartbeat Override",
+            summaryEN: "0x3F8 UI_driverAssistControl override.",
+            icon: "heart.text.square",
+            section: .driving,
+            statsPath: P4Route.summonHeartbeatStats,
+            supportKey: nil,
+            controls: [
+                FeatureControl(
+                    id: "hb.enabled", title: "启用心跳覆盖", footnote: "需同时提交原始值",
+                    kind: .toggle(
+                        key: "enabled", path: P4Route.summonHeartbeatUpdate,
+                        // 固件读 value，stats 里叫 selectedValue → 用 "read:write" 别名提交
+                        extra: ["selectedValue:value"]
+                    )
+                ),
+                FeatureControl(
+                    id: "hb.value", title: "心跳原始值", footnote: "0–3",
+                    kind: .selectRead(
+                        key: "value",
+                        readKey: "selectedValue",
+                        options: (0...3).map { .init(label: "\($0)", rawValue: "\($0)") },
+                        path: P4Route.summonHeartbeatUpdate,
+                        extra: ["enabled"]
+                    )
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "window",
+            title: "主驾车窗一键开",
+            summary: "仅 Model YL（三电机）配置可用，需车辆静止；抓取并复用原厂车窗指令。",
+            titleEN: "Driver Window Test",
+            summaryEN: "Model YL (Triple YL) only · PARK required.",
+            icon: "rectangle.split.3x1",
+            section: .driving,
+            statsPath: P4Route.driverWindowStats,
+            supportKey: "supported",
+            controls: [
+                FeatureControl(
+                    id: "window.open", title: "打开主驾车窗", footnote: "需车辆静止且信号就绪",
+                    kind: .trigger(
+                        path: P4Route.driverWindowOpen,
+                        query: [],
+                        confirmation: true,
+                        destructive: false
+                    )
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "research",
+            title: "CAN 研究捕获",
+            summary: "按槽位打标签捕获 CAN 报文，用于离线分析（A–D 槽位）。",
+            titleEN: "CAN Research Capture",
+            summaryEN: "BODY + CHASSIS + PARTY research recording.",
+            icon: "record.circle",
+            section: .driving,
+            statsPath: P4Route.researchCaptureStats,
+            supportKey: nil,
+            controls: [
+                FeatureControl(
+                    id: "research.start.a", title: "捕获 A · 立即可用",
+                    footnote: "前置窗口已就绪时按此开始",
+                    kind: .trigger(
+                        path: P4Route.researchCaptureStart,
+                        query: [P4Param("slot", "A")],
+                        confirmation: false,
+                        destructive: false
+                    )
+                ),
+                FeatureControl(
+                    id: "research.start.b", title: "捕获 B",
+                    footnote: nil,
+                    kind: .trigger(
+                        path: P4Route.researchCaptureStart,
+                        query: [P4Param("slot", "B")],
+                        confirmation: false,
+                        destructive: false
+                    )
+                ),
+                FeatureControl(
+                    id: "research.start.c", title: "捕获 C",
+                    footnote: nil,
+                    kind: .trigger(
+                        path: P4Route.researchCaptureStart,
+                        query: [P4Param("slot", "C")],
+                        confirmation: false,
+                        destructive: false
+                    )
+                ),
+                FeatureControl(
+                    id: "research.start.d", title: "捕获 D",
+                    footnote: nil,
+                    kind: .trigger(
+                        path: P4Route.researchCaptureStart,
+                        query: [P4Param("slot", "D")],
+                        confirmation: false,
+                        destructive: false
+                    )
+                ),
+                FeatureControl(
+                    id: "research.mode", title: "捕获模式", footnote: nil,
+                    kind: .selectRead(
+                        key: "mode",
+                        readKey: "captureMode",
+                        options: [
+                            .init(label: "快照 SNAPSHOT", rawValue: "SNAPSHOT"),
+                            .init(label: "原始跳变 RAW_TRANSITION", rawValue: "RAW_TRANSITION"),
+                        ],
+                        path: P4Route.researchCaptureMode,
+                        extra: []
+                    )
+                ),
+                FeatureControl(
+                    id: "research.window", title: "捕获窗口", footnote: "前置 2–15 秒 / 后置 2–10 秒，同时提交",
+                    kind: .pairNumber(
+                        first: NumberSpec(key: "preMs", range: 2000...15000, unit: "ms"),
+                        second: NumberSpec(key: "postMs", range: 2000...10000, unit: "ms"),
+                        path: P4Route.researchCaptureConfig
+                    )
+                ),
+                FeatureControl(
+                    id: "research.reset", title: "重置捕获数据", footnote: nil,
+                    kind: .trigger(
+                        path: P4Route.researchCaptureReset,
+                        query: [],
+                        confirmation: true,
+                        destructive: true
+                    )
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "dmscapture",
+            title: "驾驶员监控捕获",
+            summary: "只读录制 0x389 / 0x5D9 / 0x247 / 0x399 / 0x370 的交互与手扶状态；固定前置 2 秒 + 后置 5 秒，A–F 六种测试条件。",
+            titleEN: "Driver Monitoring Capture",
+            summaryEN: "Record driver-monitoring signals.",
+            icon: "video",
+            section: .driving,
+            statsPath: P4Route.dmsStats,
+            supportKey: nil,
+            controls: [
+                FeatureControl(
+                    id: "dmscap.a", title: "A · 正常前视", footnote: "按下后立即保持正常前视",
+                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "A")],
+                                   confirmation: false, destructive: false)
+                ),
+                FeatureControl(
+                    id: "dmscap.b", title: "B · 短暂扫视屏幕", footnote: nil,
+                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "B")],
+                                   confirmation: false, destructive: false)
+                ),
+                FeatureControl(
+                    id: "dmscap.c", title: "C · 持续侧看", footnote: nil,
+                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "C")],
+                                   confirmation: false, destructive: false)
+                ),
+                FeatureControl(
+                    id: "dmscap.d", title: "D · 低头", footnote: nil,
+                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "D")],
+                                   confirmation: false, destructive: false)
+                ),
+                FeatureControl(
+                    id: "dmscap.e", title: "E · 转向扭矩 + 移开视线", footnote: nil,
+                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "E")],
+                                   confirmation: false, destructive: false)
+                ),
+                FeatureControl(
+                    id: "dmscap.f", title: "F · 前视，无主动扭矩", footnote: nil,
+                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "F")],
+                                   confirmation: false, destructive: false)
+                ),
+                FeatureControl(
+                    id: "dmscap.reset", title: "重置捕获数据", footnote: "CSV 可在「系统 → 日志」导出",
+                    kind: .trigger(path: P4Route.dmsReset, query: [],
+                                   confirmation: true, destructive: true)
+                ),
+            ]
+        ),
+FeatureModule(
+            id: "modeh",
+            title: "Mode H 调参",
+            summary: "Mode H 波形的主峰值、等待、不应期、反向载波与 Hands-On 策略；含实时引擎监视。",
+            titleEN: "Mode H Tuning",
+            summaryEN: "Mode H profile tuning and live engine monitor.",
+            icon: "dial.medium",
+            section: .driving,
+            statsPath: P4Route.nagHProfileStats,
+            supportKey: "nagSupported",
+            controls: []
+        ),
+FeatureModule(
+            id: "r79Timing",
+            title: "R79 时序捕获",
+            summary: "记录 R79 请求与控制器完成时序，导出 CSV 分析延迟与失败原因。",
+            titleEN: "R79 Timing Capture",
+            summaryEN: "Capture R79 request/completion timing and export a CSV.",
+            icon: "timer",
+            section: .driving,
+            statsPath: P4Route.r79TimingStatus,
+            supportKey: nil,
+            controls: []
+        ),
+FeatureModule(
             id: "r79",
             title: "R79 / EU 解锁",
             summary: "Mode 1/2 波形、Bit18 策略与 HW3 兼容（HW3 必须单独提交）。",
@@ -519,23 +935,6 @@ enum FeatureCatalog {
             ]
         ),
 FeatureModule(
-            id: "fsd",
-            title: "FSD 注入",
-            summary: "在 CHASSIS 上注入 FSD 可视化标志；可设定 AP 激活时暂停。",
-            titleEN: "FSD Injection",
-            summaryEN: "Inject the FSD visualisation flag on CHASSIS, optionally suspended during AP.",
-            icon: "wand.and.stars",
-            section: .advanced,
-            statsPath: P4Route.fsdStats,
-            supportKey: nil,
-            controls: []
-        ),
-
-        
-
-        
-
-        FeatureModule(
             id: "smartShift",
             title: "SmartShift 自动换挡",
             summary: "实验性自动换挡：刹车确认后由 BODY 发出挡位请求，含车速与障碍物门槛。",
@@ -547,36 +946,7 @@ FeatureModule(
             supportKey: nil,
             controls: []
         ),
-
-        FeatureModule(
-            id: "r79Timing",
-            title: "R79 时序捕获",
-            summary: "记录 R79 请求与控制器完成时序，导出 CSV 分析延迟与失败原因。",
-            titleEN: "R79 Timing Capture",
-            summaryEN: "Capture R79 request/completion timing and export a CSV.",
-            icon: "timer",
-            section: .lab,
-            statsPath: P4Route.r79TimingStatus,
-            supportKey: nil,
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "summon",
-            title: "召唤状态",
-            summary: "查看召唤会话、确认挡位、信号新鲜度与发送队列（只读）。",
-            titleEN: "Summon Status",
-            summaryEN: "View the current Summon session and status.",
-            icon: "dot.radiowaves.left.and.right",
-            section: .driving,
-            statsPath: P4Route.summonStats,
-            supportKey: nil,
-            controls: []
-        ),
-
-        
-
-        FeatureModule(
+FeatureModule(
             id: "country",
             title: "地区 / 地图区服",
             summary: "切换国家与地图区服（STOCK / US / KOREA / NEW ZEALAND）。",
@@ -616,72 +986,7 @@ FeatureModule(
                 ),
             ]
         ),
-
-        FeatureModule(
-            id: "tlssc",
-            title: "TLSSC 交通灯 / 停车标志",
-            summary: "AP 期间注入红绿灯与停车标志控制；高速与 NOA 闸门可按需放行。",
-            titleEN: "TLSSC",
-            summaryEN: "Traffic-light and stop-sign control during AP.",
-            icon: "octagon.fill",
-            section: .driving,
-            statsPath: P4Route.summonStats,
-            supportKey: nil,
-            controls: [
-                FeatureControl(
-                    id: "summon.tlssc", title: "启用 TLSSC 注入", footnote: "独立 enable / disable 端点",
-                    kind: .endpointToggle(
-                        readKey: "tlssc",
-                        on: P4Route.summonTLSSCEnable,
-                        off: P4Route.summonTLSSCDisable
-                    )
-                ),
-                FeatureControl(
-                    id: "summon.highwayGate", title: "高速闸门", footnote: "确认进入封闭道路后暂停 TLSSC",
-                    kind: .toggle(key: "enabled", path: P4Route.summonTLSSCHighwayGate, extra: []),
-                    readKey: "tlsscHighwayGateEnabled"
-                ),
-                FeatureControl(
-                    id: "summon.noaBlock", title: "NOA 中阻断 TLSSC", footnote: "NOA 启动后释放覆盖",
-                    kind: .toggle(key: "enabled", path: P4Route.summonTLSSCNoABlock, extra: []),
-                    readKey: "tlsscBlockInNoa"
-                ),
-            ]
-        ),
 FeatureModule(
-            id: "alc",
-            title: "自动拨杆变道 (ALC)",
-            summary: "拨杆触发变道注入，可选择注入总线（CAN A / CAN B / 双路）。",
-            titleEN: "Auto Lane Change",
-            summaryEN: "Experimental 0x293 UI_autoLaneChange enable.",
-            icon: "road.lanes",
-            section: .driving,
-            statsPath: P4Route.alcStats,
-            supportKey: nil,
-            controls: [
-                FeatureControl(
-                    id: "alc.enabled", title: "启用自动变道", footnote: nil,
-                    kind: .toggle(key: "enabled", path: P4Route.alcUpdate, extra: []),
-                    readKey: "autoLaneChangeEnabled"
-                ),
-                FeatureControl(
-                    id: "alc.bus", title: "注入总线", footnote: "BOTH 会同时在两路发送",
-                    kind: .selectRead(
-                        key: "bus",
-                        readKey: "autoLaneChangeTargetBus",
-                        options: [
-                            .init(label: "CAN A", rawValue: "1"),
-                            .init(label: "CAN B", rawValue: "2"),
-                            .init(label: "BOTH", rawValue: "3"),
-                        ],
-                        path: P4Route.alcUpdate,
-                        extra: []
-                    )
-                ),
-            ]
-        ),
-
-        FeatureModule(
             id: "ulc",
             title: "无确认变道 (ULC)",
             summary: "变道确认、高速禁用与盲区策略（blind: 标准 / 激进 / 极激进）。",
@@ -741,37 +1046,7 @@ FeatureModule(
                 ),
             ]
         ),
-
-        FeatureModule(
-            id: "pedal",
-            title: "踏板映射 (Pedal Map)",
-            summary: "切换踏板/加速曲线档位，需 0x334 路由支持。",
-            titleEN: "Pedal Response",
-            summaryEN: "Acceleration response mapping.",
-            icon: "slider.horizontal.3",
-            section: .driving,
-            statsPath: P4Route.pedalMapStats,
-            supportKey: "pedalMapSupported",
-            controls: [
-                FeatureControl(
-                    id: "pedal.mode", title: "踏板档位", footnote: nil,
-                    kind: .select(
-                        key: "mode",
-                        options: [
-                            .init(label: "原厂", rawValue: "STOCK"),
-                            .init(label: "CHILL", rawValue: "CHILL"),
-                            .init(label: "SPORT", rawValue: "SPORT"),
-                            .init(label: "PERFORMANCE", rawValue: "PERFORMANCE"),
-                        ],
-                        path: P4Route.pedalMapSet,
-                        extra: []
-                    ),
-                    readKey: "targetName"
-                ),
-            ]
-        ),
-
-        FeatureModule(
+FeatureModule(
             id: "continuousAP",
             title: "常驻 AP（实验）",
             summary: "通过手势保持 AP 会话；方法与开关必须同时提交。",
@@ -805,7 +1080,19 @@ FeatureModule(
                 ),
             ]
         ),
-        FeatureModule(
+FeatureModule(
+            id: "fsd",
+            title: "Developer Test · FSD 可视化",
+            summary: "3.35.8 把 Developer Test 合并到这里：注入 FSD 可视化标志，可设 AP 激活时暂停。打开后会阻断 AP。",
+            titleEN: "Developer Test · FSD Visualisation",
+            summaryEN: "3.35.8 folds Developer Test into this page: inject the FSD visualisation flag, optionally suspended during AP. Enabling it blocks AP.",
+            icon: "wand.and.stars",
+            section: .advanced,
+            statsPath: P4Route.fsdStats,
+            supportKey: nil,
+            controls: []
+        ),
+FeatureModule(
             id: "devTest",
             title: "Developer Test",
             summary: "覆盖 CHASSIS 0x3FD 的六路 UI 信号，仅用于测试。",
@@ -817,8 +1104,7 @@ FeatureModule(
             supportKey: nil,
             controls: []
         ),
-
-        FeatureModule(
+FeatureModule(
             id: "summonVersion",
             title: "召唤版本标识",
             summary: "覆盖 0x259 的 APP_summonVersionIdentifier，仅在 P 档或召唤时注入。",
@@ -830,9 +1116,7 @@ FeatureModule(
             supportKey: nil,
             controls: []
         ),
-
-
-        FeatureModule(
+FeatureModule(
             id: "profile",
             title: "车型配置",
             summary: "只读查看当前车型/拓扑与三路总线角色；要切换车型请回设置页点「更改车型」（保存后设备重启）。",
@@ -844,335 +1128,6 @@ FeatureModule(
             supportKey: nil,
             controls: []
         ),
-
-        FeatureModule(
-            id: "apDrive",
-            title: "AP 加速 / 回收",
-            summary: "AP 期间使用 CHILL 加速与所选能量回收档位；退出 AP 后恢复手动驾驶响应。",
-            titleEN: "AP Accel / Regen",
-            summaryEN: "Use Chill acceleration and chosen regen during AP.",
-            icon: "car.side",
-            section: .driving,
-            statsPath: P4Route.pedalMapStats,
-            supportKey: "apDriveProfileSupported",
-            controls: [
-                FeatureControl(
-                    id: "apDrive.enabled", title: "启用 AP 加速 / 回收",
-                    footnote: "需要支持的 0x334 路由",
-                    kind: .toggle(key: "enabled", path: P4Route.featuresAPDriveProfile, extra: []),
-                    readKey: "apDriveProfileEnabled"
-                ),
-                FeatureControl(
-                    id: "apDrive.regen", title: "能量回收档位",
-                    footnote: "随下一帧整车 CAN 生效；手动踏板目标仍保留在内存",
-                    kind: .selectRead(
-                        key: "regen",
-                        readKey: "apDriveProfileRegenName",
-                        options: [
-                            .init(label: "标准 · 20", rawValue: "STANDARD", submitValue: "20"),
-                            .init(label: "减弱 · 10", rawValue: "REDUCED", submitValue: "10"),
-                            .init(label: "最小 · 1", rawValue: "MINIMAL", submitValue: "1"),
-                        ],
-                        path: P4Route.featuresAPDriveProfile,
-                        extra: []
-                    )
-                ),
-            ]
-        ),
-        FeatureModule(
-            id: "lighting",
-            title: "灯光功能",
-            summary: "AP 期间强制远光（需拨杆车型）与动态刹车灯（轻踩 / 重踩）。",
-            titleEN: "Lighting Features",
-            summaryEN: "AP forced high beam (stalk profiles) and dynamic brake lights.",
-            icon: "headlight.high.beam.fill",
-            section: .driving,
-            statsPath: P4Route.lightingStats,
-            supportKey: nil,
-            controls: []
-        ),
-
-FeatureModule(
-            id: "preheat",
-            title: "电池预热",
-            summary: "充电前主动请求 BMS 加热电池，达到目标温度或电池已暖后自动关闭。",
-            titleEN: "Battery Preheat",
-            summaryEN: "Ask the BMS to heat the pack before charging; stops at the target or when warm.",
-            icon: "thermometer.sun.fill",
-            section: .driving,
-            statsPath: P4Route.preheatStats,
-            supportKey: "preheatSupported",
-            controls: []
-        ),
-
-        FeatureModule(
-            id: "r79ap",
-            title: "R79 AP 控制",
-            summary: "AP 期间阻断或延迟 R79 注入（需实验室功能开启）。",
-            titleEN: "R79 AP Control",
-            summaryEN: "Set R79 behavior during AP and manual driving.",
-            icon: "car.circle",
-            section: .lab,
-            statsPath: P4Route.r79APControlStats,
-            supportKey: nil,
-            controls: [
-                FeatureControl(
-                    id: "r79ap.enabled", title: "启用 AP 控制", footnote: "四个参数需一次提交",
-                    kind: .toggle(
-                        key: "enabled", path: P4Route.r79APControlUpdate,
-                        extra: ["mode", "delaySeconds", "allowManualDriving"]
-                    )
-                ),
-                FeatureControl(
-                    id: "r79ap.mode", title: "AP 策略", footnote: nil,
-                    kind: .select(
-                        key: "mode",
-                        options: [
-                            .init(label: "AP 期间阻断", rawValue: "0"),
-                            .init(label: "AP 之后延迟", rawValue: "1"),
-                        ],
-                        path: P4Route.r79APControlUpdate,
-                        extra: ["enabled", "delaySeconds", "allowManualDriving"]
-                    )
-                ),
-                FeatureControl(
-                    id: "r79ap.delay", title: "延迟秒数", footnote: "2–10 秒",
-                    kind: .number(
-                        key: "delaySeconds", range: 2...10, step: 1, unit: "秒",
-                        path: P4Route.r79APControlUpdate,
-                        extra: ["enabled", "mode", "allowManualDriving"]
-                    )
-                ),
-                FeatureControl(
-                    id: "r79ap.manual", title: "允许人工介入", footnote: nil,
-                    kind: .toggle(
-                        key: "allowManualDriving", path: P4Route.r79APControlUpdate,
-                        extra: ["enabled", "mode", "delaySeconds"]
-                    )
-                ),
-            ]
-        ),
-
-        FeatureModule(
-            id: "r79status",
-            title: "R79 状态",
-            summary: "只读查看当前 R79 发送器的策略、MUX1 收发计数与静默状态。",
-            titleEN: "R79 Status",
-            summaryEN: "Read-only status of the selected R79 transmitter.",
-            icon: "antenna.radiowaves.left.and.right",
-            section: .lab,
-            statsPath: P4Route.r79Stats,
-            supportKey: nil,
-            controls: []
-        ),
-
-        // MARK: 车身与舒适
-
-        FeatureModule(
-            id: "heartbeat",
-            title: "召唤心跳覆盖",
-            summary: "维持召唤会话心跳（本次会话有效，重启后关闭）。",
-            titleEN: "Summon Heartbeat Override",
-            summaryEN: "0x3F8 UI_driverAssistControl override.",
-            icon: "heart.text.square",
-            section: .lab,
-            statsPath: P4Route.summonHeartbeatStats,
-            supportKey: nil,
-            controls: [
-                FeatureControl(
-                    id: "hb.enabled", title: "启用心跳覆盖", footnote: "需同时提交原始值",
-                    kind: .toggle(
-                        key: "enabled", path: P4Route.summonHeartbeatUpdate,
-                        // 固件读 value，stats 里叫 selectedValue → 用 "read:write" 别名提交
-                        extra: ["selectedValue:value"]
-                    )
-                ),
-                FeatureControl(
-                    id: "hb.value", title: "心跳原始值", footnote: "0–3",
-                    kind: .selectRead(
-                        key: "value",
-                        readKey: "selectedValue",
-                        options: (0...3).map { .init(label: "\($0)", rawValue: "\($0)") },
-                        path: P4Route.summonHeartbeatUpdate,
-                        extra: ["enabled"]
-                    )
-                ),
-            ]
-        ),
-
-        
-
-        FeatureModule(
-            id: "window",
-            title: "主驾车窗一键开",
-            summary: "仅 Model YL（三电机）配置可用，需车辆静止；抓取并复用原厂车窗指令。",
-            titleEN: "Driver Window Test",
-            summaryEN: "Model YL (Triple YL) only · PARK required.",
-            icon: "rectangle.split.3x1",
-            section: .lab,
-            statsPath: P4Route.driverWindowStats,
-            supportKey: "supported",
-            controls: [
-                FeatureControl(
-                    id: "window.open", title: "打开主驾车窗", footnote: "需车辆静止且信号就绪",
-                    kind: .trigger(
-                        path: P4Route.driverWindowOpen,
-                        query: [],
-                        confirmation: true,
-                        destructive: false
-                    )
-                ),
-            ]
-        ),
-
-        FeatureModule(
-            id: "research",
-            title: "CAN 研究捕获",
-            summary: "按槽位打标签捕获 CAN 报文，用于离线分析（A–D 槽位）。",
-            titleEN: "CAN Research Capture",
-            summaryEN: "BODY + CHASSIS + PARTY research recording.",
-            icon: "record.circle",
-            section: .lab,
-            statsPath: P4Route.researchCaptureStats,
-            supportKey: nil,
-            controls: [
-                FeatureControl(
-                    id: "research.start.a", title: "捕获 A · 立即可用",
-                    footnote: "前置窗口已就绪时按此开始",
-                    kind: .trigger(
-                        path: P4Route.researchCaptureStart,
-                        query: [P4Param("slot", "A")],
-                        confirmation: false,
-                        destructive: false
-                    )
-                ),
-                FeatureControl(
-                    id: "research.start.b", title: "捕获 B",
-                    footnote: nil,
-                    kind: .trigger(
-                        path: P4Route.researchCaptureStart,
-                        query: [P4Param("slot", "B")],
-                        confirmation: false,
-                        destructive: false
-                    )
-                ),
-                FeatureControl(
-                    id: "research.start.c", title: "捕获 C",
-                    footnote: nil,
-                    kind: .trigger(
-                        path: P4Route.researchCaptureStart,
-                        query: [P4Param("slot", "C")],
-                        confirmation: false,
-                        destructive: false
-                    )
-                ),
-                FeatureControl(
-                    id: "research.start.d", title: "捕获 D",
-                    footnote: nil,
-                    kind: .trigger(
-                        path: P4Route.researchCaptureStart,
-                        query: [P4Param("slot", "D")],
-                        confirmation: false,
-                        destructive: false
-                    )
-                ),
-                FeatureControl(
-                    id: "research.mode", title: "捕获模式", footnote: nil,
-                    kind: .selectRead(
-                        key: "mode",
-                        readKey: "captureMode",
-                        options: [
-                            .init(label: "快照 SNAPSHOT", rawValue: "SNAPSHOT"),
-                            .init(label: "原始跳变 RAW_TRANSITION", rawValue: "RAW_TRANSITION"),
-                        ],
-                        path: P4Route.researchCaptureMode,
-                        extra: []
-                    )
-                ),
-                FeatureControl(
-                    id: "research.window", title: "捕获窗口", footnote: "前置 2–15 秒 / 后置 2–10 秒，同时提交",
-                    kind: .pairNumber(
-                        first: NumberSpec(key: "preMs", range: 2000...15000, unit: "ms"),
-                        second: NumberSpec(key: "postMs", range: 2000...10000, unit: "ms"),
-                        path: P4Route.researchCaptureConfig
-                    )
-                ),
-                FeatureControl(
-                    id: "research.reset", title: "重置捕获数据", footnote: nil,
-                    kind: .trigger(
-                        path: P4Route.researchCaptureReset,
-                        query: [],
-                        confirmation: true,
-                        destructive: true
-                    )
-                ),
-            ]
-        ),
-
-        FeatureModule(
-            id: "dmscapture",
-            title: "驾驶员监控捕获",
-            summary: "只读录制 0x389 / 0x5D9 / 0x247 / 0x399 / 0x370 的交互与手扶状态；固定前置 2 秒 + 后置 5 秒，A–F 六种测试条件。",
-            titleEN: "Driver Monitoring Capture",
-            summaryEN: "Record driver-monitoring signals.",
-            icon: "video",
-            section: .lab,
-            statsPath: P4Route.dmsStats,
-            supportKey: nil,
-            controls: [
-                FeatureControl(
-                    id: "dmscap.a", title: "A · 正常前视", footnote: "按下后立即保持正常前视",
-                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "A")],
-                                   confirmation: false, destructive: false)
-                ),
-                FeatureControl(
-                    id: "dmscap.b", title: "B · 短暂扫视屏幕", footnote: nil,
-                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "B")],
-                                   confirmation: false, destructive: false)
-                ),
-                FeatureControl(
-                    id: "dmscap.c", title: "C · 持续侧看", footnote: nil,
-                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "C")],
-                                   confirmation: false, destructive: false)
-                ),
-                FeatureControl(
-                    id: "dmscap.d", title: "D · 低头", footnote: nil,
-                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "D")],
-                                   confirmation: false, destructive: false)
-                ),
-                FeatureControl(
-                    id: "dmscap.e", title: "E · 转向扭矩 + 移开视线", footnote: nil,
-                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "E")],
-                                   confirmation: false, destructive: false)
-                ),
-                FeatureControl(
-                    id: "dmscap.f", title: "F · 前视，无主动扭矩", footnote: nil,
-                    kind: .trigger(path: P4Route.dmsStart, query: [P4Param("slot", "F")],
-                                   confirmation: false, destructive: false)
-                ),
-                FeatureControl(
-                    id: "dmscap.reset", title: "重置捕获数据", footnote: "CSV 可在「系统 → 日志」导出",
-                    kind: .trigger(path: P4Route.dmsReset, query: [],
-                                   confirmation: true, destructive: true)
-                ),
-            ]
-        ),
-
-        FeatureModule(
-            id: "modeh",
-            title: "Mode H 调参",
-            summary: "Mode H 波形的主峰值、等待、不应期、反向载波与 Hands-On 策略；含实时引擎监视。",
-            titleEN: "Mode H Tuning",
-            summaryEN: "Mode H profile tuning and live engine monitor.",
-            icon: "dial.medium",
-            section: .lab,
-            statsPath: P4Route.nagHProfileStats,
-            supportKey: "nagSupported",
-            controls: []
-        ),
-
-        // MARK: 高级与兼容
-
     ]
 
     static func modules(in section: FeatureModule.Section) -> [FeatureModule] {

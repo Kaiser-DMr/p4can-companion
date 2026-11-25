@@ -29,7 +29,6 @@ struct FeaturesView: View {
         enum Kind {
             case module(FeatureModule)
             case s3xy
-            case lab
         }
 
         let id: String
@@ -91,7 +90,6 @@ struct FeaturesView: View {
                 .map { Entry(id: $0.id, kind: .module($0)) }
             if section == .advanced {
                 if !isPinned("s3xy") { items.append(Entry(id: "s3xy", kind: .s3xy)) }
-                if !isPinned("lab") { items.append(Entry(id: "lab", kind: .lab)) }
             }
             guard !items.isEmpty else { return nil }
             return Group(section: section, entries: items)
@@ -117,14 +115,8 @@ struct FeaturesView: View {
                     || module.id.lowercased().contains(needle)
             case .s3xy:
                 return ["s3xy", "button", "按键", "蓝牙", "bluetooth"].contains { $0.contains(needle) }
-            case .lab:
-                return ["lab", "menu", "实验", "实验室"].contains { $0.contains(needle) }
             }
         }
-    }
-
-    private var labEnabled: Bool {
-        gateOverrides["lab"] ?? environment.featuresStatus?["lab"]?.boolValue ?? false
     }
 
     private var s3xyEnabled: Bool {
@@ -464,19 +456,6 @@ struct FeaturesView: View {
             ) { newValue in
                 setFeaturesGate("s3xy", label: "S3XY", path: P4Route.featuresS3XY, enabled: newValue)
             }
-
-        case .lab:
-            InlineFeatureRow(
-                icon: "emoji:🧪",
-                title: L10n.t("实验室菜单 (LAB Menu)", "LAB Menu"),
-                subtitle: L10n.t("显示实验性控制与捕获工具；打开后底部出现「实验室」标签。",
-                                 "Show experimental controls and capture tools."),
-                isOn: .constant(labEnabled as Bool?),
-                busy: busyID == "lab",
-                disabled: environment.featuresStatus == nil || environment.isBusy
-            ) { newValue in
-                setFeaturesGate("lab", label: "LAB Menu", path: P4Route.featuresLab, enabled: newValue)
-            }
         }
     }
 
@@ -516,8 +495,8 @@ struct FeaturesView: View {
             Text(L10n.t("灯光类功能会实际控制车辆灯光，请只在安全环境使用；爆闪期间可随时停止。",
                         "Lighting features drive the real lamps. Use them only in a safe environment; you can stop a strobe at any time."))
         } else if group.id == groups.last?.id {
-            Text(L10n.t("开关状态全部读取自设备；实验室功能已合并到本页。长按功能可置顶。",
-                        "All switch states come from the device. Lab features are merged into this page. Long-press to pin."))
+            Text(L10n.t("开关状态全部读取自设备；实验室工具已并入「功能」分组。长按功能可置顶。",
+                        "All switch states come from the device. Lab tools now sit in the Features group. Long-press to pin."))
         }
     }
 

@@ -6,7 +6,7 @@
 SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
 ![platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![version](https://img.shields.io/badge/version-3.46%20(67)-green)
+![version](https://img.shields.io/badge/version-3.47%20(68)-green)
 ![license](https://img.shields.io/badge/license-GPL--3.0-orange)
 
 **下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
@@ -50,6 +50,7 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 | 自编 v3.35.3-strobe1-zh | 3.35.3 全部功能 + 独立爆闪页 + 中文 Dashboard |
 | 自编 v3.35.3-eapnr1-zh | 上一行 + EAP/TLSSC 免重启补发（参考 P4can-No-Reboot） |
 | 官方 v3.35.6 | 灯光页内远光/后雾爆闪、Developer Test、语言、Service 强制注入、召唤版本 |
+| 官方 v3.35.8 | 语言（EN / 简中 / 繁中）、灯光爆闪与动态刹车灯、R79 驻车/召唤暂停；已移除的六路覆盖、召唤版本、强制注入自动隐藏 |
 
 所有页面通过 `supportKey` 或端点探测（404 即隐藏）适配，不写死车型；Model 3 / Y / YL 通用。
 
@@ -106,7 +107,7 @@ arduino-cli compile \
 
 - P4 v1.x 用 `ChipVariant=prev3`
 - 中文页面：替换 `dashboard_source.html` 后运行 `python3 tools/build_dashboard.py`
-- 官方 v3.35.6 源码未公开，App 通过 `/api/lighting/*` 等接口兼容官方包
+- 官方 v3.35.6 / v3.35.8 源码未公开，App 通过 `/api/lighting/*`、`/api/r79/ap-control/*` 等接口兼容官方包
 
 ### 安全
 
@@ -159,6 +160,7 @@ New pages appear only when the firmware supports them:
 | Custom v3.35.3-strobe1-zh | All v3.35.3 features + strobe pages + Chinese dashboard |
 | Custom v3.35.3-eapnr1-zh | Above + EAP/TLSSC no-reboot replay (from P4can-No-Reboot) |
 | Official v3.35.6 | Lighting-page strobes, Developer Test, language, Service force injection, Summon Version |
+| Official v3.35.8 | Language (EN / Simplified / Traditional), lighting strobes and dynamic brake lights, R79 park/summon pause; removed 0x3FD overrides, summon version and force injection are hidden automatically |
 
 Pages are gated by `supportKey` or endpoint probes (404 hides the entry). No hard-coded vehicle model; Model 3 / Y / YL are supported through capability bits.
 
@@ -215,7 +217,7 @@ arduino-cli compile \
 
 - Use `ChipVariant=prev3` for P4 v1.x
 - Chinese dashboard: replace `dashboard_source.html`, then run `python3 tools/build_dashboard.py`
-- Official v3.35.6 source is not public; the app targets its `/api/lighting/*` and related endpoints
+- Official v3.35.6 / v3.35.8 sources are not public; the app targets `/api/lighting/*`, `/api/r79/ap-control/*` and related endpoints
 
 ### Safety
 

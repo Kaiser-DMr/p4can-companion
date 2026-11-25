@@ -361,7 +361,7 @@ private struct SystemSection: View {
                 Text(L10n.t("固件", "Firmware"))
             }
 
-            if environment.v356Supported == true {
+            if environment.dashboardLanguageSupported == true {
                 NavigationLink {
                     DashboardLanguageView()
                 } label: {
@@ -414,20 +414,6 @@ private struct SystemSection: View {
                 }
             }
 
-            if environment.newFeaturesSupported == true {
-                NavigationLink {
-                    ServiceModeView()
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("Service Mode", "Service Mode"))
-                        Text(L10n.t("进入 Service Mode · 中国市场恢复帧",
-                                    "Service Mode entry and China restore frames"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
             NavigationLink {
                 FirmwareUpdateView()
             } label: {
@@ -473,6 +459,27 @@ private struct SystemSection: View {
         } footer: {
             Text(L10n.t("重置与恢复出厂会断开连接，请确认已知晓影响后再执行。",
                         "Resets disconnect the device. Make sure you understand the impact before continuing."))
+        }
+
+        if environment.newFeaturesSupported == true {
+            Section {
+                NavigationLink {
+                    ServiceModeView()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("维护模式 · Service Mode", "Service Mode"))
+                        Text(L10n.t("维修查问题用 · 会开启 EAP 完整版",
+                                    "For service diagnostics · enables full EAP"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text(L10n.t("维护", "Service"))
+            } footer: {
+                Text(L10n.t("平常不要打开；TLSSC 恢复可能影响车辆账号安全。",
+                            "Leave it off in daily use; TLSSC restore may affect your vehicle account."))
+            }
         }
     }
 

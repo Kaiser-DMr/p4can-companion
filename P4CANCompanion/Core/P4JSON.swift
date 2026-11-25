@@ -372,6 +372,8 @@ enum P4KeyLocalization {
         "hz": "频率 (Hz)",
         "durationMs": "持续时间 (ms)",
         "remainingMs": "剩余时间",
+        "allowManualDriving": "允许人工介入",
+        "blockTxInPark": "驻车 / 召唤时暂停",
         "pattern": "模式",
         "batterySoc": "电池电量 (%)",
         "soc": "电池电量 (%)",

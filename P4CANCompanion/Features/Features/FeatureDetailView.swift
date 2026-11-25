@@ -44,10 +44,10 @@ struct FeatureDetailView: View {
         return environment.capability(key) != false
     }
 
-    /// 允许写入：能力支持 + 非 Setup 模式 + 实验室模块需 LAB 已开 + 捕获类模块没在录制/导出。
+    /// 允许写入：能力支持 + 非 Setup 模式 + 捕获类模块没在录制/导出。
+    /// 实验室工具已并入「功能」，不再依赖 LAB Menu 总开关。
     private var canWrite: Bool {
         guard capabilitySupported, !environment.isSetupMode else { return false }
-        if module.section == .lab, !environment.isLabEnabled { return false }
         if captureBusy { return false }
         return true
     }
@@ -98,13 +98,6 @@ struct FeatureDetailView: View {
                     Label(L10n.t("设备处于 Setup 模式，CAN 注入与功能写入已禁用。",
                              "The device is in setup mode; CAN injection and writes are disabled."),
                           systemImage: "gear.badge.questionmark")
-                        .font(.footnote)
-                        .foregroundStyle(.p4Warn)
-                }
-            } else if module.section == .lab, !environment.isLabEnabled {
-                Section {
-                    Label(L10n.t("需要先在「实验室功能总开关」中启用 LAB。",
-                             "Enable LAB from the lab master switch first."), systemImage: "flask")
                         .font(.footnote)
                         .foregroundStyle(.p4Warn)
                 }
@@ -587,23 +580,33 @@ struct FeatureDetailView: View {
 
     // MARK: - 提交
 
-    /// 拆分 `extra` 声明："statsKey" 或 "statsKey:submitKey"。
-    private func splitExtra(_ key: String) -> (read: String, write: String) {
-        let parts = key.split(separator: ":", maxSplits: 1).map(String.init)
-        return (parts[0], parts.count > 1 ? parts[1] : parts[0])
+    /// 拆分 `extra` 声明："statsKey"、"statsKey:submitKey"，尾部加 `?` 表示可选。
+    ///
+    /// 可选参数用于跨固件版本兼容：例如 R79 AP 控制在 3.35.8 新增 blockTxInPark，
+    /// 旧固件没有该字段，就不提交它，而不是整条命令发不出去。
+    private func splitExtra(_ key: String) -> (read: String, write: String, optional: Bool) {
+        var body = key
+        var optional = false
+        if body.hasSuffix("?") {
+            optional = true
+            body.removeLast()
+        }
+        let parts = body.split(separator: ":", maxSplits: 1).map(String.init)
+        return (parts[0], parts.count > 1 ? parts[1] : parts[0], optional)
     }
 
     /// 校验 extra 声明的兄弟参数是否都在设备状态里；缺了就明确报错，避免发出必然 400 的请求。
     private func missingSiblings(_ keys: [String]) -> [String] {
         keys.compactMap { key in
-            let read = splitExtra(key).read
-            return stats?[read] == nil ? read : nil
+            let item = splitExtra(key)
+            if item.optional { return nil }
+            return stats?[item.read] == nil ? item.read : nil
         }
     }
 
     private func siblingParams(_ keys: [String]) -> [P4Param] {
         keys.compactMap { key in
-            let (read, write) = splitExtra(key)
+            let (read, write, _) = splitExtra(key)
             guard let value = stats?[read] else { return nil }
             switch value {
             case .bool(let flag): return P4Param(write, flag ? "1" : "0")
