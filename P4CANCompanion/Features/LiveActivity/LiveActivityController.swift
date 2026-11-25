@@ -7,8 +7,11 @@ import Foundation
 
 /// 管理「灵动岛 / 锁屏」实时活动生命周期（iOS / iPadOS）。
 ///
-/// 并发策略：ActivityKit 的 `Activity` 句柄不是 Sendable，
-/// 因此控制器用 NSLock 保护句柄、所有 ActivityKit 调用都在创建它的 Task 内完成，
+/// 实时活动的生命周期长于 App 进程：App 被系统回收、手动划掉或覆盖安装后，
+/// 上一个进程创建的活动仍留在锁屏。因此启动时先接管 `Activity.activities` 里已有的活动，
+/// 多余的全部结束，保证同一时间只有一个；关闭时同样结束全部，而不只是本进程创建的那个。
+///
+/// 并发策略：ActivityKit 的 `Activity` 句柄不是 Sendable，控制器用 NSLock 保护句柄与启动标记，
 /// 句柄不跨隔离域传递（`@unchecked Sendable` 由锁保证）。
 final class LiveActivityController: @unchecked Sendable {
 
@@ -16,39 +19,74 @@ final class LiveActivityController: @unchecked Sendable {
 
     private let lock = NSLock()
     private var current: Activity<CanActivityAttributes>?
-    private var activeFlag = false
+    /// 正在启动：并发的两次启动会各自请求一个活动，后到的直接返回。
+    private var starting = false
+    /// 每次 `end()` 加一：启动过程中被关闭时，启动完成后要把刚建好的活动结束掉。
+    private var endGeneration = 0
 
+    /// 以系统状态为准：用户在锁屏划掉或系统结束后，句柄还在但已不再显示。
     var isActive: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return activeFlag
+        takeCurrent()?.activityState == .active
     }
 
     var isSupported: Bool {
         ActivityAuthorizationInfo().areActivitiesEnabled
     }
 
-    /// - Returns: 是否真的创建了活动（系统关闭实时活动、达到上限时会失败）。
+    /// - Returns: 是否有活动在显示（接管已有的或新建成功；系统关闭实时活动、达到上限时为 false）。
     @discardableResult
     func start(deviceName: String, state: CanActivityAttributes.ContentState) async -> Bool {
-        await startInternal(deviceName: deviceName, state: state)
+        guard let generation = beginStarting() else { return isActive }
+        defer { finishStarting() }
+        let shown = await startInternal(deviceName: deviceName, state: state)
+        guard generation == currentGeneration() else {
+            await endAll()
+            return false
+        }
+        return shown
     }
 
     func update(state: CanActivityAttributes.ContentState) {
         Task {
-            let activity = self.takeCurrent()
-            guard let activity else { return }
-            await activity.update(
-                ActivityContent(state: state, staleDate: Date().addingTimeInterval(5 * 60), relevanceScore: 100)
-            )
+            guard let activity = self.takeCurrent(), activity.activityState == .active else { return }
+            await activity.update(Self.content(state))
         }
     }
 
     func end() {
-        Task { await self.endInternal() }
+        lock.lock()
+        endGeneration += 1
+        lock.unlock()
+        Task { await self.endAll() }
     }
 
     // MARK: - 内部
+
+    private static func content(_ state: CanActivityAttributes.ContentState) -> ActivityContent<CanActivityAttributes.ContentState> {
+        // 5 分钟没有新数据就提示陈旧（数据每 0.25–1 s 刷新一次）。
+        ActivityContent(state: state, staleDate: Date().addingTimeInterval(5 * 60), relevanceScore: 100)
+    }
+
+    /// - Returns: 开始启动时的关闭代数；已有启动在进行时为 nil。
+    private func beginStarting() -> Int? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !starting else { return nil }
+        starting = true
+        return endGeneration
+    }
+
+    private func currentGeneration() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return endGeneration
+    }
+
+    private func finishStarting() {
+        lock.lock()
+        defer { lock.unlock() }
+        starting = false
+    }
 
     private func takeCurrent() -> Activity<CanActivityAttributes>? {
         lock.lock()
@@ -60,20 +98,38 @@ final class LiveActivityController: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         current = activity
-        activeFlag = (activity != nil)
     }
 
     private func startInternal(
         deviceName: String,
         state: CanActivityAttributes.ContentState
     ) async -> Bool {
-        await endInternal()
-        guard isSupported else { return false }
+        guard isSupported else {
+            await endAll()
+            return false
+        }
+        let existing = Activity<CanActivityAttributes>.activities
+        // 优先沿用本进程的句柄，其次接管上一个进程留下的同一设备活动。
+        let reusable = ([takeCurrent()].compactMap { $0 } + existing).first { activity in
+            activity.activityState == .active && activity.attributes.deviceName == deviceName
+        }
+        #if DEBUG
+        FileHandle.standardError.write(Data(
+            "[LiveActivity] start: existing=\(existing.count) reuse=\(reusable != nil)\n".utf8
+        ))
+        #endif
+        for activity in existing where activity.id != reusable?.id {
+            await activity.end(nil, dismissalPolicy: .immediate)
+        }
+        if let reusable {
+            store(reusable)
+            await reusable.update(Self.content(state))
+            return true
+        }
         do {
             let activity = try Activity.request(
                 attributes: CanActivityAttributes(deviceName: deviceName),
-                // 数据每 0.25–1 s 刷新一次，8 小时才过期等于永不提示陈旧。
-                content: ActivityContent(state: state, staleDate: Date().addingTimeInterval(5 * 60), relevanceScore: 100),
+                content: Self.content(state),
                 pushType: nil
             )
             store(activity)
@@ -84,10 +140,10 @@ final class LiveActivityController: @unchecked Sendable {
         }
     }
 
-    private func endInternal() async {
-        let activity = takeCurrent()
+    /// 结束本 App 的全部实时活动（包括之前进程遗留的）。
+    private func endAll() async {
         store(nil)
-        if let activity {
+        for activity in Activity<CanActivityAttributes>.activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
     }
