@@ -387,6 +387,7 @@ struct ServiceModeView: View {
                     confirmEnter = true
                 } label: {
                     Label(L10n.t("进入 Service Mode", "Enter Service Mode"), systemImage: "wrench.and.screwdriver.fill")
+                        .labelStyle(.titleAndIcon)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -411,9 +412,7 @@ struct ServiceModeView: View {
                         Spacer()
                         TextField("150", text: $intervalDraft)
                             .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 96)
-                            .textFieldStyle(.roundedBorder)
+                            .p4NumberField()
                         Button(L10n.t("保存", "Save")) {
                             Task { await setForce(restoreForce, interval: Int(intervalDraft) ?? 150) }
                         }
@@ -664,9 +663,7 @@ struct SmartShiftView: View {
                             set: { numbers[spec.key] = $0 }
                         ))
                         .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 96)
-                        .textFieldStyle(.roundedBorder)
+                        .p4NumberField()
                     }
                 }
                 Button(L10n.t("保存数值参数", "Save numeric settings")) {

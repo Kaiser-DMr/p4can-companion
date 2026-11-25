@@ -61,7 +61,7 @@ struct FeaturesView: View {
             if ["devTest", "summonVersion"].contains(module.id) {
                 return environment.v356Supported == true
             }
-            if ["preheat", "fsd", "serviceMode", "canGpio"].contains(module.id) {
+            if ["preheat", "fsd", "smartShift", "r79Timing"].contains(module.id) {
                 return environment.newFeaturesSupported == true
             }
             return true
@@ -140,29 +140,8 @@ struct FeaturesView: View {
             // 导航栏不再使用系统默认（浅色模式下为纯白）材质，与页面底色保持一致。
             .toolbarBackground(Color.p4Background, for: .navigationBar)
             .navigationDestination(for: String.self) { moduleID in
-                // 灯光两路直接进操作页；其余模块仍是通用详情页。
-                if moduleID == "headlight" {
-                    HeadlightStrobeView()
-                } else if moduleID == "rearFog" {
-                    RearFogStrobeView()
-                } else if moduleID == "preheat" {
-                    PreheatView()
-                } else if moduleID == "fsd" {
-                    if environment.deviceFamily == .t2can { T2FSDView() } else { FSDInjectionView() }
-                } else if moduleID == "serviceMode" {
-                    ServiceModeView()
-                } else if moduleID == "canGpio" {
-                    CanGpioView()
-                } else if moduleID == "lighting" {
-                    LightingFeaturesView()
-                } else if moduleID == "devTest" {
-                    DeveloperTestView()
-                } else if moduleID == "summonVersion" {
-                    SummonVersionView()
-                } else if moduleID == "modeh" {
-                    ModeHView()
-                } else if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
-                    FeatureDetailView(module: module)
+                if let module = FeatureCatalog.modules.first(where: { $0.id == moduleID }) {
+                    destination(for: module)
                 }
             }
             .overlay(alignment: .bottom) { ToastOverlay() }
@@ -404,7 +383,7 @@ struct FeaturesView: View {
         }
     }
 
-    /// 导航目的地：少数模块有专用页面，其余走通用详情页。
+    /// 导航目的地（卡片点击与调试深链共用）：少数模块有专用页面，其余走通用详情页。
     @ViewBuilder
     private func destination(for module: FeatureModule) -> some View {
         switch module.id {
@@ -413,8 +392,8 @@ struct FeaturesView: View {
         case "preheat": PreheatView()
         case "fsd":
             if environment.deviceFamily == .t2can { T2FSDView() } else { FSDInjectionView() }
-        case "serviceMode": ServiceModeView()
-        case "canGpio": CanGpioView()
+        case "smartShift": SmartShiftView()
+        case "r79Timing": R79TimingView()
         case "lighting": LightingFeaturesView()
         case "devTest": DeveloperTestView()
         case "summonVersion": SummonVersionView()

@@ -165,9 +165,6 @@ final class AppEnvironment: ObservableObject {
     /// 端点最新一次成功回包（nil = 从未成功）。
     func endpointValue(_ path: String) -> P4JSON? { endpointValues[path] }
 
-    /// 端点最近一次成功时间（用于新鲜度提示）。
-    func endpointUpdatedAt(_ path: String) -> Date? { endpointFetchedAt[path] }
-
     /// 端点数据年龄（秒）；nil 表示从未成功。
     func endpointAge(_ path: String) -> TimeInterval? {
         guard let at = endpointFetchedAt[path] else { return nil }
@@ -1096,9 +1093,6 @@ final class AppEnvironment: ObservableObject {
     // MARK: - 便捷读取
 
     var isOnline: Bool { phase == .online }
-
-    var s3xyDevices: [S3XYDevice] { S3XYDevice.devices(from: s3xyStats) }
-    var s3xyScanResults: [S3XYScanResult] { S3XYScanResult.results(from: s3xyStats) }
 
     var isBluetoothEnabled: Bool { s3xyStats?["bluetoothEnabled"]?.boolValue ?? false }
     var isLabEnabled: Bool {

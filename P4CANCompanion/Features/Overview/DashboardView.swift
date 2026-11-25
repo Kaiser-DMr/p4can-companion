@@ -897,6 +897,7 @@ struct DashboardView: View {
                     }
                 }
             }
+            .font(.subheadline)
         }
     }
 

@@ -95,10 +95,6 @@ extension ShapeStyle where Self == Color {
     static var p4Info: Color { Color(uiColor: .systemBlue) }
     /// 主操作强调色 = 系统蓝（跟随系统强调色语义）。
     static var p4Accent: Color { Color(uiColor: .systemBlue) }
-    /// 强调色上的文字。
-    static var p4OnAccent: Color { .white }
-    /// 分隔线 / 卡片描边（系统分隔色，深浅自动）。
-    static var p4Hairline: Color { Color(uiColor: .separator) }
 }
 
 /// 分类色板：只用于图标瓦片底色，区分功能类别；状态含义仍由 `P4Tone` 表达。

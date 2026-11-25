@@ -19,11 +19,6 @@ enum DeviceFamily: String, Sendable {
         }
     }
 
-    var isT2CAN: Bool { self == .t2can }
-
-    /// 固件实际 CAN 路数；unknown 时按 P4 处理，等 `system/stats` 到达后纠正。
-    var busCount: Int { self == .t2can ? 2 : 3 }
-
     /// 依据 `/api/system/stats` 判断；T2CAN 会返回 `mcpReady/mcpState`，P4 返回 `chipModel/canBusCount`。
     static func detect(system: [String: P4JSON]) -> DeviceFamily {
         if let chip = system["chipModel"]?.stringValue,

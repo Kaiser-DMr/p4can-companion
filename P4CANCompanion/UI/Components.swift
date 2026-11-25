@@ -194,6 +194,35 @@ extension View {
     }
 }
 
+// MARK: - 数值输入框
+
+/// 列表行尾的数值输入：右对齐、等宽数字、浅灰圆角底，一眼能看出可编辑，又不像系统描边框那样突兀。
+struct P4NumberFieldStyle: ViewModifier {
+    var width: CGFloat = 96
+
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content
+            .multilineTextAlignment(.trailing)
+            .monospacedDigit()
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(width: width)
+            .background(
+                Color(uiColor: .tertiarySystemFill),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+    }
+}
+
+extension View {
+    func p4NumberField(width: CGFloat = 96) -> some View {
+        modifier(P4NumberFieldStyle(width: width))
+    }
+}
+
 // MARK: - 圆环仪表
 
 /// 圆环进度：电量、写入进度等 0…1 数值，中心放主数字。
@@ -261,6 +290,7 @@ struct LiveDot: View {
 // MARK: - 键值行
 
 /// 固件状态键值行：左侧本地化键名，右侧格式化值。
+/// 与系统 `LabeledContent` 一致：键名主色、值次要色，字号跟随所在容器。
 /// 无障碍：合并为一行朗读“名称，值”。
 struct MetricRow: View {
     let key: String
@@ -269,35 +299,16 @@ struct MetricRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(P4KeyLocalization.label(for: key))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
             Spacer(minLength: Theme.spacing(1))
             Text(P4Format.value(for: key, of: value))
-                .foregroundStyle(.primary)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
                 .multilineTextAlignment(.trailing)
         }
-        .font(.subheadline)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.t("\(P4KeyLocalization.label(for: key))，\(P4Format.value(for: key, of: value))",
                                    "\(P4KeyLocalization.label(for: key)), \(P4Format.value(for: key, of: value))"))
-    }
-}
-
-// MARK: - 状态徽章
-
-/// 总线/连接状态徽章：图标 + 文字（颜色仅作辅助）。
-struct StateBadge: View {
-    let text: String
-    let systemImage: String
-    let color: Color
-
-    var body: some View {
-        Label(text, systemImage: systemImage)
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(color)
-            .padding(.horizontal, Theme.spacing(1))
-            .padding(.vertical, Theme.spacing(0.5))
-            .background(color.opacity(0.12), in: Capsule())
-            .accessibilityLabel("\(text)状态")
     }
 }
 

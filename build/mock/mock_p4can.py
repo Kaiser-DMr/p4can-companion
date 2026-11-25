@@ -135,7 +135,7 @@ PROFILE = {
     "setupMode": False,
     "nvsError": False,
     "migrationNotice": False,
-    "profile": 3,
+    "profile": 2,
     "profileName": "Model Y (Juniper)",
     "topology": 2,
     "topologyName": "BODY + CHASSIS + PARTY",
@@ -1094,7 +1094,7 @@ if T2_DEVICE:
         "twaiTxErrorCounter": 0, "twaiRxErrorCounter": 0,
     })
     PROFILE.update({
-        "profile": 3,
+        "profile": 2,
         "profileName": "Model Y Juniper (T2)",
         "topology": 2,
         "topologyName": "BODY + CHASSIS",
