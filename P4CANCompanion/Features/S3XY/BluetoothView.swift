@@ -10,12 +10,15 @@ import SwiftUI
 /// - 蓝牙总开关为独立端点。
 struct BluetoothView: View {
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var renaming: S3XYDevice?
     @State private var renameText = ""
     @State private var forgetting: S3XYDevice?
     @State private var pendingGlobal: GlobalAction?
     @State private var shareURL: URL?
+    /// 总开关的乐观值：点下立即变化，设备回读后清除。
+    @State private var pendingBluetooth: Bool?
 
     private enum GlobalAction: String, Identifiable {
         case resetAll
@@ -63,6 +66,9 @@ struct BluetoothView: View {
     private var bluetoothOn: Bool? { object["bluetoothEnabled"]?.boolValue }
     private var autoEnabled: Bool? { object["autoEnabled"]?.boolValue }
     private var scanning: Bool { object["scanning"]?.boolValue == true }
+    /// 离线时页面显示的是上次读到的数据，所有写操作都会失败，因此一并禁用。
+    private var online: Bool { environment.isOnline }
+    private var canWrite: Bool { online && !environment.isBusy }
 
     // MARK: 视图
 
@@ -82,7 +88,9 @@ struct BluetoothView: View {
                     }
                     ForEach(devices) { device in
                         deviceRow(device)
-                            .contextMenu { deviceMenu(device) }
+                            .contextMenu {
+                                if online { deviceMenu(device) }
+                            }
                     }
                 } header: {
                     Text(L10n.t("已配对设备", "Paired buttons"))
@@ -183,25 +191,29 @@ struct BluetoothView: View {
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
-            HStack(spacing: Theme.Icon.gap) {
-                SettingsIcon(systemImage: "dot.radiowaves.left.and.right", tint: P4Palette.blue, size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("蓝牙总开关", "Bluetooth"))
-                        .font(.headline)
-                    Text(bluetoothOn == nil ? L10n.t("读取中…", "Loading…")
-                         : (bluetoothOn == true ? L10n.t("已开启 · 可连接 S3XY 按键", "On · S3XY buttons can connect")
-                                                : L10n.t("已关闭", "Off")))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            // 辅助功能字号下标题、说明与开关挤在一行会被拆成单字竖排，改为上下排。
+            if dynamicTypeSize.isAccessibilitySize {
+                HStack {
+                    SettingsIcon(systemImage: "dot.radiowaves.left.and.right", tint: P4Palette.blue, size: 40)
+                    Spacer(minLength: Theme.spacing(1))
+                    bluetoothToggle
                 }
-                Spacer(minLength: Theme.spacing(1))
-                Toggle("", isOn: Binding(
-                    get: { bluetoothOn ?? false },
-                    set: { value in Task { await setBluetooth(value) } }
-                ))
-                .labelsHidden()
-                .disabled(bluetoothOn == nil || environment.isBusy)
-                .accessibilityLabel(L10n.t("蓝牙总开关", "Bluetooth"))
+                heroTitle
+            } else {
+                HStack(spacing: Theme.Icon.gap) {
+                    SettingsIcon(systemImage: "dot.radiowaves.left.and.right", tint: P4Palette.blue, size: 40)
+                    heroTitle
+                    Spacer(minLength: Theme.spacing(1))
+                    bluetoothToggle
+                }
+            }
+
+            if !online {
+                Label(offlineText, systemImage: "wifi.slash")
+                    .font(.caption)
+                    .foregroundStyle(.p4Warn)
+                    .labelStyle(.titleAndIcon)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             P4FlowLayout(spacing: Theme.spacing(1), lineSpacing: Theme.spacing(0.75)) {
@@ -241,7 +253,7 @@ struct BluetoothView: View {
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.roundedRectangle(radius: Theme.Radius.button))
-            .disabled(bluetoothOn != true || scanning || environment.isBusy)
+            .disabled(bluetoothOn != true || scanning || !canWrite)
 
             if let error = object["probeError"]?.stringValue, !error.isEmpty {
                 Label(L10n.t("最近探测错误：\(error)", "Last probe error: \(error)"),
@@ -254,11 +266,52 @@ struct BluetoothView: View {
         .padding(Theme.spacing(2))
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            LinearGradient(colors: [P4Palette.blue.opacity(bluetoothOn == true ? 0.14 : 0.05), .clear],
+            LinearGradient(colors: [P4Palette.blue.opacity(bluetoothOn == true && online ? 0.14 : 0.05), .clear],
                            startPoint: .topTrailing, endPoint: .bottomLeading),
             in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
         )
         .p4CardSurface()
+    }
+
+    private var heroTitle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(L10n.t("蓝牙总开关", "Bluetooth"))
+                .font(.headline)
+            Text(bluetoothSubtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var bluetoothToggle: some View {
+        Toggle("", isOn: Binding(
+            get: { pendingBluetooth ?? bluetoothOn ?? false },
+            set: { value in
+                pendingBluetooth = value
+                Task {
+                    await setBluetooth(value)
+                    pendingBluetooth = nil
+                }
+            }
+        ))
+        .labelsHidden()
+        .disabled(bluetoothOn == nil || !canWrite)
+        .accessibilityLabel(L10n.t("蓝牙总开关", "Bluetooth"))
+    }
+
+    private var bluetoothSubtitle: String {
+        guard let bluetoothOn else {
+            return online ? L10n.t("读取中…", "Loading…") : L10n.t("未读取到蓝牙状态", "Bluetooth state unavailable")
+        }
+        if !online { return bluetoothOn ? L10n.t("上次状态：已开启", "Last known: on") : L10n.t("上次状态：已关闭", "Last known: off") }
+        return bluetoothOn ? L10n.t("已开启 · 可连接 S3XY 按键", "On · S3XY buttons can connect") : L10n.t("已关闭", "Off")
+    }
+
+    private var offlineText: String {
+        let reason = environment.endpointError(P4Route.s3xyStats)
+        let base = L10n.t("设备未连接，下方为上次读到的数据，操作已暂停", "Device offline. Showing the last known data; actions are paused")
+        guard let reason, !reason.isEmpty else { return base }
+        return "\(base)（\(reason)）"
     }
 
     // MARK: 行
@@ -275,12 +328,14 @@ struct BluetoothView: View {
             SettingsIcon(systemImage: "dot.radiowaves.left.and.right",
                          tint: device.connected ? P4Palette.green : P4Palette.gray)
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(device.name).font(.body.weight(.semibold)).lineLimit(1)
-                    if device.connected {
-                        StatusChip(text: L10n.t("已连接", "Connected"), tone: .ok)
-                    } else if device.paused {
-                        StatusChip(text: L10n.t("已暂停", "Paused"), tone: .warn)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        Text(device.name).font(.body.weight(.semibold)).lineLimit(1)
+                        deviceStateChip(device)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(device.name).font(.body.weight(.semibold))
+                        deviceStateChip(device)
                     }
                 }
                 Text(deviceDetail(device))
@@ -306,9 +361,19 @@ struct BluetoothView: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
+            .disabled(!online)
             .accessibilityLabel(L10n.t("\(device.name) 操作", "\(device.name) actions"))
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func deviceStateChip(_ device: S3XYDevice) -> some View {
+        if device.connected {
+            StatusChip(text: L10n.t("已连接", "Connected"), tone: .ok)
+        } else if device.paused {
+            StatusChip(text: L10n.t("已暂停", "Paused"), tone: .warn)
+        }
     }
 
     private func deviceDetail(_ device: S3XYDevice) -> String {
@@ -400,7 +465,7 @@ struct BluetoothView: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
             .controlSize(.small)
-            .disabled(environment.isBusy)
+            .disabled(!canWrite)
             .accessibilityLabel(L10n.t("配对 \(result.name)", "Pair \(result.name)"))
         }
     }
@@ -450,6 +515,7 @@ struct BluetoothView: View {
         } label: {
             Image(systemName: "ellipsis.circle")
         }
+        .disabled(!online)
         .accessibilityLabel(L10n.t("蓝牙维护", "Bluetooth maintenance"))
     }
 

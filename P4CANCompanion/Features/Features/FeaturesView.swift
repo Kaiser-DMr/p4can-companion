@@ -131,8 +131,11 @@ struct FeaturesView: View {
             list
                 .searchable(
                     text: $query,
-                    placement: .navigationBarDrawer(displayMode: .automatic),
-                    prompt: L10n.t("搜索功能（如 灯光 / 踏板 / TLSSC）", "Search features (e.g. light / pedal / TLSSC)")
+                    // 辅助功能字号下可折叠的搜索栏会渲染成空白条，此时固定显示。
+                    placement: .navigationBarDrawer(
+                        displayMode: dynamicTypeSize.isAccessibilitySize ? .always : .automatic
+                    ),
+                    prompt: L10n.t("搜索功能", "Search features")
                 )
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -408,7 +411,7 @@ struct FeaturesView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title)
                 .font(.headline)
-                .foregroundStyle(.primary)
+                .foregroundStyle(.secondary)
             Text("\(count)")
                 .font(.subheadline.weight(.medium))
                 .monospacedDigit()
