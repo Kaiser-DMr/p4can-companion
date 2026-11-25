@@ -27,7 +27,6 @@ enum P4Route {
 
     // 功能闸门
     static let featuresStatus = "/api/features/status"
-    static let featuresLab = "/api/features/lab"
     static let featuresS3XY = "/api/features/s3xy"
     static let featuresBanned = "/api/features/banned"
     static let featuresAPDriveProfile = "/api/features/ap-drive-profile"

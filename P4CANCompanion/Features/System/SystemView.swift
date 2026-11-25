@@ -3,15 +3,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
-/// 「设置」页：严格对照固件网页 Settings 的分组与顺序。
-///
-/// 网页结构（v3.29.3）：
-/// 车型卡片 → Features（NAG / ISA / DMS / 视觉限速 / 自动转向灯 / 召唤状态 / R79 /
-/// 地区 / TLSSC / 变道 / 踏板 / 常驻 AP / AP 加速回收 / S3XY / LAB Menu）→
-/// System（固件 / 无线 / 外观 / 刷新间隔 / 诊断 / 升级 / 重启 / 两级重置 / 恢复出厂）→
-/// Banned Car（封禁车辆 / TLSSC 恢复）。
-///
-/// 「LAB Menu」在这里，打开后底部才会出现实验室标签。
+/// 「系统」页：车型卡片 → 系统（固件 / 语言 / 无线 / 外观 / 刷新间隔 / CAN GPIO / 诊断 / 升级）→
+/// 重启与重置 → 维护（Service Mode）→ 封禁车辆 → App → 数据浏览 → 日志导出 → 快捷指令 → 关于。
+/// 功能开关统一放在「功能」页。
 struct SystemView: View {
     @EnvironmentObject private var environment: AppEnvironment
 

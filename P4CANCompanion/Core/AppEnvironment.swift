@@ -118,8 +118,6 @@ final class AppEnvironment: ObservableObject {
     }
     /// 根控制器注入：标签显隐变化时重建标签栏（避免 Combine 跨隔离域捕获）。
     var onBluetoothTabVisibilityChange: (@MainActor () -> Void)?
-    /// 实验室（LAB）开关变化时重建标签栏：LAB 开启才显示「实验室」页。
-    var onLabVisibilityChange: (@MainActor () -> Void)?
     /// 语言变化时刷新标签栏标题等 VC 级文案。
     var onLanguageChange: (@MainActor () -> Void)?
     /// 语言（持久化；system = 跟随系统）
@@ -130,7 +128,6 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var pollIntervalMs: Int = 500
     /// 根窗口注入：外观变化时同步 overrideUserInterfaceStyle（含 UIKit 侧页面）。
     var onAppearanceChange: (@MainActor () -> Void)?
-    private var lastLabVisible = false
     private var lastS3XYVisible = false
     private static let languageDefaultsKey = "p4can.language"
     private static let appearanceDefaultsKey = "p4can.appearance"
@@ -409,7 +406,6 @@ final class AppEnvironment: ObservableObject {
         isShowingCachedData = false
         cachedAt = nil
         lastUpdated = nil
-        lastLabVisible = false
         lastS3XYVisible = false
     }
 
@@ -472,9 +468,18 @@ final class AppEnvironment: ObservableObject {
         }
         if let profile { profileStatus = profile }
         if let features { featuresStatus = features }
+        // T2CAN 固件（t2can-universal-unlock 3.30.x）没有爆闪、灯光、Developer Test 与网页语言接口：
+        // 直接判定为不支持，不再每 60 s 探测一次单线程 WebServer，也让功能页停止轮询爆闪状态。
+        let familyNow = DeviceFamily.detect(system: (system ?? systemStats)?.objectValue ?? [:])
+        if familyNow == .t2can {
+            strobeSupported = false
+            lightingSupported = false
+            v356Supported = false
+            dashboardLanguageSupported = false
+        }
         // v3.35.2 起官方固件移除了爆闪接口：探测一次 404 就把两个入口隐藏，
         // 避免列表里留着点进去只有报错的模块。网络错误不判定为“不支持”。
-        if includeMeta, strobeSupported != true, features != nil {
+        if includeMeta, familyNow != .t2can, strobeSupported != true, features != nil {
             let due = lastStrobeProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeStrobeSupport(using: currentClient) }
         }
@@ -482,15 +487,15 @@ final class AppEnvironment: ObservableObject {
             let due = lastNewFeaturesProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeNewFeatures(using: currentClient) }
         }
-        if includeMeta, lightingSupported != true, features != nil {
+        if includeMeta, familyNow != .t2can, lightingSupported != true, features != nil {
             let due = lastLightingProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeLighting(using: currentClient) }
         }
-        if includeMeta, v356Supported != true, features != nil {
+        if includeMeta, familyNow != .t2can, v356Supported != true, features != nil {
             let due = lastV356Probe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeV356(using: currentClient) }
         }
-        if includeMeta, dashboardLanguageSupported != true, features != nil {
+        if includeMeta, familyNow != .t2can, dashboardLanguageSupported != true, features != nil {
             let due = lastLanguageProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeDashboardLanguage(using: currentClient) }
         }
@@ -508,11 +513,6 @@ final class AppEnvironment: ObservableObject {
 
         rebuildDerived()
 
-        let labVisible = isLabEnabled
-        if labVisible != lastLabVisible {
-            lastLabVisible = labVisible
-            onLabVisibilityChange?()
-        }
         let s3xyVisible = isS3XYEnabled
         if s3xyVisible != lastS3XYVisible {
             lastS3XYVisible = s3xyVisible
@@ -719,18 +719,13 @@ final class AppEnvironment: ObservableObject {
         }
     }
 
-    /// 单独拉取功能闸门（LAB Menu / S3XY / 封禁方案），用于开关后立即刷新标签栏。
+    /// 单独拉取功能闸门（S3XY / 封禁方案），用于开关后立即刷新标签栏。
     func refreshFeatures() async {
         let currentClient = client
         guard let features = try? await currentClient.get(P4Route.featuresStatus),
               isCurrent(currentClient) else { return }
         featuresStatus = features
         rebuildDerived()
-        let visible = isLabEnabled
-        if visible != lastLabVisible {
-            lastLabVisible = visible
-            onLabVisibilityChange?()
-        }
         let s3xyVisible = isS3XYEnabled
         if s3xyVisible != lastS3XYVisible {
             lastS3XYVisible = s3xyVisible
@@ -1095,13 +1090,6 @@ final class AppEnvironment: ObservableObject {
     var isOnline: Bool { phase == .online }
 
     var isBluetoothEnabled: Bool { s3xyStats?["bluetoothEnabled"]?.boolValue ?? false }
-    var isLabEnabled: Bool {
-        #if DEBUG
-        // 本地联调：SIMCTL_CHILD_P4CAN_LAB=1 强制显示实验室标签
-        if ProcessInfo.processInfo.environment["P4CAN_LAB"] == "1" { return true }
-        #endif
-        return featuresStatus?["lab"]?.boolValue ?? false
-    }
     var isSetupMode: Bool { profileStatus?["setupMode"]?.boolValue ?? false }
     var profileName: String? { profileStatus?["profileName"]?.stringValue }
     var topologyName: String? { profileStatus?["topologyName"]?.stringValue }

@@ -79,9 +79,6 @@ final class RootTabBarController: UITabBarController {
         environment.onBluetoothTabVisibilityChange = { [weak self] in
             self?.applyTabSet()
         }
-        environment.onLabVisibilityChange = { [weak self] in
-            self?.applyTabSet()
-        }
         environment.onLanguageChange = { [weak self] in
             self?.refreshTitles()
             self?.applyTabSet()

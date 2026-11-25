@@ -481,7 +481,8 @@ struct FeaturesView: View {
     /// 灯光类模块的运行态：只读，失败即视为「未知」，不显示徽章。
     /// 走共享端点缓存：灯光页在 800/500 ms 轮询时，这里直接复用，不再重复打设备。
     private func loadStrobeStates() async {
-        guard environment.strobeSupported != false else {
+        // 只在确认固件带爆闪接口后读取；未探测（nil）时不发请求，T2CAN 与新版官方固件都不会碰这两个端点。
+        guard environment.strobeSupported == true else {
             strobeActive = [:]
             return
         }
@@ -518,14 +519,7 @@ struct FeaturesView: View {
             busyID = nil
             // 失败时保留 command 的失败 toast，不能再覆盖成「已开启」。
             guard ok else { return }
-            if id == "lab" {
-                environment.toast = P4Toast(
-                    message: enabled
-                        ? L10n.t("实验室已开启，底部出现「实验室」标签", "LAB enabled — the Lab tab is now shown")
-                        : L10n.t("实验室已关闭，底部标签已隐藏", "LAB disabled — the Lab tab is hidden"),
-                    style: .info
-                )
-            } else if id == "s3xy" {
+            if id == "s3xy" {
                 environment.toast = P4Toast(
                     message: enabled
                         ? L10n.t("S3XY 已开启，底部出现「蓝牙」标签", "S3XY enabled — the Bluetooth tab is now shown")
