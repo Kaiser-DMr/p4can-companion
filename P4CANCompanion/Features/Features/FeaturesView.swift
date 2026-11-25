@@ -12,6 +12,7 @@ struct FeaturesView: View {
     @State private var path: [String] = []
     @State private var query = ""
     @FocusState private var searchFocused: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var isaEnabled: Bool?
     @State private var dmsEnabled: Bool?
@@ -259,204 +260,190 @@ struct FeaturesView: View {
 
     // MARK: - 列表
 
+    /// 两列圆角卡片：普通字号每行两张，辅助功能字号退化为单列，避免文字被压扁。
+    private var gridColumns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: Theme.spacing(1.25), alignment: .top),
+                     count: count)
+    }
+
     private var list: some View {
         ScrollViewReader { proxy in
-            listRows
-                .listStyle(.insetGrouped)
-                .contentMargins(.top, Theme.spacing(0.5), for: .scrollContent)
-                .scrollContentBackground(.hidden)
-                .scrollDismissesKeyboard(.immediately)
-                #if DEBUG
-                // 本地联调：SIMCTL_CHILD_P4CAN_FEATURES_SCROLL=bottom 启动后滚到底部（核对滚动后的顶栏配色）
-                .task {
-                    guard ProcessInfo.processInfo.environment["P4CAN_FEATURES_SCROLL"] == "bottom",
-                          let last = entries.last?.id else { return }
-                    try? await Task.sleep(for: .seconds(2))
-                    withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(last, anchor: .bottom) }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: Theme.spacing(2.5)) {
+                    if isSearching {
+                        if searchResults.isEmpty {
+                            emptySearchCard
+                        } else {
+                            sectionBlock(
+                                title: L10n.t("搜索结果", "Results"),
+                                count: searchResults.count,
+                                entries: searchResults
+                            )
+                        }
+                    } else {
+                        if !pinnedEntries.isEmpty {
+                            sectionBlock(
+                                title: L10n.t("常用", "Pinned"),
+                                count: pinnedEntries.count,
+                                entries: pinnedEntries,
+                                footer: L10n.t("长按任意卡片可置顶或取消（最多 \(FeaturePinStore.maxPins) 个）。",
+                                               "Long-press a card to pin or unpin it (up to \(FeaturePinStore.maxPins)).")
+                            )
+                        }
+                        ForEach(groups) { group in
+                            sectionBlock(
+                                title: L10n.t(group.section.rawValue, group.section.englishName),
+                                count: group.entries.count,
+                                entries: group.entries,
+                                footer: sectionFooterText(for: group)
+                            )
+                        }
+                    }
                 }
-                #endif
+                .padding(.horizontal, Theme.spacing(2))
+                .padding(.top, Theme.spacing(1))
+                // 底部留出浮动标签栏的高度，最后一行卡片不会被挡住。
+                .padding(.bottom, Theme.spacing(12))
+            }
+            .scrollDismissesKeyboard(.immediately)
+            .background(Color.p4Background)
+            #if DEBUG
+            // 本地联调：SIMCTL_CHILD_P4CAN_FEATURES_SCROLL=bottom 启动后滚到底部（核对滚动后的顶栏配色）
+            .task {
+                guard ProcessInfo.processInfo.environment["P4CAN_FEATURES_SCROLL"] == "bottom",
+                      let last = entries.last?.id else { return }
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(last, anchor: .bottom) }
+            }
+            #endif
         }
     }
 
-    private var listRows: some View {
-        List {
-            if isSearching {
-                if searchResults.isEmpty {
-                    emptySearchSection
-                } else {
-                    Section {
-                        ForEach(searchResults) { entry in
-                            row(entry)
-                                .contextMenu { pinMenu(entry) }
-                        }
-                    } header: {
-                        sectionHeader(
-                            title: L10n.t("搜索结果", "Results"),
-                            count: searchResults.count
-                        )
-                    }
+    /// 一个分组：标题 + 两列卡片 + 可选脚注。
+    private func sectionBlock(title: String,
+                              count: Int,
+                              entries: [Entry],
+                              footer: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: Theme.spacing(1.25)) {
+            sectionHeader(title: title, count: count)
+                .padding(.horizontal, Theme.spacing(0.5))
+
+            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Theme.spacing(1.25)) {
+                ForEach(entries) { entry in
+                    card(entry)
+                        .id(entry.id)
+                        .contextMenu { pinMenu(entry) }
                 }
-            } else {
-                if !pinnedEntries.isEmpty {
-                    Section {
-                        ForEach(pinnedEntries) { entry in
-                            row(entry)
-                                .id(entry.id)
-                                .contextMenu { pinMenu(entry) }
-                        }
-                    } header: {
-                        sectionHeader(
-                            title: L10n.t("常用", "Pinned"),
-                            count: pinnedEntries.count
-                        )
-                    } footer: {
-                        Text(L10n.t("长按任意功能可置顶或取消（最多 \(FeaturePinStore.maxPins) 个）。",
-                                    "Long-press a feature to pin or unpin it (up to \(FeaturePinStore.maxPins))."))
-                    }
-                }
-                ForEach(groups) { group in
-                    Section {
-                        ForEach(group.entries) { entry in
-                            row(entry)
-                                .id(entry.id)
-                                .contextMenu { pinMenu(entry) }
-                        }
-                    } header: {
-                        sectionHeader(
-                            title: L10n.t(group.section.rawValue, group.section.englishName),
-                            count: group.entries.count
-                        )
-                    } footer: {
-                        sectionFooter(for: group)
-                    }
-                }
+            }
+
+            if let footer {
+                Text(footer)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Theme.spacing(0.5))
+                    .padding(.top, 2)
             }
         }
     }
 
+    /// 单张卡片：可导航的走 NavigationLink，内联开关的直接放 Toggle。
     @ViewBuilder
-    private func row(_ entry: Entry) -> some View {
+    private func card(_ entry: Entry) -> some View {
         switch entry.kind {
         case .module(let module):
             if module.id == "isa" {
-                InlineFeatureRow(
+                FeatureCard(
                     icon: module.icon,
                     title: module.localizedTitle,
                     subtitle: module.localizedSummary,
-                    isOn: $isaEnabled,
-                    busy: busyID == module.id,
-                    disabled: environment.isBusy
+                    tint: module.section.tint,
+                    toggle: $isaEnabled,
+                    toggleBusy: busyID == module.id,
+                    toggleDisabled: environment.isBusy
                 ) { newValue in
                     submitInline(module.id, label: L10n.t("ISA 抑制", "ISA Suppression"),
                                  path: P4Route.isaSuppressionConfig, enabled: newValue)
                 }
             } else if module.id == "dms" {
-                InlineFeatureRow(
+                FeatureCard(
                     icon: module.icon,
                     title: module.localizedTitle,
                     subtitle: module.localizedSummary,
-                    isOn: $dmsEnabled,
-                    busy: busyID == module.id,
-                    disabled: environment.isBusy
+                    tint: module.section.tint,
+                    toggle: $dmsEnabled,
+                    toggleBusy: busyID == module.id,
+                    toggleDisabled: environment.isBusy
                 ) { newValue in
                     submitInline(module.id, label: L10n.t("禁用驾驶员监控", "Driver Monitoring"),
                                  path: P4Route.dmsConfig, enabled: newValue)
                 }
-            } else if module.id == "headlight" {
-                // 灯光两路直接进可操作页（状态 + 触发在前，参数在后），
-                // 不再经过通用详情页里的「爆闪设置与触发」二级入口。
-                NavigationLink {
-                    HeadlightStrobeView()
-                } label: {
-                    FeatureRow(
-                        module: module,
-                        features: environment.featuresStatus,
-                        strobeActive: strobeActive[module.id]
-                    )
-                }
-            } else if module.id == "rearFog" {
-                NavigationLink {
-                    RearFogStrobeView()
-                } label: {
-                    FeatureRow(
-                        module: module,
-                        features: environment.featuresStatus,
-                        strobeActive: strobeActive[module.id]
-                    )
-                }
-            } else if module.id == "preheat" {
-                NavigationLink {
-                    PreheatView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
-            } else if module.id == "fsd" {
-                NavigationLink {
-                    FSDInjectionView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
-            } else if module.id == "serviceMode" {
-                NavigationLink {
-                    ServiceModeView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
-            } else if module.id == "canGpio" {
-                NavigationLink {
-                    CanGpioView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
-            } else if module.id == "lighting" {
-                NavigationLink {
-                    LightingFeaturesView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
-            } else if module.id == "devTest" {
-                NavigationLink {
-                    DeveloperTestView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
-            } else if module.id == "summonVersion" {
-                NavigationLink {
-                    SummonVersionView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
-            } else if module.id == "modeh" {
-                NavigationLink {
-                    ModeHView()
-                } label: {
-                    FeatureRow(module: module, features: environment.featuresStatus)
-                }
             } else {
                 NavigationLink {
-                    FeatureDetailView(module: module)
+                    destination(for: module)
                 } label: {
-                    FeatureRow(
-                        module: module,
-                        features: environment.featuresStatus,
-                        strobeActive: strobeActive[module.id]
+                    FeatureCard(
+                        icon: module.icon,
+                        title: module.localizedTitle,
+                        subtitle: module.localizedSummary,
+                        tint: module.section.tint,
+                        badge: badge(for: module),
+                        showsDisclosure: true
                     )
                 }
+                .buttonStyle(CardPressStyle())
             }
 
         case .s3xy:
-            InlineFeatureRow(
+            FeatureCard(
                 icon: "emoji:🎮",
                 title: L10n.t("S3XY", "S3XY"),
                 subtitle: L10n.t("打开后底部出现「蓝牙」标签；用于 S3XY 配对与按键动作。",
                                  "Turns on S3XY buttons and shows the Bluetooth tab."),
-                isOn: .constant(s3xyEnabled as Bool?),
-                busy: busyID == "s3xy",
-                disabled: environment.featuresStatus == nil || environment.isBusy
+                tint: .p4Info,
+                toggle: .constant(s3xyEnabled),
+                toggleBusy: busyID == "s3xy",
+                toggleDisabled: environment.featuresStatus == nil || environment.isBusy
             ) { newValue in
                 setFeaturesGate("s3xy", label: "S3XY", path: P4Route.featuresS3XY, enabled: newValue)
             }
         }
+    }
+
+    /// 导航目的地：少数模块有专用页面，其余走通用详情页。
+    @ViewBuilder
+    private func destination(for module: FeatureModule) -> some View {
+        switch module.id {
+        case "headlight": HeadlightStrobeView()
+        case "rearFog": RearFogStrobeView()
+        case "preheat": PreheatView()
+        case "fsd": FSDInjectionView()
+        case "serviceMode": ServiceModeView()
+        case "canGpio": CanGpioView()
+        case "lighting": LightingFeaturesView()
+        case "devTest": DeveloperTestView()
+        case "summonVersion": SummonVersionView()
+        case "modeh": ModeHView()
+        default: FeatureDetailView(module: module)
+        }
+    }
+
+    /// 卡片右上角只显示需要提醒的状态：爆闪中 / 当前车型不支持。
+    private func badge(for module: FeatureModule) -> FeatureCard.Badge? {
+        if strobeActive[module.id] == true {
+            return .init(text: L10n.t("爆闪中", "Strobing"),
+                         systemImage: "light.beacon.max.fill",
+                         tone: .ok)
+        }
+        if let key = module.supportKey,
+           let value = environment.featuresStatus?[key]?.boolValue,
+           value == false {
+            return .init(text: L10n.t("不支持", "Unsupported"),
+                         systemImage: "minus",
+                         tone: .warn)
+        }
+        return nil
     }
 
     /// 长按菜单：置顶 / 取消置顶。
@@ -489,15 +476,16 @@ struct FeaturesView: View {
     }
 
     /// 分组脚注：灯光组提示真实灯光风险，最后一组说明状态来源。
-    @ViewBuilder
-    private func sectionFooter(for group: Group) -> some View {
+    private func sectionFooterText(for group: Group) -> String? {
         if group.section == .lighting {
-            Text(L10n.t("灯光类功能会实际控制车辆灯光，请只在安全环境使用；爆闪期间可随时停止。",
-                        "Lighting features drive the real lamps. Use them only in a safe environment; you can stop a strobe at any time."))
-        } else if group.id == groups.last?.id {
-            Text(L10n.t("开关状态全部读取自设备；实验室工具已并入「功能」分组。长按功能可置顶。",
-                        "All switch states come from the device. Lab tools now sit in the Features group. Long-press to pin."))
+            return L10n.t("灯光类功能会实际控制车辆灯光，请只在安全环境使用；爆闪期间可随时停止。",
+                          "Lighting features drive the real lamps. Use them only in a safe environment; you can stop a strobe at any time.")
         }
+        if group.id == groups.last?.id {
+            return L10n.t("开关状态全部读取自设备；实验室工具已并入「功能」分组。长按卡片可置顶。",
+                          "All switch states come from the device. Lab tools now sit in the Features group. Long-press a card to pin.")
+        }
+        return nil
     }
 
     /// 列表分组头：emoji + 标题 + 数量胶囊，和卡片左边缘对齐。
@@ -523,24 +511,31 @@ struct FeaturesView: View {
         .accessibilityLabel(L10n.t("\(title)，共 \(count) 项", "\(title), \(count) items"))
     }
 
-    private var emptySearchSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: Theme.spacing(1)) {
-                Label(L10n.t("没有匹配的功能", "No matching features"), systemImage: "magnifyingglass")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Text(L10n.t("试试更短的关键词，例如「灯光」「NAG」「踏板」「LAB」。",
-                            "Try a shorter keyword such as light, NAG, pedal or LAB."))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button(L10n.t("清除搜索", "Clear search")) {
-                    Haptics.impact()
-                    query = ""
-                }
-                .font(.footnote.weight(.medium))
+    private var emptySearchCard: some View {
+        VStack(alignment: .leading, spacing: Theme.spacing(1)) {
+            Label(L10n.t("没有匹配的功能", "No matching features"), systemImage: "magnifyingglass")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text(L10n.t("试试更短的关键词，例如「灯光」「NAG」「踏板」「R79」。",
+                        "Try a shorter keyword such as light, NAG, pedal or R79."))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Button(L10n.t("清除搜索", "Clear search")) {
+                Haptics.impact()
+                query = ""
             }
-            .padding(.vertical, Theme.spacing(1))
+            .font(.footnote.weight(.medium))
         }
+        .padding(Theme.spacing(2))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.p4Card)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
     }
 
     // MARK: - 读写
@@ -632,150 +627,109 @@ struct FeaturesView: View {
     }
 }
 
-// MARK: - 行骨架
+// MARK: - 功能卡片
 
-/// 功能行的统一骨架：36pt 图标瓦片 + 标题 / 说明 + 尾部区域。
+/// 两列网格里的功能卡片：圆角底、图标 + 标题 + 说明，尾部放开关或状态徽标。
 ///
-/// 功能页的普通行与内联开关行都走这里，保证图标尺寸、内边距、字重与行高完全一致；
-/// 以后新增行样式（带徽章、带进度）只需要换尾部内容。
-private struct FeatureRowShell<Trailing: View>: View {
+/// 与旧的整行列表相比，卡片把「图标 / 标题 / 说明 / 状态」压成纵向三层，
+/// 在 2 列宽度下仍能放下两行标题与三行说明；辅助功能字号会自动退化为单列。
+private struct FeatureCard: View {
+    struct Badge {
+        let text: String
+        let systemImage: String
+        let tone: P4Tone
+    }
+
     let icon: String
     let title: String
     let subtitle: String
     var tint: Color? = nil
-    /// 内联开关行要保留 Toggle 的可交互性，不能把子元素合并成一个无障碍元素。
-    let combinesAccessibility: Bool
-    private let trailing: Trailing
+    var badge: Badge? = nil
+    /// 非 nil 时右上角显示开关（ISA / DMS / S3XY）；nil 表示这是可导航卡片。
+    var toggle: Binding<Bool?>? = nil
+    var toggleBusy = false
+    var toggleDisabled = false
+    var showsDisclosure = false
+    var onToggle: ((Bool) -> Void)? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    init(
-        icon: String,
-        title: String,
-        subtitle: String,
-        tint: Color? = nil,
-        combinesAccessibility: Bool = true,
-        @ViewBuilder trailing: () -> Trailing
-    ) {
-        self.icon = icon
-        self.title = title
-        self.subtitle = subtitle
-        self.tint = tint
-        self.combinesAccessibility = combinesAccessibility
-        self.trailing = trailing()
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
     }
 
     var body: some View {
-        // 辅助功能字号下图标改为顶部对齐，和标题首行齐平（否则图标会漂在高文本块中间）。
-        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center,
-               spacing: Theme.Icon.gap) {
-            ModuleIconTile(name: icon, tint: tint)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.body.weight(.semibold))
-                    // 常规字号保持单行；辅助功能字号不限制行数，避免标题被截。
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    // 常规字号两行；辅助功能字号完整展示说明。
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                    .multilineTextAlignment(.leading)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: Theme.spacing(0.75)) {
+                ModuleIconTile(name: icon, size: Theme.Icon.tile, tint: tint)
+                Spacer(minLength: 0)
+                trailing
             }
-            // 分隔线与文字左边缘对齐（而不是贴着图标瓦片），列表看起来更整齐。
-            .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-            Spacer(minLength: Theme.spacing(1))
-            trailing
-                .layoutPriority(1)
-        }
-        .padding(.vertical, Theme.spacing(0.5))
-        .modifier(CombineAccessibilityIfNeeded(enabled: combinesAccessibility))
-    }
-}
 
-/// 条件式无障碍合并，避免在 ViewBuilder 里写 if 造成类型分叉。
-private struct CombineAccessibilityIfNeeded: ViewModifier {
-    let enabled: Bool
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Theme.spacing(1))
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 3)
+
+            Spacer(minLength: Theme.spacing(0.75))
+
+            if showsDisclosure {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(Theme.spacing(1.5))
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+        .background(shape.fill(Color.p4Card))
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .contentShape(shape)
+    }
 
     @ViewBuilder
-    func body(content: Content) -> some View {
-        if enabled {
-            content.accessibilityElement(children: .combine)
-        } else {
-            content
-        }
-    }
-}
-
-// MARK: - 普通功能行
-
-private struct FeatureRow: View {
-    let module: FeatureModule
-    let features: P4JSON?
-    /// 灯光类模块是否正在爆闪（nil = 设备未提供该状态）。
-    var strobeActive: Bool? = nil
-
-    private var supportState: (text: String, ok: Bool)? {
-        guard let key = module.supportKey, let value = features?[key]?.boolValue else { return nil }
-        return (value ? L10n.t("支持", "Supported") : L10n.t("不支持", "Unsupported"), value)
-    }
-
-    var body: some View {
-        FeatureRowShell(icon: module.icon,
-                        title: module.localizedTitle,
-                        subtitle: module.localizedSummary,
-                        tint: module.section.tint) {
-            if strobeActive == true {
-                StatusChip(text: L10n.t("爆闪中", "Strobing"),
-                           systemImage: "light.beacon.max.fill",
-                           tone: .ok)
-            } else if let support = supportState {
-                StatusChip(
-                    text: support.text,
-                    systemImage: support.ok ? "checkmark" : "minus",
-                    tone: support.ok ? .ok : .warn
-                )
-            }
-        }
-    }
-}
-
-// MARK: - 内联开关行
-
-private struct InlineFeatureRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    @Binding var isOn: Bool?
-    let busy: Bool
-    let disabled: Bool
-    let onChange: (Bool) -> Void
-
-    private var binding: Binding<Bool> {
-        Binding(
-            get: { isOn ?? false },
-            set: { newValue in
-                Haptics.impact()
-                onChange(newValue)
-            }
-        )
-    }
-
-    var body: some View {
-        FeatureRowShell(icon: icon,
-                        title: title,
-                        subtitle: subtitle,
-                        combinesAccessibility: false) {
-            if busy || isOn == nil {
+    private var trailing: some View {
+        if let toggle {
+            if toggleBusy || toggle.wrappedValue == nil {
                 ProgressView()
                     .controlSize(.small)
                     .accessibilityLabel(L10n.t("正在与设备同步", "Syncing with device"))
             } else {
-                Toggle("", isOn: binding)
-                    .labelsHidden()
-                    .disabled(disabled)
-                    .accessibilityLabel(title)
+                Toggle("", isOn: Binding(
+                    get: { toggle.wrappedValue ?? false },
+                    set: { onToggle?($0) }
+                ))
+                .labelsHidden()
+                .controlSize(.mini)
+                .disabled(toggleDisabled)
+                .accessibilityLabel(title)
             }
+        } else if let badge {
+            StatusChip(text: badge.text, systemImage: badge.systemImage, tone: badge.tone)
         }
+    }
+}
+
+/// 卡片按压缩放：比系统默认的链接高亮更贴合圆角卡片。
+private struct CardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
