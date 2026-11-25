@@ -310,8 +310,13 @@ struct P4LogFile: Identifiable, Sendable {
         id: "research", title: "CAN 研究捕获", path: "/api/researchcapture/log.csv",
         fileName: "CAN_Research_Capture.csv"
     )
+    /// 固件 `httpCanErrorsJson`：三路 TWAI 错误计数、Bus-Off 记录与驱动快照（与网页「诊断」导出同一文件）。
+    static let canErrors = P4LogFile(
+        id: "canerrors", title: "CAN 错误记录（JSON）", path: "/api/system/can-errors.json",
+        fileName: "P4-CAN_CAN_ERRORS.json"
+    )
 
     static let all: [P4LogFile] = [
-        .bootCapture, .canATrace, .canBTrace, .s3xyLog, .driverMonitorLog, .researchCaptureLog,
+        .bootCapture, .canATrace, .canBTrace, .canErrors, .s3xyLog, .driverMonitorLog, .researchCaptureLog,
     ]
 }

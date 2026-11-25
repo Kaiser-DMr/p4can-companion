@@ -106,6 +106,17 @@ struct CoreSmokeTest {
             check("写接口", false, "\(error)")
         }
 
+        print("== 5b. 日志导出（CAN 错误 JSON）==")
+        do {
+            let data = try await client.downloadData("/api/system/can-errors.json")
+            let json = try JSONDecoder().decode(P4JSON.self, from: data)
+            check("CAN 错误 JSON schemaVersion = 1", json["schemaVersion"]?.intValue == 1,
+                  "值 \(json["schemaVersion"]?.intValue.map(String.init) ?? "nil")")
+            check("CAN 错误 JSON 含三路总线", json["buses"]?.arrayValue?.count == 3)
+        } catch {
+            check("CAN 错误 JSON 下载", false, "\(error)")
+        }
+
         print("== 6. 错误处理 ==")
         do {
             let bad = P4APIClient(host: "127.0.0.1:65531")

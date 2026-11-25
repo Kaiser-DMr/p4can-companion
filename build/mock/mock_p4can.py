@@ -168,6 +168,25 @@ PREHEAT = {
     "bmsSeen": True, "bmsPreconditionAllowed": True, "bmsHeatingWorthwhile": True,
     "heatingActive": False, "txOk": 0, "txFail": 0, "tripId": "0x347",
     "evalAgeMs": 120, "autoOffReason": "NONE", "blocked": False,
+    # 以下字段与固件 preheatStatsToJson 一致（v3.35.3）
+    "bmsKeepWarmRequest": False, "coolantSeen": True, "coolantFlowLpm": 8.4,
+    "statorFrontSeen": True, "statorFrontAgeMs": 90, "statorHeatFrontKw": 1.25,
+    "statorRearSeen": True, "statorRearAgeMs": 90, "statorHeatRearKw": 2.10, "statorHeatKw": 3.35,
+    "ptMaxPackSeen": True, "ptMaxPackAgeMs": 400, "ptMaxPackC": 20.4,
+    "ptFlowReqSeen": True, "ptFlowReqAgeMs": 400, "ptFlowReqLpm": 7.5,
+    "ptCellTargetSeen": True, "ptCellTargetAgeMs": 400, "ptCellTargetC": 25.0,
+    "ptHpPowerSeen": True, "ptHpPowerAgeMs": 400, "ptHpPowerW": 1850,
+    "ptAmbientSeen": True, "ptAmbientAgeMs": 900, "ptAmbientC": 2.5,
+    "ptHeatLimitSeen": True, "ptHeatLimitAgeMs": 400, "ptHeatLimitKw": 7.00,
+    "replyTx": 0, "replyFail": 0, "replyLatLastMs": 0, "replyLatMaxMs": 0,
+    "heatDrops": 0, "heatDropsNearCar": 0, "autoOffCount": 1, "lastSkipReason": "DISABLED",
+    "thVitalsAgeMs": 120, "thPumpBatRpm": 2100, "thPumpPtRpm": 1800, "thFanRpm": 0,
+    "thModeAgeMs": 120, "thValveMode": 0, "thHpReq": 2, "thSysAgeMs": 800, "thHeatPump": True,
+    "thInletsAgeMs": 120, "thBatInletC": 21.2, "thPtInletC": 34.6,
+    "thFlowsAgeMs": 120, "thFlowBatLpm": 8.4, "thFlowPtLpm": 6.1,
+    "thPcsAgeMs": 2000, "thDcdcC": 31.0, "thChargerC": 18.0,
+    "thInvFrontAgeMs": 2000, "thInvFrontC": 27.0, "thInvRearAgeMs": 2000, "thInvRearC": 33.0,
+    "thApAgeMs": 4000, "thApC": 42.0, "thInfoAgeMs": 4294967295, "thInfoC": 0.0,
 }
 FSD = {"enabled": False, "suspendDuringAp": True, "values": 0,
        "mux0Fresh": True, "stock1": "0x00", "txOk": 0, "txFail": 0, "apBlocked": False}
@@ -1192,6 +1211,14 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/api/system/can-errors.json":
+            # 与固件 canDiagJsonSerialize 相同的顶层结构（内容精简）
+            return self.send_json({
+                "schemaVersion": 1, "firmware": SYSTEM.get("fwVersion", "mock"), "bootId": 1,
+                "captureBeginUs": "0", "capturedUs": "1000000", "consistent": True,
+                "buses": [{"bus": i, "busErrors": 0, "controllerEpoch": 1} for i in range(3)],
+                "driverErrorCapture": {"count": 0}, "reinitializations": [],
+            })
         if path in ("/api/headlight-strobe/config", "/api/headlight-strobe/stats"):
             return self.send_json(headlight_json())
         if path == "/api/rear-fog-strobe/stats":
