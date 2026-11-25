@@ -78,10 +78,10 @@ struct FeatureModule: Identifiable, Sendable {
         /// 分组色板：决定图标瓦片底色，让「灯光/驾驶辅助/车身」一眼可分。
         var tint: Color {
             switch self {
-            case .lighting: return .p4Warn
-            case .driving: return .p4Info
-            case .body: return .p4OK
-            case .advanced: return .secondary
+            case .lighting: return P4Palette.orange
+            case .driving: return P4Palette.blue
+            case .body: return P4Palette.green
+            case .advanced: return P4Palette.indigo
             }
         }
 

@@ -41,7 +41,7 @@ struct WirelessView: View {
                     setAutoConnect(newValue)
                 }
             } header: {
-                Label(L10n.t("蓝牙", "Bluetooth"), systemImage: "dot.radiowaves.left.and.right")
+                Text(L10n.t("蓝牙", "Bluetooth"))
             } footer: {
                 Text(L10n.t("关闭蓝牙总开关会停用 S3XY 按钮与 BLE 日志，但不会删除配对；再次打开即恢复。",
                             "Turning Bluetooth off stops S3XY buttons and BLE logs without deleting pairings."))
@@ -60,7 +60,7 @@ struct WirelessView: View {
                 }
                 .disabled(busy || bluetoothOn != true)
             } header: {
-                Label(L10n.t("S3XY 按钮", "S3XY buttons"), systemImage: "button.programmable")
+                Text(L10n.t("S3XY 按钮", "S3XY buttons"))
             } footer: {
                 Text(L10n.t("清除会移除注册按钮、按键映射、BLE 绑定与发现缓存，并重启 P4-CAN；蓝牙总开关与自动重连设置保留。",
                             "Removes registered buttons, action mappings, BLE bonds and discovery cache, then reboots P4-CAN. Bluetooth Master and Auto Connect are kept."))
@@ -69,6 +69,7 @@ struct WirelessView: View {
             wifiSection
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("无线", "Wireless"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
@@ -157,7 +158,7 @@ struct WirelessView: View {
             }
             .disabled(busy || (ssid.isEmpty && password.isEmpty))
         } header: {
-            Label(L10n.t("设备热点（SoftAP）", "Device hotspot (SoftAP)"), systemImage: "wifi.router")
+            Text(L10n.t("设备热点（SoftAP）", "Device hotspot (SoftAP)"))
         } footer: {
             Text(L10n.t("设置保存在 NVS，「重置功能设置」不会清除。应用后只重启热点，不影响 CAN 与蓝牙；IP 仍为 192.168.4.1。密码通过局域网 HTTP 发送（固件接口仅支持 query 参数），请只在可信网络下修改；App 的网络日志会对其打码。",
                         "Settings are stored in NVS and preserved by Reset Feature Settings. Only the access point restarts; CAN and Bluetooth keep running. The password is sent over local HTTP (the firmware only accepts query parameters); change it only on a trusted network. The in-app network log masks it."))

@@ -59,9 +59,9 @@ final class S3XYDeviceCell: UICollectionViewListCell {
         content.secondaryTextProperties.font = .preferredFont(forTextStyle: .subheadline)
         content.secondaryTextProperties.color = .secondaryLabel
         content.secondaryTextProperties.numberOfLines = 0
-        content.image = UIImage(systemName: "dot.radiowaves.left.and.right")
-        content.imageProperties.tintColor = .systemBlue
-        content.imageProperties.maximumSize = CGSize(width: 22, height: 22)
+        content.image = UIImage.p4Tile(systemName: "dot.radiowaves.left.and.right",
+                                       color: device.connected ? .systemGreen : .systemBlue)
+        content.imageToTextPadding = Theme.Icon.gap
 
         contentConfiguration = content
         accessibilityLabel = "\(device.name)，状态\(device.state)"
@@ -114,8 +114,8 @@ final class S3XYScanCell: UICollectionViewListCell {
         if let rssi = result.rssi { parts.append("RSSI \(rssi) dBm") }
         if result.registered { parts.append("已注册") }
         content.secondaryText = parts.joined(separator: " · ")
-        content.image = UIImage(systemName: "dot.radiowaves.forward")
-        content.imageProperties.tintColor = .systemTeal
+        content.image = UIImage.p4Tile(systemName: "dot.radiowaves.forward", color: .systemTeal)
+        content.imageToTextPadding = Theme.Icon.gap
         contentConfiguration = content
         accessibilityLabel = "\(result.name)，\(result.address)"
     }

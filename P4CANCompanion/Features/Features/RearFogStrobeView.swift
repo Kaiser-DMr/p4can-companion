@@ -113,7 +113,7 @@ struct RearFogStrobeView: View {
                         .foregroundStyle(age > 5 ? Color.p4Warn : Color.primary)
                 }
             } header: {
-                Label(L10n.t("运行状态", "Status"), systemImage: "gauge.with.dots.needle.33percent")
+                Text(L10n.t("运行状态", "Status"))
             }
 
             if let errorText {
@@ -134,6 +134,7 @@ struct RearFogStrobeView: View {
         .navigationTitle(L10n.t("后雾灯爆闪", "Rear Fog Strobe"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.p4Background, for: .navigationBar)
+        .labelStyle(.p4Row)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .overlay(alignment: .bottom) { ToastOverlay() }

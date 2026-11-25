@@ -130,6 +130,7 @@ struct PreheatView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -208,6 +209,7 @@ struct FSDInjectionView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -317,6 +319,7 @@ struct T2FSDView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -471,6 +474,7 @@ struct ServiceModeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -688,6 +692,7 @@ struct SmartShiftView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -828,6 +833,7 @@ struct R79TimingView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -972,6 +978,7 @@ struct CanGpioView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1130,6 +1137,7 @@ struct LightingFeaturesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1208,6 +1216,7 @@ struct DeveloperTestView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1284,6 +1293,7 @@ struct SummonVersionView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1348,6 +1358,7 @@ struct DashboardLanguageView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())

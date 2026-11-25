@@ -97,7 +97,7 @@ enum DS {
 
     // MARK: - 卡片容器
 
-    /// 卡片：只用系统卡片底色与圆角分层，不加描边（系统分组列表也不给卡片描边）。
+    /// 无标题卡片：与 `Card` 共用 `p4CardSurface` 底。
     struct Card<Content: View>: View {
         var padding: CGFloat = 16
         @ViewBuilder var content: Content
@@ -106,10 +106,7 @@ enum DS {
             content
                 .padding(padding)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    Color.p4Card,
-                    in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                )
+                .p4CardSurface()
         }
     }
 

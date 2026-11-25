@@ -71,6 +71,7 @@ struct ConnectionGuideView: View {
                 }
 
             }
+            .p4ListStyle()
             .navigationTitle(L10n.t("连接引导", "Connection guide"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

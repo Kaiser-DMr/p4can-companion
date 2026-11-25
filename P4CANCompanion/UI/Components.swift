@@ -1,27 +1,257 @@
 import SwiftUI
 
+// MARK: - 卡片表面
+
+/// 卡片底：浅色模式靠极轻阴影从灰底上浮起，深色模式阴影不可见，改用 0.5pt 发丝描边分层。
+struct CardSurface: ViewModifier {
+    var cornerRadius: CGFloat = Theme.Radius.card
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background(shape.fill(Color.p4Card))
+            .overlay(
+                shape.strokeBorder(
+                    Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.04),
+                    lineWidth: 0.5
+                )
+            )
+            .shadow(
+                color: .black.opacity(colorScheme == .dark ? 0 : 0.045),
+                radius: 10, x: 0, y: 3
+            )
+    }
+}
+
+extension View {
+    func p4CardSurface(cornerRadius: CGFloat = Theme.Radius.card) -> some View {
+        modifier(CardSurface(cornerRadius: cornerRadius))
+    }
+}
+
 // MARK: - 卡片容器
 
-/// 分组卡片：标题 + SF Symbol + 内容。全宽 16pt 边距（8pt 网格 ×2）。
-struct Card<Content: View>: View {
+/// 分组卡片：彩色小图标 + 标题 + 可选尾部附件 + 内容。
+struct Card<Content: View, Accessory: View>: View {
     let title: String
     let systemImage: String
+    var tint: Color = .p4Accent
+    @ViewBuilder let accessory: Accessory
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacing(2)) {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: Theme.spacing(1.75)) {
+            HStack(spacing: Theme.spacing(1)) {
+                SettingsIcon(systemImage: systemImage, tint: tint, size: 24)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: Theme.spacing(1))
+                accessory
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
             content
         }
         .padding(Theme.spacing(2))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Color.p4Card,
-            in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-        )
+        .p4CardSurface()
+    }
+}
+
+extension Card where Accessory == EmptyView {
+    init(title: String,
+         systemImage: String,
+         tint: Color = .p4Accent,
+         @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.systemImage = systemImage
+        self.tint = tint
+        self.accessory = EmptyView()
+        self.content = content()
+    }
+}
+
+// MARK: - 列表行图标
+
+/// 系统设置页同款行图标：实心彩色圆角方块 + 白色字形，顶部带一层很淡的高光渐变。
+struct SettingsIcon: View {
+    let systemImage: String
+    var tint: Color = .p4Accent
+    var size: CGFloat = Theme.RowIcon.size
+
+    private var corner: CGFloat { (size * Theme.RowIcon.corner / Theme.RowIcon.size).rounded() }
+    private var glyph: CGFloat { (size * Theme.RowIcon.glyph / Theme.RowIcon.size).rounded() }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(tint.gradient)
+            Image(systemName: systemImage)
+                .font(.system(size: glyph, weight: .semibold))
+                .foregroundStyle(.white)
+                .symbolRenderingMode(.monochrome)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/// 列表行：彩色图标 + 标题 + 可选说明。放在 `NavigationLink` / `Button` 的 label 里使用。
+struct IconRow: View {
+    let title: String
+    var subtitle: String? = nil
+    let systemImage: String
+    var tint: Color = .p4Accent
+    var titleColor: Color = .primary
+
+    var body: some View {
+        HStack(spacing: Theme.Icon.gap) {
+            SettingsIcon(systemImage: systemImage, tint: tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .foregroundStyle(titleColor)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, subtitle == nil ? 0 : 1)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - 列表行 Label 样式
+
+private struct P4RowTintKey: EnvironmentKey {
+    static let defaultValue: Color = .p4Accent
+}
+
+extension EnvironmentValues {
+    /// 列表行图标瓦片的底色，由 `.p4RowTint(_:)` 设置，向下传递。
+    var p4RowTint: Color {
+        get { self[P4RowTintKey.self] }
+        set { self[P4RowTintKey.self] = newValue }
+    }
+}
+
+/// 列表行 Label：SF Symbol 放进实心彩色圆角方块（系统设置页观感），标题保持原样。
+/// 对 `List` 整体设置后，所有行内 `Label` 自动统一；分组标题使用纯文字，不受影响。
+/// 显式设置了非正文字号的 Label（脚注提示、错误说明）保持行内小图标，不放大成方块。
+struct P4RowLabelStyle: LabelStyle {
+    @Environment(\.p4RowTint) private var tint
+    @Environment(\.font) private var font
+
+    @ViewBuilder
+    func makeBody(configuration: Configuration) -> some View {
+        if let font, font != .body {
+            Label(configuration).labelStyle(.titleAndIcon)
+        } else {
+            HStack(spacing: Theme.Icon.gap) {
+                configuration.icon
+                    .font(.system(size: Theme.RowIcon.glyph, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .symbolRenderingMode(.monochrome)
+                    .frame(width: Theme.RowIcon.size, height: Theme.RowIcon.size)
+                    .background(
+                        tint.gradient,
+                        in: RoundedRectangle(cornerRadius: Theme.RowIcon.corner, style: .continuous)
+                    )
+                    .accessibilityHidden(true)
+                configuration.title
+            }
+        }
+    }
+}
+
+extension LabelStyle where Self == P4RowLabelStyle {
+    static var p4Row: P4RowLabelStyle { .init() }
+}
+
+extension View {
+    /// 设置本视图内列表行图标的底色。
+    func p4RowTint(_ color: Color) -> some View {
+        environment(\.p4RowTint, color)
+    }
+
+    /// 分组列表的统一外观：行内 Label 换成彩色图标，页面底色与其他标签页一致。
+    func p4ListStyle() -> some View {
+        self
+            .labelStyle(.p4Row)
+            .scrollContentBackground(.hidden)
+            .background(Color.p4Background)
+    }
+}
+
+// MARK: - 圆环仪表
+
+/// 圆环进度：电量、写入进度等 0…1 数值，中心放主数字。
+struct RingGauge<Center: View>: View {
+    let value: Double
+    var tint: Color = .p4OK
+    var lineWidth: CGFloat = 10
+    @ViewBuilder var center: Center
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var clamped: Double { min(max(value, 0), 1) }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.p4Tile, lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: clamped)
+                .stroke(
+                    AngularGradient(
+                        colors: [tint.opacity(0.65), tint],
+                        center: .center,
+                        startAngle: .degrees(0),
+                        endAngle: .degrees(360 * clamped)
+                    ),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(reduceMotion ? nil : .smooth(duration: 0.6), value: clamped)
+            center
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityValue("\(Int(clamped * 100))%")
+    }
+}
+
+// MARK: - 实时指示点
+
+/// 在线时缓慢呼吸的状态点；减弱动态效果时保持静止。
+struct LiveDot: View {
+    var color: Color = .p4OK
+    var isLive = true
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            if isLive && !reduceMotion {
+                Circle()
+                    .fill(color.opacity(0.35))
+                    .scaleEffect(pulse ? 2.2 : 1)
+                    .opacity(pulse ? 0 : 1)
+                    .animation(.easeOut(duration: 1.6).repeatForever(autoreverses: false), value: pulse)
+            }
+            Circle().fill(color)
+        }
+        .frame(width: 8, height: 8)
+        .onAppear { pulse = true }
+        .accessibilityHidden(true)
     }
 }
 
@@ -309,22 +539,30 @@ struct ModuleIcon: View {
 
 /// 带底色瓦片的模块图标：功能列表、详情页链接、实验室列表统一使用。
 ///
-/// 三层结构固定为「瓦片底 + 0.5pt 描边 + 居中字形」，这样不同底色（卡片 / 玻璃）上
-/// 图标块的视觉重量一致；emoji 本身有颜色，不使用强调色，SF Symbol 才着色。
+/// 传入分类色时是实心渐变底 + 白色字形（与列表行 `SettingsIcon` 同一语言）；
+/// emoji 自带颜色，固定使用中性底。
 struct ModuleIconTile: View {
     let name: String
     var size: CGFloat = Theme.Icon.tile
-    /// nil 表示中性瓦片（emoji 场景）；传入强调色时瓦片底色跟随淡化。
+    /// nil 表示中性瓦片（emoji 场景或未分类）。
     var tint: Color? = nil
 
     private var corner: CGFloat { Theme.Icon.corner(for: size) }
+    private var isEmoji: Bool { name.hasPrefix("emoji:") }
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .fill(tint.map { $0.opacity(0.14) } ?? Color.p4Tile)
-            ModuleIcon(name: name, glyphSize: Theme.Icon.glyph(for: size))
-                .foregroundStyle(tint ?? Color.accentColor)
+            if let tint, !isEmoji {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(tint.gradient)
+                ModuleIcon(name: name, glyphSize: Theme.Icon.glyph(for: size))
+                    .foregroundStyle(.white)
+            } else {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(Color.p4Tile)
+                ModuleIcon(name: name, glyphSize: Theme.Icon.glyph(for: size))
+                    .foregroundStyle(Color.accentColor)
+            }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -386,6 +624,8 @@ struct MetricTile: View {
     var unit: String? = nil
     var tone: P4Tone = .info
     var footnote: String? = nil
+    /// 标题行图标的分类色。
+    var iconTint: Color = .p4Accent
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -399,15 +639,16 @@ struct MetricTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                // 图标保持次要色：色彩只留给「需要注意」的数值，避免一排彩色小图标抢走层级。
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(iconTint)
+                    .frame(width: 24, height: 24)
+                    .background(iconTint.opacity(0.14), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                     .accessibilityHidden(true)
                 Text(title)
-                    .font(.caption)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
@@ -435,12 +676,9 @@ struct MetricTile: View {
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             }
         }
-        .padding(Theme.spacing(1.5))
-        .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
-        .background(
-            Color.p4Card,
-            in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
-        )
+        .padding(Theme.spacing(1.75))
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .p4CardSurface(cornerRadius: Theme.Radius.card - 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title)，\(value)\(unit ?? "")")
     }

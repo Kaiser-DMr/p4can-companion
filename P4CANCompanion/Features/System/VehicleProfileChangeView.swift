@@ -203,6 +203,7 @@ struct VehicleProfileChangeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("更改车型", "Change Vehicle"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

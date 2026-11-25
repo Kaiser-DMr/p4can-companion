@@ -150,6 +150,7 @@ struct FirmwareChangelogView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("固件变更记录", "Firmware changelog"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.p4Background, for: .navigationBar)

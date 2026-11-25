@@ -10,12 +10,18 @@ enum Theme {
         grid * multiple
     }
 
-    /// 圆角规范：卡片 12 / 瓦片 9 / 按钮 12，胶囊由 Capsule 处理。
-    /// 对齐系统观感：iOS 分组卡片约 10–12，连续曲率（continuous）。
+    /// 圆角规范：卡片 20 / 瓦片 14 / 按钮 14，胶囊由 Capsule 处理，全部连续曲率。
     enum Radius {
-        static let card: CGFloat = 12
-        static let tile: CGFloat = 9
-        static let button: CGFloat = 12
+        static let card: CGFloat = 20
+        static let tile: CGFloat = 14
+        static let button: CGFloat = 14
+    }
+
+    /// 列表行图标（系统设置页同款实心彩色小方块）。
+    enum RowIcon {
+        static let size: CGFloat = 29
+        static let corner: CGFloat = 7
+        static let glyph: CGFloat = 15
     }
 
     /// 图标规范：全 App 只允许这三种尺寸，避免同一列表里图标大小不一。
@@ -93,6 +99,40 @@ extension ShapeStyle where Self == Color {
     static var p4OnAccent: Color { .white }
     /// 分隔线 / 卡片描边（系统分隔色，深浅自动）。
     static var p4Hairline: Color { Color(uiColor: .separator) }
+}
+
+/// 分类色板：只用于图标瓦片底色，区分功能类别；状态含义仍由 `P4Tone` 表达。
+enum P4Palette {
+    static let blue = Color(uiColor: .systemBlue)
+    static let indigo = Color(uiColor: .systemIndigo)
+    static let purple = Color(uiColor: .systemPurple)
+    static let pink = Color(uiColor: .systemPink)
+    static let red = Color(uiColor: .systemRed)
+    static let orange = Color(uiColor: .systemOrange)
+    static let yellow = Color(uiColor: .systemYellow)
+    static let green = Color(uiColor: .systemGreen)
+    static let mint = Color(uiColor: .systemMint)
+    static let teal = Color(uiColor: .systemTeal)
+    static let cyan = Color(uiColor: .systemCyan)
+    static let gray = Color(uiColor: .systemGray)
+}
+
+extension UIImage {
+    /// UIKit 页面用的行图标：与 SwiftUI `SettingsIcon` 同尺寸、同圆角的实心彩色方块 + 白色字形。
+    static func p4Tile(systemName: String, color: UIColor, size: CGFloat = Theme.RowIcon.size) -> UIImage? {
+        let pointSize = size * Theme.RowIcon.glyph / Theme.RowIcon.size
+        let configuration = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .semibold)
+        guard let symbol = UIImage(systemName: systemName, withConfiguration: configuration)?
+            .withTintColor(.white, renderingMode: .alwaysOriginal) else { return nil }
+        let rect = CGRect(x: 0, y: 0, width: size, height: size)
+        return UIGraphicsImageRenderer(size: rect.size).image { _ in
+            color.setFill()
+            UIBezierPath(roundedRect: rect, cornerRadius: size * Theme.RowIcon.corner / Theme.RowIcon.size).fill()
+            let glyph = symbol.size
+            symbol.draw(in: CGRect(x: (size - glyph.width) / 2, y: (size - glyph.height) / 2,
+                                   width: glyph.width, height: glyph.height))
+        }
+    }
 }
 
 /// 语义色调：颜色与默认图标一处定义，保证全 App 一致。

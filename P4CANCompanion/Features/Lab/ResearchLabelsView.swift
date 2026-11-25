@@ -54,7 +54,7 @@ struct ResearchLabelsView: View {
                     }
                 }
             } header: {
-                Label(L10n.t("捕获标签", "Capture labels"), systemImage: "tag")
+                Text(L10n.t("捕获标签", "Capture labels"))
             } footer: {
                 Text(L10n.t("留空表示保持设备当前标签；每个标签最多 63 个 UTF-8 字节。",
                             "Leave a field blank to keep the device label; each label is limited to 63 UTF-8 bytes."))
@@ -98,6 +98,7 @@ struct ResearchLabelsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("捕获标签", "Capture labels"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }

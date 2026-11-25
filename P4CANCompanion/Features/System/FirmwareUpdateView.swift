@@ -31,7 +31,7 @@ struct FirmwareUpdateView: View {
                     }
                 }
             } header: {
-                Label(L10n.t("设备", "Device"), systemImage: "cpu")
+                Text(L10n.t("设备", "Device"))
             }
 
             Section {
@@ -51,7 +51,7 @@ struct FirmwareUpdateView: View {
                     SkeletonRows(count: 3)
                 }
             } header: {
-                Label(L10n.t("当前升级状态", "Update status"), systemImage: "arrow.down.circle")
+                Text(L10n.t("当前升级状态", "Update status"))
             }
 
             if environment.otaUploadPhase != .idle {
@@ -76,7 +76,7 @@ struct FirmwareUpdateView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("\(phaseText)，\(byteText)")
                 } header: {
-                    Label(L10n.t("上传进度", "Upload progress"), systemImage: "arrow.up.circle")
+                    Text(L10n.t("上传进度", "Upload progress"))
                 }
             }
 
@@ -119,7 +119,7 @@ struct FirmwareUpdateView: View {
                 }
                 .disabled(pickedURL == nil || environment.otaUploading || !environment.isOnline)
             } header: {
-                Label(L10n.t("应用镜像", "Application image"), systemImage: "doc.badge.arrow.up")
+                Text(L10n.t("应用镜像", "Application image"))
             } footer: {
                 Text(L10n.t("上传成功后设备会自动重启，连接会短暂中断（属正常）。刷写过程中不要断电。",
                             "\(environment.deviceName) reboots after a successful flash, so the connection drops briefly — that is expected. Do not cut power."))
@@ -138,7 +138,7 @@ struct FirmwareUpdateView: View {
                                    value: last.flashedAt.formatted(date: .abbreviated, time: .shortened))
                     LabeledContent(L10n.t("当时固件", "Firmware then"), value: last.deviceFirmware)
                 } header: {
-                    Label(L10n.t("上次刷写", "Last flash"), systemImage: "clock.arrow.circlepath")
+                    Text(L10n.t("上次刷写", "Last flash"))
                 } footer: {
                     Text(L10n.t("刷写前先核对 SHA-256 前 12 位，能避免刷错包（同版本不同改动时尤其有用）。",
                                 "Compare the first 12 hex chars before flashing to avoid picking the wrong build."))
@@ -146,6 +146,7 @@ struct FirmwareUpdateView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .task {
             #if DEBUG
             // 本地联调：SIMCTL_CHILD_P4CAN_OTA_FILE=/path/app.ino.bin 启动后自动选择并上传，

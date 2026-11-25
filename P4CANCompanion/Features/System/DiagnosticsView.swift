@@ -38,7 +38,7 @@ struct DiagnosticsView: View {
                     SkeletonRows(count: 5)
                 }
             } header: {
-                Label(L10n.t("系统", "System"), systemImage: "cpu")
+                Text(L10n.t("系统", "System"))
             }
 
             ForEach(busIndexes, id: \.self) { index in
@@ -72,7 +72,7 @@ struct DiagnosticsView: View {
                         .foregroundStyle(.p4Err)
                 }
             } header: {
-                Label(L10n.t("恢复动作", "Recovery"), systemImage: "wrench.and.screwdriver")
+                Text(L10n.t("恢复动作", "Recovery"))
             } footer: {
                 Text(L10n.t("硬重初始化会让全部 CAN 短暂中断；仅在总线持续 BUS OFF 或计数异常时使用。",
                             "Hard reinitialization briefly interrupts all three CAN buses. Use only after persistent BUS OFF or abnormal counters."))
@@ -102,6 +102,7 @@ struct DiagnosticsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("诊断 / 恢复", "Diagnostics / Recovery"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
@@ -160,7 +161,7 @@ struct DiagnosticsView: View {
                 }
             }
         } header: {
-            Label("CAN \(index) · \(name)", systemImage: "point.3.connected.trianglepath.dotted")
+            Text("CAN \(index) · \(name)")
         }
     }
 

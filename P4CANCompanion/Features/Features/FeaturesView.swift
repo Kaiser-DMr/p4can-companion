@@ -237,24 +237,16 @@ struct FeaturesView: View {
             }
         }
         .padding(.horizontal, Theme.spacing(1.5))
-        // 用垂直内边距 + 最小高度代替固定 38pt：大字号下输入框会随文字长高，图标不再溢出圆角。
+        // 用垂直内边距 + 最小高度代替固定高度：大字号下输入框随文字长高。
         .padding(.vertical, Theme.spacing(1))
-        .frame(minHeight: 40)
-        // 用「轻微着色的底 + 细描边」代替玻璃白底：既贴合页面底色，也不会在顶部形成一条白条。
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
-                .fill(Color.primary.opacity(0.05))
-        )
+        .frame(minHeight: 42)
+        .background(Capsule().fill(Color(uiColor: .tertiarySystemFill)))
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
-                // 聚焦态：描边换成强调色并加粗到 1pt，和胶囊的"选中=有边界"语言一致。
-                .strokeBorder(
-                    searchFocused ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.06),
-                    lineWidth: searchFocused ? 1 : 0.5
-                )
+            Capsule()
+                .strokeBorder(Color.accentColor.opacity(searchFocused ? 0.5 : 0), lineWidth: 1)
                 .animation(.easeOut(duration: 0.15), value: searchFocused)
         )
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+        .contentShape(Capsule())
         .onTapGesture { searchFocused = true }
         .padding(.horizontal, Theme.spacing(2))
     }
@@ -264,14 +256,14 @@ struct FeaturesView: View {
     /// 两列圆角卡片：普通字号每行两张，辅助功能字号退化为单列，避免文字被压扁。
     private var gridColumns: [GridItem] {
         let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: Theme.spacing(1.25), alignment: .top),
+        return Array(repeating: GridItem(.flexible(), spacing: Theme.spacing(1.5), alignment: .top),
                      count: count)
     }
 
     private var list: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Theme.spacing(2.5)) {
+                LazyVStack(alignment: .leading, spacing: Theme.spacing(3.5)) {
                     if isSearching {
                         if searchResults.isEmpty {
                             emptySearchCard
@@ -330,7 +322,7 @@ struct FeaturesView: View {
             sectionHeader(title: title, count: count)
                 .padding(.horizontal, Theme.spacing(0.5))
 
-            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Theme.spacing(1.25)) {
+            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Theme.spacing(1.5)) {
                 ForEach(entries) { entry in
                     card(entry)
                         .id(entry.id)
@@ -398,11 +390,11 @@ struct FeaturesView: View {
 
         case .s3xy:
             FeatureCard(
-                icon: "emoji:🎮",
+                icon: "gamecontroller.fill",
                 title: L10n.t("S3XY", "S3XY"),
                 subtitle: L10n.t("打开后底部出现「蓝牙」标签；用于 S3XY 配对与按键动作。",
                                  "Turns on S3XY buttons and shows the Bluetooth tab."),
-                tint: .p4Info,
+                tint: P4Palette.purple,
                 toggle: .constant(s3xyEnabled),
                 toggleBusy: busyID == "s3xy",
                 toggleDisabled: environment.featuresStatus == nil || environment.isBusy
@@ -493,12 +485,12 @@ struct FeaturesView: View {
     /// 列表分组头：emoji + 标题 + 数量胶囊，和卡片左边缘对齐。
     /// 分组标题：系统分组列表的观感——纯文字、次要色、不加色点或胶囊徽标。
     private func sectionHeader(title: String, count: Int) -> some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
             Text("\(count)")
-                .font(.footnote)
+                .font(.subheadline.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(.tertiary)
             if environment.isShowingCachedData {
@@ -530,14 +522,7 @@ struct FeaturesView: View {
         }
         .padding(Theme.spacing(2))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.p4Card)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
-        )
+        .p4CardSurface()
     }
 
     // MARK: - 读写
@@ -657,16 +642,18 @@ private struct FeatureCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
+        RoundedRectangle(cornerRadius: Theme.Radius.card - 2, style: .continuous)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: Theme.spacing(0.75)) {
+            HStack(alignment: .center, spacing: Theme.spacing(0.75)) {
                 ModuleIconTile(name: icon, size: Theme.Icon.tile, tint: tint)
                 Spacer(minLength: 0)
                 trailing
             }
+
+            Spacer(minLength: Theme.spacing(1.5))
 
             Text(title)
                 .font(.subheadline.weight(.semibold))
@@ -674,32 +661,27 @@ private struct FeatureCard: View {
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, Theme.spacing(1))
 
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 3)
-
-            Spacer(minLength: Theme.spacing(0.75))
-
-            if showsDisclosure {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
+            HStack(alignment: .lastTextBaseline, spacing: 4) {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if showsDisclosure {
                     Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                 }
-                .foregroundStyle(.tertiary)
             }
+            .padding(.top, 3)
         }
-        .padding(Theme.spacing(1.5))
-        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-        .background(shape.fill(Color.p4Card))
-        .overlay(shape.strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(Theme.spacing(1.75))
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .p4CardSurface(cornerRadius: Theme.Radius.card - 2)
         .contentShape(shape)
     }
 

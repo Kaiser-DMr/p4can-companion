@@ -481,11 +481,20 @@ final class S3XYHeaderView: UIView {
 
     private func setupViews() {
         backgroundColor = .secondarySystemGroupedBackground
-        layer.cornerRadius = 12
+        layer.cornerRadius = Theme.Radius.card
         layer.cornerCurve = .continuous
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = traitCollection.userInterfaceStyle == .dark ? 0 : 0.045
+        layer.shadowRadius = 10
+        layer.shadowOffset = CGSize(width: 0, height: 3)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: Self, _) in
+            view.layer.shadowOpacity = view.traitCollection.userInterfaceStyle == .dark ? 0 : 0.045
+        }
 
         titleLabel.text = "S3XY 蓝牙设备"
-        titleLabel.font = .preferredFont(forTextStyle: .headline)
+        let base = UIFont.systemFont(ofSize: 20, weight: .bold)
+        let rounded = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: 20) } ?? base
+        titleLabel.font = UIFontMetrics(forTextStyle: .title3).scaledFont(for: rounded)
         titleLabel.adjustsFontForContentSizeCategory = true
 
         bluetoothLabel.text = "蓝牙总开关"

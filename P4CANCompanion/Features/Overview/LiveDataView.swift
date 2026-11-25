@@ -24,6 +24,7 @@ struct LiveDataView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle("全部数据")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: L10n.t("搜索字段，如 can1 / gear / das / state", "Search fields, e.g. can1 / gear / das / state"))

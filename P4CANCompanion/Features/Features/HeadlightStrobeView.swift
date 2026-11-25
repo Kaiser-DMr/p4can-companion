@@ -278,7 +278,7 @@ struct HeadlightStrobeView: View {
                 }
                 .frame(maxWidth: .infinity)
             } header: {
-                Label(L10n.t("触发", "Trigger"), systemImage: "bolt.fill")
+                Text(L10n.t("触发", "Trigger"))
             }
 
             statusSection
@@ -347,7 +347,7 @@ struct HeadlightStrobeView: View {
                 }
                 .pickerStyle(.segmented)
             } header: {
-                Label(L10n.t("参数", "Parameters"), systemImage: "slider.horizontal.3")
+                Text(L10n.t("参数", "Parameters"))
             } footer: {
                 Text(ending == .count
                      ? L10n.t("刻度按 \(intervalStepText) ms 吸附；参数改动需保存后才会用于下一次触发。",
@@ -413,6 +413,7 @@ struct HeadlightStrobeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         // 自定义标签栏浮在底部：给最后两行留出空间，避免按钮贴着/压到栏上。
         .contentMargins(.bottom, 28, for: .scrollContent)
         #if DEBUG
@@ -521,7 +522,7 @@ struct HeadlightStrobeView: View {
                 .font(.caption)
             }
         } header: {
-            Label(L10n.t("运行状态", "Runtime"), systemImage: "gauge.with.dots.needle.33percent")
+            Text(L10n.t("运行状态", "Runtime"))
         } footer: {
             Text(L10n.t("0x249 高灯 PULL/IDLE；爆闪期间暂停其他 0x249 注入，结束后自动解除。",
                         "0x249 high-beam PULL/IDLE. Other 0x249 injections are paused while active."))

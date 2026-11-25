@@ -152,7 +152,7 @@ struct NagAdvancedView: View {
                 hexRow(L10n.t("转向 ID", "Steering ID"), text: $steeringIdText,
                        hint: L10n.t("转向角报文 ID，默认 0x129", "Steering-angle frame ID, default 0x129"))
             } header: {
-                Label(L10n.t("报文 ID", "Frame IDs"), systemImage: "number")
+                Text(L10n.t("报文 ID", "Frame IDs"))
             } footer: {
                 Text(L10n.t("支持 0x001–0x7FF 的十六进制，或同等十进制；下方会显示十进制值。",
                             "Accepts hexadecimal 0x001–0x7FF or the decimal equivalent; the decimal value is shown below."))
@@ -166,7 +166,7 @@ struct NagAdvancedView: View {
                 decimalRow(L10n.t("Pause", "Pause"), text: $pauseText, unit: "ms",
                            range: "0–10000")
             } header: {
-                Label(L10n.t("报文节奏", "Frame timing"), systemImage: "timer")
+                Text(L10n.t("报文节奏", "Frame timing"))
             } footer: {
                 Text(L10n.t("Burst 为单次注入的持续时间，Pause 为两次注入之间的间隔。",
                             "Burst is the duration of one injection; Pause is the gap between injections."))
@@ -230,6 +230,7 @@ struct NagAdvancedView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("高级参数（报文级）", "Advanced parameters"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
@@ -326,7 +327,7 @@ struct NagAdvancedView: View {
                 }
             }
         } header: {
-            Label(L10n.t("扭矩表（只读）", "Torque table (read-only)"), systemImage: "tablecells")
+            Text(L10n.t("扭矩表（只读）", "Torque table (read-only)"))
         } footer: {
             Text(L10n.t("扭矩表仍由网页端编辑；App 第一期只展示，不会写入或清空。",
                         "The torque table remains web-editable; this app only displays it and never writes or clears it."))
