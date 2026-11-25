@@ -73,6 +73,7 @@ struct RearFogStrobeView: View {
                         Label(isActive ? L10n.t("爆闪中…", "Strobing…") : L10n.t("开始爆闪", "Start strobe"),
                               systemImage: "light.beacon.max")
                             .font(.body.weight(.semibold))
+                            .labelStyle(.titleAndIcon)
                         Spacer()
                     }
                 }

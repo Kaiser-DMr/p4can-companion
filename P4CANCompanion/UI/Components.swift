@@ -145,14 +145,17 @@ extension EnvironmentValues {
 
 /// 列表行 Label：SF Symbol 放进实心彩色圆角方块（系统设置页观感），标题保持原样。
 /// 对 `List` 整体设置后，所有行内 `Label` 自动统一；分组标题使用纯文字，不受影响。
-/// 显式设置了非正文字号的 Label（脚注提示、错误说明）保持行内小图标，不放大成方块。
+/// 显式设置了小字号的 Label（脚注提示、错误说明）保持行内小图标，不放大成方块。
+/// 只认小字号：`LabeledContent` 等系统容器会给标签设置自己的字体，不能当成提示文字。
 struct P4RowLabelStyle: LabelStyle {
     @Environment(\.p4RowTint) private var tint
     @Environment(\.font) private var font
 
+    private static let inlineFonts: [Font] = [.footnote, .caption, .caption2]
+
     @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
-        if let font, font != .body {
+        if let font, Self.inlineFonts.contains(font) {
             Label(configuration).labelStyle(.titleAndIcon)
         } else {
             HStack(spacing: Theme.Icon.gap) {

@@ -461,6 +461,7 @@ struct FeatureDetailView: View {
                     } label: {
                         Label(L10n.t("同时提交", "Submit both"), systemImage: "arrow.up.circle")
                             .font(.footnote.weight(.medium))
+                            .labelStyle(.titleAndIcon)
                     }
                     .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
                 }

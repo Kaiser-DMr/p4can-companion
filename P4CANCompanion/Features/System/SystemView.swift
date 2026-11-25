@@ -368,6 +368,7 @@ private struct SystemSection: View {
                     .foregroundStyle(.secondary)
             } label: {
                 Label(L10n.t("固件", "Firmware"), systemImage: "cpu")
+                    .labelStyle(.p4Row)
             }
             .p4RowTint(P4Palette.gray)
 
@@ -691,6 +692,7 @@ private struct AppSection: View {
                 }
             } label: {
                 Label(L10n.t("设备地址", "Device address"), systemImage: "network")
+                    .labelStyle(.p4Row)
             }
             .p4RowTint(P4Palette.green)
 
@@ -882,6 +884,7 @@ private struct ShortcutsSection: View {
             } label: {
                 Label(L10n.t("前大灯爆闪", "Headlight strobe"),
                       systemImage: "light.beacon.max.fill")
+                    .labelStyle(.p4Row)
             }
             .p4RowTint(P4Palette.orange)
             .accessibilityElement(children: .combine)
@@ -893,6 +896,7 @@ private struct ShortcutsSection: View {
             } label: {
                 Label(L10n.t("后雾灯爆闪", "Rear fog strobe"),
                       systemImage: "cloud.fog.fill")
+                    .labelStyle(.p4Row)
             }
             .p4RowTint(P4Palette.red)
             .accessibilityElement(children: .combine)
