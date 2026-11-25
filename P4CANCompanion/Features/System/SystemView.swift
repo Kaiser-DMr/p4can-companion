@@ -64,6 +64,7 @@ struct SystemView: View {
                     case "diagnostics": DiagnosticsView()
                     case "ota": FirmwareUpdateView()
                     case "changelog": FirmwareChangelogView()
+                    case "service": ServiceModeView()
                     default: EmptyView()
                     }
                 }

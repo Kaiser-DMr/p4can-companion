@@ -270,6 +270,13 @@ struct ServiceModeView: View {
     private var eapNr: [String: P4JSON] { object["eapNr"]?.objectValue ?? [:] }
     private var eapNrEnabled: Bool { eapNr["enabled"]?.boolValue ?? false }
 
+    // v3.35.8 把免重启补发合并进 service-mode/stats（扁平的 cacheValid… 字段）。
+    private var replayPresent: Bool { object["cacheValid"] != nil }
+    private var replayCacheValid: Bool { object["cacheValid"]?.boolValue ?? false }
+    private var replayCacheHex: String { object["cacheHex"]?.stringValue ?? "—" }
+    private var replayPersisted: Bool { object["persisted"]?.boolValue ?? false }
+    private var replayWindowExpired: Bool { object["windowExpired"]?.boolValue ?? false }
+
     var body: some View {
         List {
             Section {
@@ -316,6 +323,17 @@ struct ServiceModeView: View {
                             "Confirm Service Mode on the vehicle screen. The request is sent once. TLSSC restore enables full EAP and may affect your vehicle account; leave it off in daily use."))
             }
 
+            if replayPresent {
+                Section {
+                    FWStatusRows(rows: replayRows)
+                } header: {
+                    Text(L10n.t("重启修复自检", "Anti-restart self-check"))
+                } footer: {
+                    Text(L10n.t("开启 TLSSC 恢复、让车发过一次 0x331 后，下次上电的前 60 秒应看到补发帧数与成功数增长；车自己开始发 0x331 后会提前让位。",
+                                "With TLSSC Restore on and one 0x331 seen, the next power-up should show burst/replayOk rising within the first 60 s; it yields early once the car sends its own 0x331."))
+                }
+            }
+
             if !eapNr.isEmpty {
                 Section {
                     Toggle(L10n.t("EAP 防重启补发", "EAP anti-restart replay"),
@@ -360,6 +378,18 @@ struct ServiceModeView: View {
             Text(L10n.t("车辆需在驻车状态，进入后还要在车机屏幕上确认。", "Park the car first; you still confirm on the vehicle screen."))
         }
         .task { await poll() }
+    }
+
+    private var replayRows: [(String, String)] {
+        [
+            (L10n.t("缓存帧", "Cached frame"), replayCacheValid ? replayCacheHex : L10n.t("未捕获", "Not captured")),
+            (L10n.t("已写入 NVS", "Persisted"), replayPersisted ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+            (L10n.t("补发 成功 / 失败 / 让位 / 跳过", "Replay ok / fail / busy / skip"),
+             "\(object["replayOk"]?.intValue ?? 0) / \(object["replayFail"]?.intValue ?? 0) / \(object["replayBusy"]?.intValue ?? 0) / \(object["replaySkip"]?.intValue ?? 0)"),
+            (L10n.t("补发帧数", "Burst frames"), "\(object["burst"]?.intValue ?? 0)"),
+            (L10n.t("60 秒窗口", "60 s window"), replayWindowExpired ? L10n.t("已结束", "Expired") : L10n.t("进行中", "Active")),
+            (L10n.t("最后错误", "Last error"), object["lastErrName"]?.stringValue ?? "—"),
+        ]
     }
 
     private var statusRows: [(String, String)] {

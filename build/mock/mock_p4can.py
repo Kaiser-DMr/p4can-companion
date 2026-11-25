@@ -171,8 +171,12 @@ PREHEAT = {
 }
 FSD = {"enabled": False, "suspendDuringAp": True, "values": 0,
        "mux0Fresh": True, "stock1": "0x00", "txOk": 0, "txFail": 0, "apBlocked": False}
-SERVICE = {"canEnter": True, "chinaRestore": False, "restoreTxOk": 0, "restoreTxFail": 0,
+SERVICE = {"canEnter": True, "chinaRestore": True, "restoreTxOk": 12, "restoreTxFail": 0,
            "restoreForce": False, "restoreIntervalMs": 150,
+           "cacheValid": True, "cacheLen": 8, "cacheHex": "1B0A2F0000000000",
+           "persisted": True, "replayOk": 42, "replayFail": 0, "replayBusy": 1,
+           "replaySkip": 0, "burst": 42, "lastErr": 0, "lastErrName": "OK",
+           "windowExpired": True,
            "eapNr": {"enabled": True, "prereq": False, "cacheValid": True,
                      "cacheHex": "1B0000000000", "stockRx": 12, "replayOk": 0,
                      "replayFail": 0, "replayBusy": 0, "burst": 0}}
@@ -1096,7 +1100,10 @@ class Handler(BaseHTTPRequestHandler):
             if FW_VARIANT.startswith(("3.35.7", "3.35.8")):
                 return self.send_json({k: v for k, v in SERVICE.items()
                                        if k not in ("restoreForce", "restoreIntervalMs", "eapNr")})
-            return self.send_json(SERVICE)
+            return self.send_json({k: v for k, v in SERVICE.items()
+                                   if k not in ("cacheValid", "cacheLen", "cacheHex", "persisted",
+                                                "replayOk", "replayFail", "replayBusy", "replaySkip",
+                                                "burst", "lastErr", "lastErrName", "windowExpired")})
         if path == "/api/smartshift/stats":
             return self.send_json(SMARTSHIFT)
         if path == "/api/developer-test/stats":
