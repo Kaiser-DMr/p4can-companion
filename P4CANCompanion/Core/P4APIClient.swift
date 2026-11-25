@@ -278,31 +278,34 @@ final class P4APIClient: Sendable {
 
     /// GET 并解析为动态 JSON（强制回源，禁用缓存）。
     func get(_ path: String, query: [P4Param] = []) async throws -> P4JSON {
-        var request = URLRequest(url: url(for: path, query: query))
+        let resolved = DeviceRoute.resolve(path)
+        var request = URLRequest(url: url(for: resolved, query: query))
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue("no-cache", forHTTPHeaderField: "Pragma")
-        let (data, response) = try await execute(request, path: path, query: query)
+        let (data, response) = try await execute(request, path: resolved, query: query)
         try Self.checkSize(data, limit: Self.maxJSONBytes, label: "响应")
-        return try Self.interpret(data: data, response: response, path: path)
+        return try Self.interpret(data: data, response: response, path: resolved)
     }
 
     /// POST（query 参数），与固件网页完全一致的调用方式。
     @discardableResult
     func post(_ path: String, query: [P4Param] = []) async throws -> P4JSON {
-        var request = URLRequest(url: url(for: path, query: query))
+        let resolved = DeviceRoute.resolve(path)
+        var request = URLRequest(url: url(for: resolved, query: query))
         request.httpMethod = "POST"
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        let (data, response) = try await execute(request, path: path, query: query)
+        let (data, response) = try await execute(request, path: resolved, query: query)
         try Self.checkSize(data, limit: Self.maxJSONBytes, label: "响应")
-        return try Self.interpret(data: data, response: response, path: path)
+        return try Self.interpret(data: data, response: response, path: resolved)
     }
 
     /// 下载原始数据（CSV 日志等）。
     func downloadData(_ path: String) async throws -> Data {
-        var request = URLRequest(url: url(for: path))
+        let resolved = DeviceRoute.resolve(path)
+        var request = URLRequest(url: url(for: resolved))
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        let (data, response) = try await execute(request, path: path, query: [])
+        let (data, response) = try await execute(request, path: resolved, query: [])
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw P4APIError(message: "下载失败（HTTP \(http.statusCode)）")
         }

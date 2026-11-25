@@ -84,6 +84,10 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var v356Supported: Bool?
     /// 固件是否支持网页语言切换（3.35.5 起；3.35.8 仍保留，独立探测）。
     @Published private(set) var dashboardLanguageSupported: Bool?
+    /// 当前设备家族（P4-CAN / T2CAN）；由 system/stats 的字段结构判断。
+    @Published private(set) var deviceFamily: DeviceFamily = .unknown
+    /// 设备显示名，用于界面上的「重启 P4-CAN / T2CAN」等文案。
+    var deviceName: String { deviceFamily.displayName }
     /// 上次探测爆闪接口的时间：为 false 时每分钟复探一次，方便重新刷回带爆闪的固件后自动恢复入口。
     private var lastStrobeProbe: Date?
     private var lastNewFeaturesProbe: Date?
@@ -380,6 +384,8 @@ final class AppEnvironment: ObservableObject {
         lightingSupported = nil
         v356Supported = nil
         dashboardLanguageSupported = nil
+        deviceFamily = .unknown
+        DeviceRoute.family = .unknown
         mergedStats = [:]
         canBuses = []
         trendSamples = []
@@ -591,9 +597,15 @@ final class AppEnvironment: ObservableObject {
             }
         }
         mergedStats = merged
+        let family = DeviceFamily.detect(system: systemStats?.objectValue ?? [:])
+        if family != .unknown {
+            deviceFamily = family
+            DeviceRoute.family = family
+        }
         canBuses = CanBusResolver.resolve(
             traffic: fastGroups["cantraffic"]?.objectValue ?? [:],
-            profile: profileStatus?.objectValue ?? [:]
+            profile: profileStatus?.objectValue ?? [:],
+            system: systemStats?.objectValue ?? [:]
         )
         if appendSample { appendTrendSample() }
         if pushLiveActivity { refreshLiveActivity() }

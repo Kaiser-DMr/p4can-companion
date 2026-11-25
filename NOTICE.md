@@ -8,6 +8,14 @@ This repository contains or derives from the following projects:
 - License: GNU GPL v3.0
 - The firmware sources under `build/firmware-build/P4-CAN-Universal-*` are modified builds of this project. The strobe patches, Chinese dashboard build, and GPIO notes are documented in `build/firmware-build/3.35.3-爆闪移植.md`.
 
+## T2CAN Universal Unlock
+
+- Upstream: https://github.com/06066060606060/t2can-universal-unlock
+- License: GNU GPL v3.0
+- The app supports this firmware's two-bus layout (MCP2515 + TWAI) and its
+  `/api/lab/fsd/*`, `/api/lab/service-mode/*` routes. No firmware source is
+  bundled in this repository.
+
 ## SnapKit
 
 - Upstream: https://github.com/SnapKit/SnapKit

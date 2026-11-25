@@ -18,7 +18,7 @@ struct VehicleProfileChangeView: View {
         let detail: String
     }
 
-    private static let vehicles: [Vehicle] = [
+    private static let p4Vehicles: [Vehicle] = [
         Vehicle(id: 1, name: "Model Y L", badge: "YL", topology: 1,
                 detail: "CAN A · PARTY / CAN B · VH"),
         Vehicle(id: 2, name: "Model Y Juniper", badge: "YJ", topology: 2,
@@ -31,8 +31,29 @@ struct VehicleProfileChangeView: View {
                 detail: "CAN A · BODY / CAN B · CHASSIS / CAN C · PARTY"),
     ]
 
+    /// T2CAN 3.30.x 支持的车型（vehicle_profile.h），只有两路 CAN。
+    private static let t2Vehicles: [Vehicle] = [
+        Vehicle(id: 1, name: "Model Y L", badge: "YL", topology: 1,
+                detail: "CAN A · PARTY / CAN B · VH"),
+        Vehicle(id: 6, name: "Model S/X MCU2 HW3", badge: "S/X", topology: 1,
+                detail: "CAN A · PARTY / CAN B · VH"),
+        Vehicle(id: 2, name: "Model Y Juniper", badge: "YJ", topology: 2,
+                detail: "CAN A · BODY / CAN B · CHASSIS"),
+        Vehicle(id: 3, name: "Model Y Legacy", badge: "Y", topology: 2,
+                detail: "CAN A · BODY / CAN B · CHASSIS"),
+        Vehicle(id: 4, name: "Model 3 Highland", badge: "3H", topology: 2,
+                detail: "CAN A · BODY / CAN B · CHASSIS"),
+        Vehicle(id: 5, name: "Model 3 Legacy", badge: "3", topology: 2,
+                detail: "CAN A · BODY / CAN B · CHASSIS"),
+    ]
+
+    private var isT2: Bool { environment.deviceFamily == .t2can }
+    private var vehicles: [Vehicle] { isT2 ? Self.t2Vehicles : Self.p4Vehicles }
+
     @State private var selectedID: Int
     @State private var turn: Int
+    /// T2CAN 非 YL 车型可在 Body+Chassis / Party+Chassis 之间选。
+    @State private var t2Topology: Int = 2
     @State private var confirms = false
     @State private var saving = false
     @State private var confirming = false
@@ -46,7 +67,7 @@ struct VehicleProfileChangeView: View {
     }
 
     private var selectedVehicle: Vehicle? {
-        Self.vehicles.first { $0.id == selectedID }
+        vehicles.first { $0.id == selectedID }
     }
 
     /// 只有 Model 3 Highland 需要选拨杆；其余车型固件固定 STALK。
@@ -56,10 +77,17 @@ struct VehicleProfileChangeView: View {
         needsTurnChoice ? turn : 1
     }
 
+    /// P4 的拓扑由车型固定；T2CAN 非 YL 车型允许选 Body/Party + Chassis。
+    private var resolvedTopology: Int {
+        guard let vehicle = selectedVehicle else { return 2 }
+        if isT2, vehicle.topology != 1 { return t2Topology }
+        return vehicle.topology
+    }
+
     var body: some View {
         List {
             Section {
-                ForEach(Self.vehicles) { vehicle in
+                ForEach(vehicles) { vehicle in
                     Button {
                         Haptics.impact()
                         selectedID = vehicle.id
@@ -96,8 +124,13 @@ struct VehicleProfileChangeView: View {
             } header: {
                 Text(L10n.t("车型", "Vehicle"))
             } footer: {
-                Text(L10n.t("CAN 拓扑由车型决定：Model Y L 使用 Party + VH，其余车型使用 Body + Chassis + Party。",
-                            "CAN topology is fixed by model: Model Y L uses Party + VH; other models use Body + Chassis + Party."))
+                if isT2 {
+                    Text(L10n.t("T2CAN 只有两路 CAN：Model Y L / Model S X 使用 Party + VH，其余车型默认 Body + Chassis。",
+                                "T2CAN has two CAN buses: Model Y L / Model S X use Party + VH; other models default to Body + Chassis."))
+                } else {
+                    Text(L10n.t("CAN 拓扑由车型决定：Model Y L 使用 Party + VH，其余车型使用 Body + Chassis + Party。",
+                                "CAN topology is fixed by model: Model Y L uses Party + VH; other models use Body + Chassis + Party."))
+                }
             }
 
             if needsTurnChoice {
@@ -116,6 +149,22 @@ struct VehicleProfileChangeView: View {
                 }
             }
 
+            if isT2, let vehicle = selectedVehicle, vehicle.topology != 1 {
+                Section {
+                    Picker(L10n.t("CAN 拓扑", "CAN topology"), selection: $t2Topology) {
+                        Text("Body + Chassis").tag(2)
+                        Text("Party + Chassis").tag(3)
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } header: {
+                    Text(L10n.t("拓扑", "Topology"))
+                } footer: {
+                    Text(L10n.t("只有不确定原车接线时才改；选错会让 NAG / 转向灯路由失效。",
+                                "Change this only if the stock wiring is non-standard; a wrong choice breaks NAG and turn-signal routing."))
+                }
+            }
+
             Section {
                 HStack {
                     Text(L10n.t("当前车型", "Current profile"))
@@ -125,8 +174,8 @@ struct VehicleProfileChangeView: View {
                 }
                 .font(.subheadline)
             } footer: {
-                Text(L10n.t("保存后 P4-CAN 会立即重启，并在 CAN 初始化前应用新车型；正在进行的注入会停止。",
-                            "P4-CAN reboots immediately after saving and applies the profile before CAN initialization. Active injection stops."))
+                Text(L10n.t("保存后 \(environment.deviceName) 会立即重启，并在 CAN 初始化前应用新车型；正在进行的注入会停止。",
+                            "\(environment.deviceName) reboots immediately after saving and applies the profile before CAN initialization. Active injection stops."))
             }
 
             if let errorText {
@@ -164,7 +213,7 @@ struct VehicleProfileChangeView: View {
         .overlay(alignment: .bottom) { ToastOverlay() }
         .onAppear(perform: loadCurrent)
         .confirmationDialog(
-            L10n.t("保存并重启 P4-CAN？", "Save profile and reboot P4-CAN?"),
+            L10n.t("保存并重启 \(environment.deviceName)？", "Save profile and reboot \(environment.deviceName)?"),
             isPresented: $confirms,
             titleVisibility: .visible
         ) {
@@ -178,26 +227,33 @@ struct VehicleProfileChangeView: View {
         .alert(L10n.t("车型已保存", "Profile saved"), isPresented: $saved) {
             Button(L10n.t("完成", "Done")) { dismiss() }
         } message: {
-            Text(L10n.t("设备正在重启并应用新车型。若 Wi-Fi 未开启自动加入，请手动重连 P4-CAN 热点。",
-                        "P4-CAN is rebooting with the new profile. Reconnect to its hotspot manually if Auto-Join is off."))
+            Text(L10n.t("设备正在重启并应用新车型。若 Wi-Fi 未开启自动加入，请手动重连 \(environment.deviceName) 热点。",
+                        "\(environment.deviceName) is rebooting with the new profile. Reconnect to its hotspot manually if Auto-Join is off."))
         }
     }
 
     private var summary: String {
         let vehicle = selectedVehicle?.name ?? "—"
-        let topology = selectedVehicle?.topology == 1 ? "Party + VH" : "Body + Chassis + Party"
+        let topology: String
+        if resolvedTopology == 1 {
+            topology = "Party + VH"
+        } else if isT2 {
+            topology = resolvedTopology == 3 ? "Party + Chassis" : "Body + Chassis"
+        } else {
+            topology = "Body + Chassis + Party"
+        }
         let turnText = needsTurnChoice
             ? (turn == 2 ? "STALKLESS · 0x3C2" : "STALK · 0x249")
             : "STALK · 0x249"
         return L10n.t("车型：\(vehicle)\n拓扑：\(topology)\n拨杆：\(turnText)\n\n保存后设备立即重启。",
-                      "Vehicle: \(vehicle)\nTopology: \(topology)\nTurn: \(turnText)\n\nP4-CAN reboots immediately after saving.")
+                      "Vehicle: \(vehicle)\nTopology: \(topology)\nTurn: \(turnText)\n\n\(environment.deviceName) reboots immediately after saving.")
     }
 
     private func loadCurrent() {
         #if DEBUG
         // 本地联调：SIMCTL_CHILD_P4CAN_PROFILE_ID=4 预选车型（验证 Highland 拨杆选项）
         if let raw = ProcessInfo.processInfo.environment["P4CAN_PROFILE_ID"],
-           let id = Int(raw), Self.vehicles.contains(where: { $0.id == id }) {
+           let id = Int(raw), vehicles.contains(where: { $0.id == id }) {
             selectedID = id
             if id == 4 { turn = 1 }
             return
@@ -205,8 +261,12 @@ struct VehicleProfileChangeView: View {
         #endif
         guard let raw = environment.profileStatus?["profile"]?.intValue else { return }
         let id = Int(raw)
-        if Self.vehicles.contains(where: { $0.id == id }) {
+        if vehicles.contains(where: { $0.id == id }) {
             selectedID = id
+        }
+        if let storedTopology = environment.profileStatus?["topology"]?.intValue,
+           isT2, storedTopology == 3 {
+            t2Topology = 3
         }
         if let storedTurn = environment.profileStatus?["turn"]?.intValue {
             turn = Int(storedTurn) == 2 ? 2 : 1
@@ -217,7 +277,12 @@ struct VehicleProfileChangeView: View {
     private var isAlreadyCurrent: Bool {
         guard let selected = selectedVehicle,
               let current = environment.profileStatus?["profile"]?.intValue else { return false }
-        return selected.id == Int(current)
+        guard selected.id == Int(current) else { return false }
+        // T2CAN 同一车型可能切过拓扑，拓扑不同仍要允许保存。
+        if isT2, let currentTopology = environment.profileStatus?["topology"]?.intValue {
+            return resolvedTopology == Int(currentTopology)
+        }
+        return true
     }
 
     private func save() async {
@@ -226,7 +291,7 @@ struct VehicleProfileChangeView: View {
         errorText = nil
         let query = [
             P4Param("profile", String(vehicle.id)),
-            P4Param("topology", String(vehicle.topology)),
+            P4Param("topology", String(resolvedTopology)),
             P4Param("turn", String(resolvedTurn)),
         ]
         do {

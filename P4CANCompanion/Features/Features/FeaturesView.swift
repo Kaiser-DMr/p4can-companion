@@ -48,6 +48,7 @@ struct FeaturesView: View {
     private var modules: [FeatureModule] {
         FeatureCatalog.modules.filter { module in
             guard module.id != "profile" else { return false }
+            guard FeatureSupport.supports(module.id, family: environment.deviceFamily) else { return false }
             // v3.35.2 起官方固件移除了爆闪接口：探测到 404 后不再展示这两个入口。
             if module.id == "headlight" || module.id == "rearFog" {
                 return environment.strobeSupported != false
@@ -147,7 +148,7 @@ struct FeaturesView: View {
                 } else if moduleID == "preheat" {
                     PreheatView()
                 } else if moduleID == "fsd" {
-                    FSDInjectionView()
+                    if environment.deviceFamily == .t2can { T2FSDView() } else { FSDInjectionView() }
                 } else if moduleID == "serviceMode" {
                     ServiceModeView()
                 } else if moduleID == "canGpio" {
@@ -418,7 +419,8 @@ struct FeaturesView: View {
         case "headlight": HeadlightStrobeView()
         case "rearFog": RearFogStrobeView()
         case "preheat": PreheatView()
-        case "fsd": FSDInjectionView()
+        case "fsd":
+            if environment.deviceFamily == .t2can { T2FSDView() } else { FSDInjectionView() }
         case "serviceMode": ServiceModeView()
         case "canGpio": CanGpioView()
         case "lighting": LightingFeaturesView()

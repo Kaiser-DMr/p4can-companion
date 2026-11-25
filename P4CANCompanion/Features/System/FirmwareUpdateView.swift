@@ -22,11 +22,13 @@ struct FirmwareUpdateView: View {
                 LabeledContent(L10n.t("当前固件", "Firmware"), value: firmwareText)
                 LabeledContent(L10n.t("连接", "Connection"),
                                value: environment.isOnline ? L10n.t("在线", "Online") : L10n.t("离线", "Offline"))
-                NavigationLink {
-                    FirmwareChangelogView()
-                } label: {
-                    Label(L10n.t("固件变更记录", "Firmware changelog"),
-                          systemImage: "list.bullet.rectangle")
+                if environment.deviceFamily != .t2can {
+                    NavigationLink {
+                        FirmwareChangelogView()
+                    } label: {
+                        Label(L10n.t("固件变更记录", "Firmware changelog"),
+                              systemImage: "list.bullet.rectangle")
+                    }
                 }
             } header: {
                 Label(L10n.t("设备", "Device"), systemImage: "cpu")
@@ -120,7 +122,7 @@ struct FirmwareUpdateView: View {
                 Label(L10n.t("应用镜像", "Application image"), systemImage: "doc.badge.arrow.up")
             } footer: {
                 Text(L10n.t("上传成功后设备会自动重启，连接会短暂中断（属正常）。刷写过程中不要断电。",
-                            "P4-CAN reboots after a successful flash, so the connection drops briefly — that is expected. Do not cut power."))
+                            "\(environment.deviceName) reboots after a successful flash, so the connection drops briefly — that is expected. Do not cut power."))
             }
 
             if let last = lastPackage {
@@ -326,8 +328,8 @@ struct FirmwareUpdateView: View {
             return L10n.t("只支持 .bin 固件文件", "Only .bin firmware files are supported")
         }
         guard !name.contains(".merged") else {
-            return L10n.t("这是串口全量镜像（.merged.bin），不能用于 App 内 OTA；请选择应用升级版 .ino.bin",
-                          "This is a full merged image (.merged.bin); choose the application .ino.bin instead")
+            return L10n.t("这是串口全量镜像（.merged.bin），不能用于 App 内 OTA；请选择应用升级版 .bin",
+                          "This is a full merged image (.merged.bin); choose the application .bin instead")
         }
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }

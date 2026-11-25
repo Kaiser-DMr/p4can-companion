@@ -2,11 +2,15 @@
 
 [简体中文](#简体中文) | [English](#english)
 
-原生 iOS / iPadOS / macOS 控制台，用于 **P4-CAN Universal（ESP32-P4 三路 CAN 控制器）**。
+原生 iOS / iPadOS / macOS 控制台，支持两种硬件：
+
+- **P4-CAN Universal**（ESP32-P4，三路 CAN）
+- **T2CAN Universal**（LilyGO T-2Can，MCP2515 + TWAI 两路 CAN）
+
 SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
 ![platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![version](https://img.shields.io/badge/version-3.50%20(71)-green)
+![version](https://img.shields.io/badge/version-3.51%20(72)-green)
 ![license](https://img.shields.io/badge/license-GPL--3.0-orange)
 
 **下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
@@ -16,6 +20,17 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 ![status](docs/screenshots/status.png)
 ![features](docs/screenshots/features.png)
 ![lighting](docs/screenshots/lighting.png)
+
+### 硬件兼容 / Hardware
+
+| 硬件 | CAN | App 适配 |
+|---|---|---|
+| P4-CAN Universal | 3 路 TWAI：BODY / CHASSIS / PARTY | 全部功能，含 GPIO、灯光爆闪、SmartShift、R79 时序 |
+| T2CAN Universal | 2 路：MCP2515（CAN A）+ TWAI（CAN B） | 状态/NAG/ISA/DMS/TLSSC/ALC/踏板/预热/R79/FSD/Service Mode 等；P4 专属项自动隐藏 |
+
+设备家族由 `/api/system/stats` 自动识别（P4 看 `chipModel`，T2 看 `mcpReady`），无需手动切换。
+
+![T2CAN 状态页](docs/screenshots/t2-status.png)
 
 ---
 
@@ -27,10 +42,10 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 
 | 模块 | 内容 |
 |---|---|
-| **状态** | 设备在线、固件版本、内存、三路 CAN（BODY / CHASSIS / PARTY）收发与 Bus-Off、扭矩趋势、电池信息（固件提供时）、锁屏/灵动岛实时活动 |
-| **功能** | 按固件新版结构分组：**灯光**（前大灯爆闪 / 后雾灯爆闪）→ **功能**（NAG、ISA、DMS、限速、BlinkA、召唤、TLSSC、ALC、踏板、AP 加速/回收、灯光功能、电池预热）→ **实验**（R79、FSD、SmartShift、地区、Lane Change、常驻 AP、Developer Test、召唤版本）→ **实验室功能**（R79 AP、召唤心跳、车窗、研究捕获、DMS 捕获、Mode H、R79 时序）。支持搜索、长按置顶 |
+| **状态** | 设备在线、固件版本、CAN 收发与 Bus-Off（P4 三路；T2 两路 MCP2515 + TWAI）、扭矩趋势、电池信息（固件提供时）、锁屏/灵动岛实时活动 |
+| **功能** | **灯光**（P4 专属爆闪）→ **功能**（NAG、ISA、DMS、限速、BlinkA、召唤、TLSSC、ALC、踏板、AP 加速/回收、灯光功能、电池预热，以及 R79 AP/状态、车窗、研究捕获、DMS 捕获、Mode H 等实验工具）→ **实验**（R79、FSD、SmartShift、地区、Lane Change、常驻 AP、Developer Test）。两列圆角卡片，支持搜索、长按置顶 |
 | **蓝牙** | S3XY 按键扫描/配对/连接、单击/双击/长按动作绑定、自动重连、日志导出 |
-| **系统** | 车型卡片与更改车型、语言（设备网页 EN/简中/繁中）、无线、外观、刷新间隔、CAN GPIO、诊断/恢复、OTA 升级（SHA-256 校验）、重启、两级重置、恢复出厂、Service Mode、诊断导出 |
+| **系统** | 车型卡片与更改车型（P4 5 种 / T2 6 种含 Model S/X）、语言（P4 设备网页 EN/简中/繁中）、无线、外观、刷新间隔、CAN GPIO（仅 P4）、诊断/恢复、OTA 升级、重启、两级重置、恢复出厂、Service Mode、诊断导出 |
 
 新功能页面按固件能力自动显示，不会在旧固件上留下死入口：
 
@@ -51,6 +66,7 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 | 自编 v3.35.3-eapnr1-zh | 上一行 + EAP/TLSSC 免重启补发（参考 P4can-No-Reboot） |
 | 官方 v3.35.6 | 灯光页内远光/后雾爆闪、Developer Test、语言、Service 强制注入、召唤版本 |
 | 官方 v3.35.8 | 语言（EN / 简中 / 繁中）、灯光爆闪与动态刹车灯、R79 驻车/召唤暂停、内置 0x331 缓存补发（TLSSC 免重启）；Service Mode 可看补发计数 |
+| 官方 T2CAN v3.30.x | 两路 CAN、车型含 Model S/X、NAG/ISA/DMS/TLSSC/ALC/踏板/预热/R79/ULC/FSD/Service Mode；自动隐藏 P4 专属项 |
 
 所有页面通过 `supportKey` 或端点探测（404 即隐藏）适配，不写死车型；Model 3 / Y / YL 通用。
 
@@ -126,8 +142,21 @@ GNU GPL v3.0，见 [LICENSE](LICENSE)。固件部分基于
 
 ## English
 
-Native iOS / iPadOS / macOS companion for the **P4-CAN Universal** (ESP32-P4 three-bus CAN controller).
+Native iOS / iPadOS / macOS companion for two boards:
+
+- **P4-CAN Universal** (ESP32-P4, three CAN buses)
+- **T2CAN Universal** (LilyGO T-2Can, MCP2515 + TWAI, two CAN buses)
+
 Built with SwiftUI + UIKit — not a web wrapper. Every value comes from the device HTTP API, and writes are read back for confirmation.
+
+### Hardware support
+
+| Board | CAN | App coverage |
+|---|---|---|
+| P4-CAN Universal | 3 × TWAI: BODY / CHASSIS / PARTY | Everything, including GPIO, strobes, SmartShift and R79 timing |
+| T2CAN Universal | 2 × CAN: MCP2515 (CAN A) + TWAI (CAN B) | Status, NAG, ISA, DMS, TLSSC, ALC, pedal, preheat, R79, FSD, Service Mode; P4-only pages are hidden |
+
+The app detects the board from `/api/system/stats` (`chipModel` on P4, `mcpReady` on T2); no manual switch.
 
 > Not affiliated with Tesla, Inc. CAN injection is risky. Use only while parked or on a closed course, and follow local laws.
 
@@ -137,10 +166,10 @@ Four tabs: **Status / Features / Bluetooth / Settings**.
 
 | Tab | Contents |
 |---|---|
-| **Status** | Device online state, firmware, memory, three CAN buses (BODY / CHASSIS / PARTY) with RX/TX and bus-off counters, torque trend, battery info when provided, Live Activity |
-| **Features** | Grouped like the current firmware UI: **Lighting** (headlight / rear fog strobe) → **Features** (NAG, ISA, DMS, vision speed, BlinkA, Summon, TLSSC, ALC, pedal, AP accel/regen, Lighting Features, battery preheat) → **Experimental** (R79, FSD, SmartShift, country, lane change, continuous AP, Developer Test, Summon Version) → **Lab** (R79 AP, summon heartbeat, window, research capture, DMS capture, Mode H, R79 timing). Search and long-press pinning |
+| **Status** | Device online state, firmware, memory, CAN buses (three on P4; MCP2515 + TWAI on T2) with RX/TX and bus-off counters, torque trend, battery info when provided, Live Activity |
+| **Features** | **Lighting** (P4 only) → **Features** (NAG, ISA, DMS, vision speed, BlinkA, Summon, TLSSC, ALC, pedal, AP accel/regen, Lighting Features, preheat, plus lab tools such as R79 AP/status, window, research capture, DMS capture, Mode H) → **Experimental** (R79, FSD, SmartShift, country, lane change, continuous AP, Developer Test). Two-column rounded cards with search and long-press pinning |
 | **Bluetooth** | S3XY button scan/pair/connect, single/double/long-press action mapping, auto-reconnect, log export |
-| **Settings** | Vehicle profile and change profile, language (dashboard EN/简体/繁體), wireless, appearance, refresh interval, CAN GPIO, diagnostics/recovery, OTA with SHA-256, reboot, resets, factory reset, Service Mode, diagnostics export |
+| **Settings** | Vehicle profile (5 on P4, 6 on T2 including Model S/X), language (P4 dashboard EN/简体/繁體), wireless, appearance, refresh interval, CAN GPIO (P4 only), diagnostics/recovery, OTA, reboot, resets, factory reset, Service Mode, diagnostics export |
 
 New pages appear only when the firmware supports them:
 
@@ -161,6 +190,7 @@ New pages appear only when the firmware supports them:
 | Custom v3.35.3-eapnr1-zh | Above + EAP/TLSSC no-reboot replay (from P4can-No-Reboot) |
 | Official v3.35.6 | Lighting-page strobes, Developer Test, language, Service force injection, Summon Version |
 | Official v3.35.8 | Language (EN / Simplified / Traditional), lighting strobes and dynamic brake lights, R79 park/summon pause, built-in 0x331 cached replay (TLSSC no-reboot); Service Mode shows replay counters |
+| Official T2CAN v3.30.x | Two CAN buses, Model S/X profile, NAG/ISA/DMS/TLSSC/ALC/pedal/preheat/R79/ULC/FSD/Service Mode; P4-only pages hidden automatically |
 
 Pages are gated by `supportKey` or endpoint probes (404 hides the entry). No hard-coded vehicle model; Model 3 / Y / YL are supported through capability bits.
 

@@ -62,8 +62,15 @@ enum CanBusResolver {
 
     static func resolve(
         traffic: [String: P4JSON],
-        profile: [String: P4JSON]
+        profile: [String: P4JSON],
+        system: [String: P4JSON] = [:]
     ) -> [CanBusSnapshot] {
+        // T2CAN：MCP2515（CAN A）+ TWAI（CAN B），状态字段是 mcp*/twai*。
+        if system["mcpReady"] != nil || system["mcpState"] != nil
+            || traffic["mcpTrafficOnline"] != nil {
+            return resolveT2(traffic: traffic, profile: profile, system: system)
+        }
+
         let roleNames: [String?] = [
             profile["canA"]?.stringValue,
             profile["canB"]?.stringValue,
@@ -99,6 +106,64 @@ enum CanBusResolver {
             )
         }
         return buses
+    }
+
+    /// T2CAN 两路总线：MCP2515（CAN A）与 TWAI（CAN B）。
+    ///
+    /// T2 的 `system/stats` 没有 `can1*` 字段，只有 `mcp*` / `twai*`；
+    /// MCP 的 `mcpState` 是驱动错误码而非 TWAI 状态，所以不映射成 STOPPED/RUNNING，
+    /// 在线判断交给 trafficOnline，避免把 ERROR_OK(0) 误显示为 STOPPED。
+    private static func resolveT2(
+        traffic: [String: P4JSON],
+        profile: [String: P4JSON],
+        system: [String: P4JSON]
+    ) -> [CanBusSnapshot] {
+        func scalarFields(prefix: String) -> [CanBusSnapshot.Field] {
+            system
+                .filter { key, value in
+                    key.hasPrefix(prefix) && value.objectValue == nil
+                }
+                .sorted { $0.key < $1.key }
+                .map { CanBusSnapshot.Field(key: $0.key, value: $0.value) }
+        }
+
+        func value(_ key: String) -> P4JSON? { system[key] }
+
+        let busA = CanBusSnapshot(
+            index: 1,
+            codeName: "MCP2515",
+            roleName: profile["canA"]?.stringValue,
+            state: nil,
+            ready: value("mcpReady")?.boolValue ?? false,
+            trafficOnline: traffic["mcpTrafficOnline"]?.boolValue
+                ?? value("mcpTrafficOnline")?.boolValue ?? false,
+            rxCount: value("canARxFramesProcessed")?.intValue,
+            txAccepted: value("mcpTxOk")?.intValue,
+            txRejected: value("mcpTxFail")?.intValue,
+            busOff: value("mcpBusOffCount")?.intValue,
+            trafficAgeMs: traffic["mcpTrafficAgeMs"]?.intValue
+                ?? value("mcpTrafficAgeMs")?.intValue,
+            fields: scalarFields(prefix: "mcp")
+        )
+
+        let busB = CanBusSnapshot(
+            index: 2,
+            codeName: "TWAI",
+            roleName: profile["canB"]?.stringValue,
+            state: value("twaiState")?.intValue.map { Int($0) },
+            ready: value("twaiReady")?.boolValue ?? false,
+            trafficOnline: traffic["twaiTrafficOnline"]?.boolValue
+                ?? value("twaiTrafficOnline")?.boolValue ?? false,
+            rxCount: nil,
+            txAccepted: nil,
+            txRejected: value("twaiTxFailedCount")?.intValue,
+            busOff: value("twaiBusOffCount")?.intValue,
+            trafficAgeMs: traffic["twaiTrafficAgeMs"]?.intValue
+                ?? value("twaiTrafficAgeMs")?.intValue,
+            fields: scalarFields(prefix: "twai")
+        )
+
+        return [busA, busB]
     }
 }
 

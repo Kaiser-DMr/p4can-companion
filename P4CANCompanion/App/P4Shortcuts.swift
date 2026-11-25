@@ -58,13 +58,13 @@ enum P4ShortcutRunner {
             switch urlError.code {
             case .timedOut:
                 return P4IntentText.t(
-                    "设备响应超时：确认这台 iPhone 仍连在 P4-CAN 的热点上",
-                    "Timed out. Make sure this iPhone is still on the P4-CAN hotspot."
+                    "设备响应超时：确认这台 iPhone 仍连在设备的热点上",
+                    "Timed out. Make sure this iPhone is still on the device hotspot."
                 )
             case .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet:
                 return P4IntentText.t(
-                    "连不上设备：请先加入 P4-CAN 的 Wi-Fi 再运行",
-                    "Cannot reach the device. Join the P4-CAN Wi-Fi first."
+                    "连不上设备：请先加入设备的 Wi-Fi 再运行",
+                    "Cannot reach the device. Join the device Wi-Fi first."
                 )
             default:
                 break

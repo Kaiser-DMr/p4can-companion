@@ -54,7 +54,7 @@ struct DiagnosticsView: View {
                 Button(role: .destructive) {
                     confirmsReinit = true
                 } label: {
-                    Label(L10n.t("硬重初始化三路 CAN", "Hard Reinitialize"), systemImage: "bolt.trianglebadge.exclamationmark")
+                    Label(L10n.t("硬重初始化全部 CAN", "Hard Reinitialize CAN"), systemImage: "bolt.trianglebadge.exclamationmark")
                 }
                 Button {
                     exportBootCapture()
@@ -74,7 +74,7 @@ struct DiagnosticsView: View {
             } header: {
                 Label(L10n.t("恢复动作", "Recovery"), systemImage: "wrench.and.screwdriver")
             } footer: {
-                Text(L10n.t("硬重初始化会让三路 CAN 短暂中断；仅在总线持续 BUS OFF 或计数异常时使用。",
+                Text(L10n.t("硬重初始化会让全部 CAN 短暂中断；仅在总线持续 BUS OFF 或计数异常时使用。",
                             "Hard reinitialization briefly interrupts all three CAN buses. Use only after persistent BUS OFF or abnormal counters."))
             }
 
@@ -116,7 +116,7 @@ struct DiagnosticsView: View {
             }
         }
         .confirmationDialog(
-            L10n.t("硬重初始化三路 CAN？", "Hard reinitialize all CAN buses?"),
+            L10n.t("硬重初始化全部 CAN？", "Hard reinitialize all CAN buses?"),
             isPresented: $confirmsReinit,
             titleVisibility: .visible
         ) {

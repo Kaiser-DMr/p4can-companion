@@ -250,6 +250,102 @@ struct FSDInjectionView: View {
     }
 }
 
+// MARK: - T2CAN FSD 面板
+
+/// T2CAN 的 FSD 在 `/api/lab/fsd/*`，写接口是 `field=enable|profile|pauseOnAp`
+/// 而不是 P4 的 `enabled/values/suspendDuringAp`，所以单独一页。
+struct T2FSDView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var busy = false
+
+    private var stats: P4JSON? { environment.endpointValue(P4Route.fsdStats) }
+    private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
+    private var supported: Bool { object["supported"]?.boolValue ?? false }
+    private var labEnabled: Bool { object["labEnabled"]?.boolValue ?? false }
+    private var apBlocked: Bool { object["apBlocked"]?.boolValue ?? false }
+    private var enableEcho: Bool { object["enableEcho"]?.boolValue ?? false }
+    private var profileEcho: Bool { object["profileEcho"]?.boolValue ?? false }
+    private var pauseOnAp: Bool { object["pauseOnAp"]?.boolValue ?? false }
+
+    var body: some View {
+        List {
+            if !supported {
+                Section {
+                    Label(L10n.t("当前车型或拓扑不支持 FSD 可视化（需要 CHASSIS CAN B，Model S/X 不支持）。",
+                                 "This profile or topology does not support FSD visualisation (CHASSIS CAN B required; not available on Model S/X)."),
+                          systemImage: "nosign")
+                        .font(.footnote)
+                        .foregroundStyle(.p4Warn)
+                }
+            }
+
+            Section {
+                Toggle(L10n.t("启用 FSD 可视化", "Enable FSD visualisation"),
+                       isOn: Binding(get: { enableEcho }, set: { value in
+                           Task { await setField("enable", enabled: value, value: "0") }
+                       }))
+                    .disabled(busy || !supported)
+
+                Toggle(L10n.t("车型配置信号（profile）", "Profile signal"),
+                       isOn: Binding(get: { profileEcho }, set: { value in
+                           Task { await setField("profile", enabled: value, value: value ? "2" : "0") }
+                       }))
+                    .disabled(busy || !supported)
+
+                Toggle(L10n.t("AP 激活时暂停", "Suspend during AP"),
+                       isOn: Binding(get: { pauseOnAp }, set: { value in
+                           Task { await setField("pauseOnAp", enabled: value, value: "0") }
+                       }))
+                    .disabled(busy || !supported)
+            } header: {
+                Text(L10n.t("控制", "Controls"))
+            } footer: {
+                Text(L10n.t("T2CAN 的 FSD 面板需要先开启 LAB 菜单。打开后会阻断 AP，并可能引起自动泊车报错，只在需要时开。",
+                            "The T2CAN FSD panel requires LAB. Enabling it blocks AP and may cause autopark errors; turn it on only when needed."))
+            }
+
+            Section(L10n.t("状态", "Status")) {
+                FWStatusRows(rows: [
+                    (L10n.t("支持", "Supported"), supported ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                    (L10n.t("LAB 菜单", "LAB menu"), labEnabled ? L10n.t("开", "On") : L10n.t("关", "Off")),
+                    (L10n.t("AP", "AP"), apBlocked ? L10n.t("已阻断", "Blocked") : L10n.t("未阻断", "Not blocked")),
+                    (L10n.t("enable TX 成功 / 失败", "enable TX ok / fail"),
+                     "\(object["enableTxOk"]?.intValue ?? 0) / \(object["enableTxFail"]?.intValue ?? 0)"),
+                    (L10n.t("profile TX 成功 / 失败", "profile TX ok / fail"),
+                     "\(object["profileTxOk"]?.intValue ?? 0) / \(object["profileTxFail"]?.intValue ?? 0)"),
+                ])
+            }
+        }
+        .listStyle(.insetGrouped)
+        .contentMargins(.bottom, 28, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Color.p4Background.ignoresSafeArea())
+        .navigationTitle(L10n.t("FSD 可视化", "FSD Visualisation"))
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) { ToastOverlay() }
+        .task { await poll() }
+    }
+
+    private func setField(_ field: String, enabled: Bool, value: String) async {
+        busy = true
+        defer { busy = false }
+        _ = await fwWrite(environment, path: P4Route.fsdUpdate, query: [
+            P4Param("field", field),
+            P4Param("enabled", enabled ? "1" : "0"),
+            P4Param("value", value),
+        ], storeTo: P4Route.fsdStats)
+        Haptics.impact()
+    }
+
+    private func poll() async {
+        await environment.refreshEndpoint(P4Route.fsdStats)
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            await environment.refreshEndpoint(P4Route.fsdStats)
+        }
+    }
+}
+
 // MARK: - Service Mode
 
 struct ServiceModeView: View {
@@ -261,7 +357,11 @@ struct ServiceModeView: View {
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.serviceModeStats) }
     private var object: [String: P4JSON] { stats?.objectValue ?? [:] }
-    private var canEnter: Bool { object["canEnter"]?.boolValue ?? false }
+    private var isT2: Bool { environment.deviceFamily == .t2can }
+    /// T2CAN 用 available，P4 用 canEnter。
+    private var canEnter: Bool {
+        object["canEnter"]?.boolValue ?? object["available"]?.boolValue ?? false
+    }
     private var chinaRestore: Bool { object["chinaRestore"]?.boolValue ?? false }
     private var restoreForce: Bool { object["restoreForce"]?.boolValue ?? false }
     private var restoreInterval: Int { Int(object["restoreIntervalMs"]?.intValue ?? 150) }
@@ -290,11 +390,13 @@ struct ServiceModeView: View {
                 .tint(.p4Warn)
                 .disabled(!canEnter || busy)
 
-                Toggle(L10n.t("恢复红绿灯 / 停车标志辅助（TLSSC）", "Restore Traffic Light & Stop Sign Control"),
-                       isOn: Binding(get: { chinaRestore }, set: { value in Task { await setRestore(value) } }))
-                    .disabled(busy)
+                if !isT2 {
+                    Toggle(L10n.t("恢复红绿灯 / 停车标志辅助（TLSSC）", "Restore Traffic Light & Stop Sign Control"),
+                           isOn: Binding(get: { chinaRestore }, set: { value in Task { await setRestore(value) } }))
+                        .disabled(busy)
+                }
 
-                if hasForce {
+                if hasForce, !isT2 {
                     Toggle(L10n.t("强制注入 0x331", "Force 0x331 injection"),
                            isOn: Binding(get: { restoreForce }, set: { value in
                                Task { await setForce(value, interval: restoreInterval) }
@@ -319,8 +421,13 @@ struct ServiceModeView: View {
             } header: {
                 Text(L10n.t("控制", "Controls"))
             } footer: {
-                Text(L10n.t("进入后需要在车机屏幕上确认；固件只发一次请求，不会自动重试。TLSSC 恢复会开启 EAP 完整版，可能影响车辆账号安全，平时不要开启。",
-                            "Confirm Service Mode on the vehicle screen. The request is sent once. TLSSC restore enables full EAP and may affect your vehicle account; leave it off in daily use."))
+                if isT2 {
+                    Text(L10n.t("T2CAN 需要先在设备网页开启 LAB 菜单。每次点击只发送一帧 0x339 进入维护模式，不会自动重发。",
+                                "T2CAN requires LAB to be enabled in the device dashboard. Each tap sends a single 0x339 frame; it is not retried automatically."))
+                } else {
+                    Text(L10n.t("进入后需要在车机屏幕上确认；固件只发一次请求，不会自动重试。TLSSC 恢复会开启 EAP 完整版，可能影响车辆账号安全，平时不要开启。",
+                                "Confirm Service Mode on the vehicle screen. The request is sent once. TLSSC restore enables full EAP and may affect your vehicle account; leave it off in daily use."))
+                }
             }
 
             if replayPresent {
@@ -393,6 +500,13 @@ struct ServiceModeView: View {
     }
 
     private var statusRows: [(String, String)] {
+        if isT2 {
+            return [
+                (L10n.t("支持", "Supported"), object["supported"]?.boolValue == true ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                (L10n.t("可用", "Available"), canEnter ? L10n.t("是", "Yes") : L10n.t("否", "No")),
+                (L10n.t("总线", "Bus"), object["bus"]?.stringValue ?? "—"),
+            ]
+        }
         var rows: [(String, String)] = [
             (L10n.t("可进入", "Can enter"), canEnter ? L10n.t("是", "Yes") : L10n.t("否", "No")),
             (L10n.t("恢复帧", "Restore frames"), chinaRestore ? L10n.t("开", "On") : L10n.t("关", "Off")),
@@ -409,7 +523,10 @@ struct ServiceModeView: View {
     private func enter() async {
         busy = true
         defer { busy = false }
-        _ = await fwWrite(environment, path: P4Route.serviceModeEnter, query: [], storeTo: P4Route.serviceModeStats)
+        // T2CAN 的 /api/lab/service-mode/send 要求 enabled=1；P4 的 /enter 不带参数。
+        let query = isT2 ? [P4Param("enabled", "1")] : []
+        _ = await fwWrite(environment, path: P4Route.serviceModeEnter, query: query,
+                          storeTo: P4Route.serviceModeStats)
         Haptics.success()
     }
 

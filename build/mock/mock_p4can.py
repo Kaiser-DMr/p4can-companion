@@ -1052,6 +1052,65 @@ def apply_post(path, qs):
     return None
 
 
+# ── T2CAN 模式：P4CAN_DEVICE=t2can ─────────────────────────────
+# T2CAN 只有两路 CAN（MCP2515 + TWAI），状态字段前缀与 P4 不同；
+# FSD / Service Mode 在 /api/lab/* 下。
+T2_DEVICE = os.environ.get("P4CAN_DEVICE", "p4can") == "t2can"
+
+
+def t2_cantraffic():
+    return {
+        "mcpTrafficSeen": True,
+        "mcpTrafficOnline": True,
+        "mcpTrafficAgeMs": 11,
+        "twaiTrafficSeen": True,
+        "twaiTrafficOnline": True,
+        "twaiTrafficAgeMs": 7,
+    }
+
+
+if T2_DEVICE:
+    for _key in [k for k in SYSTEM if k.startswith("can")]:
+        SYSTEM.pop(_key, None)
+    for _key in ("chipModel", "canHarness", "canPins", "hostedHostVersion",
+                 "hostedPinsReady", "canBusCount"):
+        SYSTEM.pop(_key, None)
+    SYSTEM.update({
+        "fwVersion": "v3.30.3 (mock)",
+        "mcpReady": True, "mcpState": 0,
+        "mcpTrafficSeen": True, "mcpTrafficOnline": True, "mcpTrafficAgeMs": 11,
+        "mcpTxOk": 320, "mcpTxFail": 2, "mcpBusOffCount": 0,
+        "canARxFramesProcessed": 98211, "mcpRxOverflowCount": 0,
+        "mcpErrorFlags": 0, "mcpTxFailConsecutive": 0,
+        "twaiReady": True, "twaiState": 1, "twaiStateName": "RUNNING",
+        "twaiTrafficSeen": True, "twaiTrafficOnline": True, "twaiTrafficAgeMs": 7,
+        "twaiTxFailedCount": 4, "twaiBusOffCount": 0,
+        "twaiRxMissedCount": 0, "twaiRxOverrunCount": 0,
+        "twaiTxErrorCounter": 0, "twaiRxErrorCounter": 0,
+    })
+    PROFILE.update({
+        "profile": 3,
+        "profileName": "Model Y Juniper (T2)",
+        "topology": 2,
+        "topologyName": "BODY + CHASSIS",
+        "canA": "BODY",
+        "canB": "CHASSIS",
+    })
+    PROFILE.pop("canExtra", None)
+
+    STATS["/api/lab/fsd/stats"] = {
+        "ok": True, "supported": True, "labEnabled": True,
+        "pauseOnAp": False, "apBlocked": False,
+        "enableEcho": False, "enableValue": 0, "enableOriginal": 0,
+        "enableAgeMs": 120, "enableRx": 18, "enableTxOk": 0, "enableTxFail": 0,
+        "profileEcho": False, "profileValue": 0, "profileOriginal": 0,
+        "profileAgeMs": 120, "profileRx": 9, "profileTxOk": 0, "profileTxFail": 0,
+    }
+    STATS["/api/lab/service-mode/stats"] = {
+        "ok": True, "supported": True, "available": True, "bus": "CAN B",
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -1139,8 +1198,15 @@ class Handler(BaseHTTPRequestHandler):
                 payload = {"fast": snapshot_fast()}
                 if qs.get("slow", ["0"])[0] == "1":
                     payload["slow"] = snapshot_slow()
+                if T2_DEVICE:
+                    payload["fast"]["cantraffic"] = t2_cantraffic()
+                    payload["fast"].pop("lab3f8", None)
                 return self.send_json(payload)
-            return self.send_json({"fast": snapshot_fast(), "slow": snapshot_slow()})
+            payload = {"fast": snapshot_fast(), "slow": snapshot_slow()}
+            if T2_DEVICE:
+                payload["fast"]["cantraffic"] = t2_cantraffic()
+                payload["fast"].pop("lab3f8", None)
+            return self.send_json(payload)
 
         table = {
             "/api/profile/status": PROFILE,
@@ -1181,6 +1247,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": False, "error": "not found"}, status=404)
         # OTA 上传（与固件 server.on("/update", HTTP_POST, ...) 对齐）：
         # 按 Content-Length 读满 multipart，取 part 头之后的净载荷长度当写入量。
+        if T2_DEVICE and path == "/api/lab/fsd/update":
+            field = (qs.get("field") or [""])[0]
+            enabled = (qs.get("enabled") or ["0"])[0] in ("1", "true", "True")
+            fsd = STATS["/api/lab/fsd/stats"]
+            if field == "enable":
+                fsd["enableEcho"] = enabled
+                fsd["enableTxOk"] = fsd.get("enableTxOk", 0) + (1 if enabled else 0)
+            elif field == "profile":
+                fsd["profileEcho"] = enabled
+                fsd["profileValue"] = 2 if enabled else 0
+                fsd["profileTxOk"] = fsd.get("profileTxOk", 0) + (1 if enabled else 0)
+            elif field == "pauseOnAp":
+                fsd["pauseOnAp"] = enabled
+            return self.send_json(fsd)
+        if T2_DEVICE and path == "/api/lab/service-mode/send":
+            return self.send_json({"ok": True, "sent": True})
         if path == "/update":
             length = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(length) if length else b""

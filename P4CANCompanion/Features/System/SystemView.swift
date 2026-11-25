@@ -65,6 +65,7 @@ struct SystemView: View {
                     case "ota": FirmwareUpdateView()
                     case "changelog": FirmwareChangelogView()
                     case "service": ServiceModeView()
+                    case "profile": VehicleProfileChangeView()
                     default: EmptyView()
                     }
                 }
@@ -118,7 +119,7 @@ struct SystemView: View {
 
         @MainActor var title: String {
             switch self {
-            case .reboot: return L10n.t("重启 P4-CAN", "Reboot P4-CAN")
+            case .reboot: return L10n.t("重启设备", "Reboot device")
             case .resetSettings: return L10n.t("重置功能设置", "Reset Feature Settings")
             case .resetNVSKeepBLE: return L10n.t("重置设置 · 保留 S3XY", "Reset Setup · Keep S3XY")
             case .factoryReset: return L10n.t("恢复出厂设置", "Factory Reset")
@@ -129,7 +130,7 @@ struct SystemView: View {
             switch self {
             case .reboot:
                 return L10n.t("设备将重启，连接会短暂中断；Wi-Fi 未开启自动加入时需手动重连。",
-                              "P4-CAN will reboot. Reconnect to Wi-Fi manually if Auto-Join is off.")
+                              "The device will reboot. Reconnect to Wi-Fi manually if Auto-Join is off.")
             case .resetSettings:
                 return L10n.t("功能设置恢复默认；车型、Wi-Fi、S3XY 配对与 BUS OFF 证据保留。LAB Menu 与封禁开关会回到关闭。",
                               "Feature settings return to defaults. Vehicle, Wi-Fi, S3XY pairings and BUS OFF evidence are preserved. LAB Menu and banned switches return to OFF.")
@@ -138,7 +139,7 @@ struct SystemView: View {
                               "Returns to profile setup. Vehicle, Wi-Fi, features, LAB and diagnostics are cleared; S3XY registry, mappings, Bluetooth settings and bonds are kept.")
             case .factoryReset:
                 return L10n.t("清除全部设置、Wi-Fi 与 S3XY 配对，设备回到首次开箱的车型选择。此操作不可撤销。",
-                              "Erase all settings, Wi-Fi and paired buttons. P4-CAN returns to first-boot profile setup. This cannot be undone.")
+                              "Erase all settings, Wi-Fi and paired buttons. The device returns to first-boot profile setup. This cannot be undone.")
             }
         }
 
@@ -258,7 +259,7 @@ private struct ProfileSection: View {
                                     .foregroundStyle(.secondary)
                                 Text(model)
                                     .font(.headline)
-                                Text("P4-CAN · \(firmware)")
+                                Text("\(environment.deviceName) · \(firmware)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .monospacedDigit()
@@ -362,7 +363,7 @@ private struct SystemSection: View {
                 Text(L10n.t("固件", "Firmware"))
             }
 
-            if environment.dashboardLanguageSupported == true {
+            if environment.dashboardLanguageSupported == true, environment.deviceFamily != .t2can {
                 NavigationLink {
                     DashboardLanguageView()
                 } label: {
@@ -390,7 +391,7 @@ private struct SystemSection: View {
             appearanceRow
             refreshRow
 
-            if environment.newFeaturesSupported == true {
+            if environment.newFeaturesSupported == true, environment.deviceFamily != .t2can {
                 NavigationLink {
                     CanGpioView()
                 } label: {
@@ -429,7 +430,7 @@ private struct SystemSection: View {
             Button {
                 destructiveAction = .reboot
             } label: {
-                Label(L10n.t("重启 P4-CAN", "Reboot P4-CAN"), systemImage: "arrow.clockwise")
+                Label(L10n.t("重启 \(environment.deviceName)", "Reboot \(environment.deviceName)"), systemImage: "arrow.clockwise")
             }
 
             Button {
@@ -453,7 +454,7 @@ private struct SystemSection: View {
             HStack {
                 Text(L10n.t("系统", "System"))
                 Spacer()
-                Text("P4-CAN")
+                Text(environment.deviceName)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -667,7 +668,7 @@ private struct AppSection: View {
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("锁屏 / 灵动岛实时状态", "Live Activity"))
-                    Text(L10n.t("锁屏与灵动岛显示三路总线状态",
+                    Text(L10n.t("锁屏与灵动岛显示总线状态",
                                 "Show CAN bus status on the Lock Screen and Dynamic Island"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -886,8 +887,8 @@ private struct ShortcutsSection: View {
             Label(L10n.t("快捷指令", "Shortcuts"), systemImage: "square.stack.3d.up.fill")
         } footer: {
             Text(L10n.t(
-                "动作在后台执行，使用 App 内已保存的次数与间隔；运行前请确认手机已连上 P4-CAN 的 Wi-Fi。",
-                "Actions run in the background with the settings saved in the app. Make sure this iPhone is on the P4-CAN Wi-Fi first."
+                "动作在后台执行，使用 App 内已保存的次数与间隔；运行前请确认手机已连上设备的 Wi-Fi。",
+                "Actions run in the background with the settings saved in the app. Make sure this iPhone is on the device Wi-Fi first."
             ))
         }
     }
@@ -900,7 +901,7 @@ private struct AboutSection: View {
     var body: some View {
         Section {
             LabeledContent(L10n.t("App 版本", "App version"), value: environment.appVersionText)
-            LabeledContent(L10n.t("适配固件", "Firmware"), value: "P4-CAN Universal Unlock v3.29.3")
+            LabeledContent(L10n.t("适配固件", "Firmware"), value: "\(environment.deviceName) Universal Unlock")
             LabeledContent(L10n.t("接口契约", "API contract"), value: "web_api.h（query 参数）")
             LabeledContent(L10n.t("连接方式", "Transport"), value: L10n.t("本地 HTTP（192.168.4.1）", "Local HTTP (192.168.4.1)"))
 

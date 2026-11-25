@@ -190,7 +190,7 @@ struct DashboardView: View {
     }
 
     private var heroTitleText: some View {
-        Text(environment.profileName ?? "P4-CAN")
+        Text(environment.profileName ?? environment.deviceName)
             .font(.title2.weight(.bold))
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             .minimumScaleFactor(0.8)
@@ -236,6 +236,7 @@ struct DashboardView: View {
 
     private var heroSubtitle: String {
         var parts: [String] = []
+        if environment.deviceFamily == .t2can { parts.append("T2CAN") }
         if let topology = environment.topologyName { parts.append(topology) }
         if let fw = environment.systemStats?["fwVersion"]?.stringValue ?? environment.stat("fwVersion")?.stringValue {
             parts.append(L10n.t("固件 \(fw)", "FW \(fw)"))
@@ -483,7 +484,7 @@ struct DashboardView: View {
                             tone: busTone
                         )
                         Spacer(minLength: Theme.spacing(1))
-                        Text("canBusCount = \(environment.stat("canBusCount")?.displayText ?? "—")")
+                        Text(environment.topologyName ?? "")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -865,7 +866,7 @@ struct DashboardView: View {
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("显示实时状态").font(.subheadline)
-                    Text(L10n.t("三路总线在线情况 + 挡位 + NAG / Blink / TLSSC", "Bus status + gear + NAG / Blink / TLSSC"))
+                    Text(L10n.t("总线在线情况 + 挡位 + NAG / Blink / TLSSC", "Bus status + gear + NAG / Blink / TLSSC"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
