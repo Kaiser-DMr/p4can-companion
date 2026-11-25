@@ -1149,6 +1149,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/lab/auto-lane-change/stats":
             return self.send_json(STATS["/api/ulc/stats"])
         if path in STATS:
+            if path == "/api/r79/ap-control/stats" and not FW_VARIANT.startswith("3.35.8"):
+                return self.send_json({k: v for k, v in STATS[path].items()
+                                       if k != "blockTxInPark"})
             return self.send_json(STATS[path])
         if path.endswith(".csv"):
             body = b"segment,label\n1,A\n"

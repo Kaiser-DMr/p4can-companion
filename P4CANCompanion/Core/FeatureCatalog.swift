@@ -586,7 +586,7 @@ FeatureModule(
             supportKey: nil,
             controls: [
                 FeatureControl(
-                    id: "r79ap.enabled", title: "启用 AP 控制", footnote: "五个参数需一次提交",
+                    id: "r79ap.enabled", title: "启用 AP 控制", footnote: "一次提交全部参数（旧固件 4 个，3.35.8 起 5 个）",
                     kind: .toggle(
                         key: "enabled", path: P4Route.r79APControlUpdate,
                         extra: ["mode", "delaySeconds", "allowManualDriving", "blockTxInPark?"]

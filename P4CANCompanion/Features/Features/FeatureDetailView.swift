@@ -105,7 +105,7 @@ struct FeatureDetailView: View {
 
             if !module.controls.isEmpty {
                 Section(L10n.t("控制", "Controls")) {
-                    ForEach(module.controls) { control in
+                    ForEach(module.controls.filter(isControlAvailable)) { control in
                         controlRow(control)
                     }
                 }
@@ -264,6 +264,13 @@ struct FeatureDetailView: View {
             await load()
             try? await Task.sleep(for: pollInterval)
         }
+    }
+
+    /// 控件是否适用于当前固件：3.35.8 新增的 blockTxInPark 在旧固件上不存在时整行隐藏，
+    /// 而不是留一个永远「读取中」的占位行。
+    private func isControlAvailable(_ control: FeatureControl) -> Bool {
+        if control.id == "r79ap.blockPark" { return stats?["blockTxInPark"] != nil }
+        return true
     }
 
     private func load() async {
