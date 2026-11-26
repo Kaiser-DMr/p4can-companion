@@ -5,7 +5,7 @@ import SwiftUI
 /// `POST /api/researchcapture/labels?slot=A&label=…`，标签 1–63 UTF-8 字节；
 /// 标签只影响 CSV 的 segment 注释，不改变捕获内容。
 struct ResearchLabelsView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
 
     private let slots = ["A", "B", "C", "D"]
@@ -54,7 +54,7 @@ struct ResearchLabelsView: View {
                     }
                 }
             } header: {
-                Label(L10n.t("捕获标签", "Capture labels"), systemImage: "tag")
+                Text(L10n.t("捕获标签", "Capture labels"))
             } footer: {
                 Text(L10n.t("留空表示保持设备当前标签；每个标签最多 63 个 UTF-8 字节。",
                             "Leave a field blank to keep the device label; each label is limited to 63 UTF-8 bytes."))
@@ -98,6 +98,7 @@ struct ResearchLabelsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("捕获标签", "Capture labels"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }

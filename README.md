@@ -104,7 +104,7 @@ open P4CANCompanion.xcodeproj
 ```
 
 - Scheme：`P4CANCompanion`
-- 无 SPM / CocoaPods 依赖；SnapKit 已内置
+- 无 SPM / CocoaPods 依赖
 - 真机安装需要在 Signing & Capabilities 选择自己的 Team
 - Release 构建可导出 ad-hoc IPA，用 AltStore / Sideloadly 自签安装
 
@@ -228,7 +228,7 @@ open P4CANCompanion.xcodeproj
 ```
 
 - Scheme: `P4CANCompanion`
-- No SPM / CocoaPods dependencies; SnapKit is vendored
+- No SPM / CocoaPods dependencies
 - Select your own Team for on-device builds
 - Export an ad-hoc IPA for AltStore / Sideloadly
 

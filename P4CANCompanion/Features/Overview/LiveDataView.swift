@@ -8,7 +8,7 @@ import SwiftUI
 /// - 支持关键字搜索（如 canA、state、tx）；
 /// - 可开启 3 秒自动刷新，手动下拉亦可刷新。
 struct LiveDataView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     @State private var query = ""
     @State private var autoRefresh = true
@@ -24,6 +24,7 @@ struct LiveDataView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle("全部数据")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: L10n.t("搜索字段，如 can1 / gear / das / state", "Search fields, e.g. can1 / gear / das / state"))

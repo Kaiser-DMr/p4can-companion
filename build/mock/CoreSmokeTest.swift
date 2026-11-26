@@ -1,12 +1,12 @@
 import Foundation
 
 // 本机联调测试：直接编译 App 的 Core 源码（P4JSON / Models / P4APIClient / NetworkLog），
-// 对 127.0.0.1:8080 的固件 mock 做真实 HTTP 往返与控制接口验证。
+// 对固件 mock 做真实 HTTP 往返与控制接口验证；默认 127.0.0.1:8080，端口被占用时用 P4CAN_HOST 指定。
 
 @main
 struct CoreSmokeTest {
     static func main() async {
-        let client = P4APIClient(host: "127.0.0.1:8080")
+        let client = P4APIClient(host: ProcessInfo.processInfo.environment["P4CAN_HOST"] ?? "127.0.0.1:8080")
         var failures = 0
 
         func check(_ name: String, _ condition: Bool, _ detail: String = "") {
@@ -104,6 +104,17 @@ struct CoreSmokeTest {
             check("S3XY 动作/配对请求返回 ok", true)
         } catch {
             check("写接口", false, "\(error)")
+        }
+
+        print("== 5b. 日志导出（CAN 错误 JSON）==")
+        do {
+            let data = try await client.downloadData("/api/system/can-errors.json")
+            let json = try JSONDecoder().decode(P4JSON.self, from: data)
+            check("CAN 错误 JSON schemaVersion = 1", json["schemaVersion"]?.intValue == 1,
+                  "值 \(json["schemaVersion"]?.intValue.map(String.init) ?? "nil")")
+            check("CAN 错误 JSON 含三路总线", json["buses"]?.arrayValue?.count == 3)
+        } catch {
+            check("CAN 错误 JSON 下载", false, "\(error)")
         }
 
         print("== 6. 错误处理 ==")

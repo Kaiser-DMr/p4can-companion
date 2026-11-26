@@ -3,17 +3,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
-/// 「设置」页：严格对照固件网页 Settings 的分组与顺序。
-///
-/// 网页结构（v3.29.3）：
-/// 车型卡片 → Features（NAG / ISA / DMS / 视觉限速 / 自动转向灯 / 召唤状态 / R79 /
-/// 地区 / TLSSC / 变道 / 踏板 / 常驻 AP / AP 加速回收 / S3XY / LAB Menu）→
-/// System（固件 / 无线 / 外观 / 刷新间隔 / 诊断 / 升级 / 重启 / 两级重置 / 恢复出厂）→
-/// Banned Car（封禁车辆 / TLSSC 恢复）。
-///
-/// 「LAB Menu」在这里，打开后底部才会出现实验室标签。
+/// 「系统」页：车型卡片 → 系统（固件 / 语言 / 无线 / 外观 / 刷新间隔 / CAN GPIO / 诊断 / 升级）→
+/// 重启与重置 → 维护（Service Mode）→ 封禁车辆 → App → 数据浏览 → 日志导出 → 快捷指令 → 关于。
+/// 功能开关统一放在「功能」页。
 struct SystemView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     @State private var destructiveAction: ResetAction?
     @State private var dangerToggle: DangerToggle?
@@ -39,8 +33,9 @@ struct SystemView: View {
                     AboutSection().id("about")
                 }
                 .listStyle(.insetGrouped)
-                .navigationTitle(L10n.t("设置", "Settings"))
-                .overlay(alignment: .bottom) { ToastOverlay() }
+                .p4ListStyle()
+                .contentMargins(.top, Theme.spacing(0.5), for: .scrollContent)
+                .p4RootPage(L10n.t("系统", "Settings"))
                 .onAppear { AppEnvironmentActions.shared.environment = environment }
                 .task {
                     #if DEBUG
@@ -187,7 +182,7 @@ struct SystemView: View {
     }
 }
 
-/// 让确认弹窗里的动作能拿到 environment（SwiftUI 的 enum 无法持有 EnvironmentObject）。
+/// 让确认弹窗里的动作能拿到 environment（SwiftUI 的 enum 无法读取环境值）。
 @MainActor
 final class AppEnvironmentActions {
     static let shared = AppEnvironmentActions()
@@ -203,7 +198,7 @@ final class AppEnvironmentActions {
 // MARK: - 车型卡片
 
 private struct ProfileSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var showsChange = false
 
     private var profile: [String: P4JSON] { environment.profileStatus?.objectValue ?? [:] }
@@ -245,20 +240,25 @@ private struct ProfileSection: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 12) {
                             Text(badge)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(Color.p4OK)
-                                // 44pt 徽标固定尺寸（与 App 图标网格一致），大字号下缩小字重而不是截成 "…"。
+                                .font(.system(.headline, design: .rounded).weight(.bold))
+                                .foregroundStyle(.white)
+                                // 固定尺寸徽标，大字号下缩小字形而不是截成 "…"。
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.45)
-                                .frame(width: 44, height: 44)
-                                .background(Color.p4OK.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .padding(4)
+                                .frame(width: 52, height: 52)
+                                .background(
+                                    LinearGradient(colors: [P4Palette.green, P4Palette.teal],
+                                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                )
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(L10n.t("车型配置 · 开机锁定", "Vehicle profile · locked at boot"))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                 Text(model)
-                                    .font(.headline)
+                                    .font(.system(.title3, design: .rounded).weight(.bold))
                                 Text("\(environment.deviceName) · \(firmware)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -294,6 +294,7 @@ private struct ProfileSection: View {
                 HStack {
                     Label(L10n.t("更改车型", "Change vehicle profile"),
                           systemImage: "arrow.triangle.2.circlepath")
+                        .p4RowTint(P4Palette.green)
                     Spacer()
                     Text(environment.profileName ?? "—")
                         .font(.footnote)
@@ -304,7 +305,7 @@ private struct ProfileSection: View {
             .sheet(isPresented: $showsChange) {
                 NavigationStack {
                     VehicleProfileChangeView()
-                        .environmentObject(environment)
+                        .environment(environment)
                 }
             }
             .task {
@@ -343,7 +344,7 @@ private struct ProfileSection: View {
 // MARK: - 系统
 
 private struct SystemSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Binding var destructiveAction: SystemView.ResetAction?
 
     private var firmware: String {
@@ -360,32 +361,30 @@ private struct SystemSection: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             } label: {
-                Text(L10n.t("固件", "Firmware"))
+                Label(L10n.t("固件", "Firmware"), systemImage: "cpu")
+                    .labelStyle(.p4Row)
             }
+            .p4RowTint(P4Palette.gray)
 
             if environment.dashboardLanguageSupported == true, environment.deviceFamily != .t2can {
                 NavigationLink {
                     DashboardLanguageView()
                 } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("语言", "Language"))
-                        Text(L10n.t("设备网页语言 · EN / 简中 / 繁中",
-                                    "Dashboard language · EN / Simplified / Traditional"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    IconRow(title: L10n.t("语言", "Language"),
+                            subtitle: L10n.t("设备网页语言 · EN / 简中 / 繁中",
+                                             "Dashboard language · EN / Simplified / Traditional"),
+                            systemImage: "character.bubble.fill",
+                            tint: P4Palette.indigo)
                 }
             }
 
             NavigationLink {
                 WirelessView()
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("无线", "Wireless"))
-                    Text(wirelessSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                IconRow(title: L10n.t("无线", "Wireless"),
+                        subtitle: wirelessSummary,
+                        systemImage: "wifi",
+                        tint: P4Palette.blue)
             }
 
             appearanceRow
@@ -395,64 +394,66 @@ private struct SystemSection: View {
                 NavigationLink {
                     CanGpioView()
                 } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("CAN GPIO 设置", "CAN GPIO"))
-                        Text(L10n.t("配置 TX / RX 引脚 · 重启生效",
-                                    "Configure TX / RX pins · reboot to apply"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    IconRow(title: L10n.t("CAN GPIO 设置", "CAN GPIO"),
+                            subtitle: L10n.t("配置 TX / RX 引脚 · 重启生效",
+                                             "Configure TX / RX pins · reboot to apply"),
+                            systemImage: "cable.connector",
+                            tint: P4Palette.teal)
                 }
             }
 
             NavigationLink {
                 DiagnosticsView()
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("诊断 / 恢复", "Diagnostics / Recovery"))
-                    Text(L10n.t("计数器、启动抓包与系统日志", "Counters, boot capture and system logs"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                IconRow(title: L10n.t("诊断 / 恢复", "Diagnostics / Recovery"),
+                        subtitle: L10n.t("计数器、启动抓包与系统日志", "Counters, boot capture and system logs"),
+                        systemImage: "stethoscope",
+                        tint: P4Palette.pink)
             }
 
             NavigationLink {
                 FirmwareUpdateView()
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("固件升级", "Firmware Update"))
-                    Text(L10n.t("上传应用 .bin 文件", "Install an application .bin file"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                IconRow(title: L10n.t("固件升级", "Firmware Update"),
+                        subtitle: L10n.t("上传应用 .bin 文件", "Install an application .bin file"),
+                        systemImage: "arrow.down.circle.fill",
+                        tint: P4Palette.cyan)
             }
+        } header: {
+            Text(L10n.t("系统", "System"))
+        }
 
+        Section {
             Button {
                 destructiveAction = .reboot
             } label: {
                 Label(L10n.t("重启 \(environment.deviceName)", "Reboot \(environment.deviceName)"), systemImage: "arrow.clockwise")
             }
+            .p4RowTint(P4Palette.orange)
 
             Button {
                 destructiveAction = .resetSettings
             } label: {
                 Label(L10n.t("重置功能设置", "Reset Feature Settings"), systemImage: "arrow.counterclockwise")
             }
+            .p4RowTint(P4Palette.orange)
 
             Button {
                 destructiveAction = .resetNVSKeepBLE
             } label: {
                 Label(L10n.t("重置设置 · 保留 S3XY", "Reset Setup · Keep S3XY"), systemImage: "externaldrive.badge.minus")
             }
+            .p4RowTint(P4Palette.orange)
 
             Button(role: .destructive) {
                 destructiveAction = .factoryReset
             } label: {
                 Label(L10n.t("恢复出厂设置", "Factory Reset"), systemImage: "trash")
             }
+            .p4RowTint(P4Palette.red)
         } header: {
             HStack {
-                Text(L10n.t("系统", "System"))
+                Text(L10n.t("重启与重置", "Reboot & reset"))
                 Spacer()
                 Text(environment.deviceName)
                     .font(.caption2)
@@ -468,13 +469,11 @@ private struct SystemSection: View {
                 NavigationLink {
                     ServiceModeView()
                 } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.t("维护模式 · Service Mode", "Service Mode"))
-                        Text(L10n.t("维修查问题用 · 会开启 EAP 完整版",
-                                    "For service diagnostics · enables full EAP"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    IconRow(title: L10n.t("维护模式 · Service Mode", "Service Mode"),
+                            subtitle: L10n.t("维修查问题用 · 会开启 EAP 完整版",
+                                             "For service diagnostics · enables full EAP"),
+                            systemImage: "wrench.and.screwdriver.fill",
+                            tint: P4Palette.gray)
                 }
             } header: {
                 Text(L10n.t("维护", "Service"))
@@ -495,9 +494,10 @@ private struct SystemSection: View {
     }
 
     private var appearanceRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(L10n.t("外观", "Appearance"))
+                Label(L10n.t("外观", "Appearance"), systemImage: "circle.lefthalf.filled")
+                    .p4RowTint(P4Palette.indigo)
                 Spacer()
                 Text(environment.appearance == .system
                      ? L10n.t("跟随手机设置", "Follows phone setting")
@@ -520,9 +520,10 @@ private struct SystemSection: View {
     }
 
     private var refreshRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(L10n.t("数据刷新间隔", "Data Refresh Interval"))
+                Label(L10n.t("数据刷新间隔", "Data Refresh Interval"), systemImage: "timer")
+                    .p4RowTint(P4Palette.orange)
                 Spacer()
                 Text(L10n.t("主页更新 · 默认 500 ms", "Home updates · default 500 ms"))
                     .font(.caption)
@@ -546,7 +547,7 @@ private struct SystemSection: View {
 // MARK: - 封禁车辆（危险）
 
 private struct BannedSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Binding var pending: SystemView.DangerToggle?
 
     private var banned: Bool { environment.featuresStatus?["banned"]?.boolValue ?? false }
@@ -606,7 +607,9 @@ private struct BannedSection: View {
         supported: Bool,
         id: SystemView.DangerToggle
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Icon.gap) {
+            SettingsIcon(systemImage: id == .banned ? "exclamationmark.octagon.fill" : "arrow.uturn.backward",
+                         tint: P4Palette.red)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body)
@@ -644,7 +647,7 @@ private struct BannedSection: View {
 // MARK: - App 自身设置
 
 private struct AppSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var hostField = ""
     @State private var showsGuide = false
 
@@ -660,28 +663,32 @@ private struct AppSection: View {
             } label: {
                 Label(L10n.t("语言", "Language"), systemImage: "globe")
             }
+            .p4RowTint(P4Palette.blue)
             .accessibilityLabel(L10n.t("界面语言", "Interface language"))
 
             Toggle(isOn: Binding(
                 get: { environment.liveActivityEnabled },
                 set: { environment.setLiveActivity($0) }
             )) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("锁屏 / 灵动岛实时状态", "Live Activity"))
-                    Text(L10n.t("锁屏与灵动岛显示总线状态",
-                                "Show CAN bus status on the Lock Screen and Dynamic Island"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                IconRow(title: L10n.t("锁屏 / 灵动岛实时状态", "Live Activity"),
+                        subtitle: L10n.t("锁屏与灵动岛显示总线状态",
+                                         "Show CAN bus status on the Lock Screen and Dynamic Island"),
+                        systemImage: "platter.filled.top.and.arrow.up.iphone",
+                        tint: P4Palette.pink)
             }
 
-            HStack {
-                Text(L10n.t("设备地址", "Device address"))
-                Spacer()
-                Text(environment.phase == .online ? L10n.t("在线", "Online") : L10n.t("离线", "Offline"))
-                    .foregroundStyle(environment.phase == .online ? Color.p4OK : Color.p4Err)
+            LabeledContent {
+                HStack(spacing: 6) {
+                    LiveDot(color: environment.phase == .online ? .p4OK : .p4Err,
+                            isLive: environment.phase == .online)
+                    Text(environment.phase == .online ? L10n.t("在线", "Online") : L10n.t("离线", "Offline"))
+                        .foregroundStyle(environment.phase == .online ? Color.p4OK : Color.p4Err)
+                }
+            } label: {
+                Label(L10n.t("设备地址", "Device address"), systemImage: "network")
+                    .labelStyle(.p4Row)
             }
-            .font(.subheadline)
+            .p4RowTint(P4Palette.green)
 
             TextField(L10n.t("例如 192.168.4.1", "e.g. 192.168.4.1"), text: $hostField)
                 // 支持 host:port 与 http:// 前缀，decimalPad 打不出冒号与斜杠。
@@ -700,7 +707,7 @@ private struct AppSection: View {
 
             Button(L10n.t("查看连接引导", "Connection guide")) { showsGuide = true }
         } header: {
-            Label(L10n.t("App", "App"), systemImage: "app.badge")
+            Text(L10n.t("App", "App"))
         } footer: {
             Text(L10n.t("语言切换立即生效，英文采用固件网页的原始措辞。蓝牙标签由「功能 → S3XY」开关控制：打开即显示，关闭即隐藏。",
                         "Language changes apply immediately. The Bluetooth tab follows the S3XY switch in Features: on shows it, off hides it."))
@@ -712,7 +719,7 @@ private struct AppSection: View {
 // MARK: - 数据浏览
 
 private struct DataBrowseSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
         Section {
@@ -721,6 +728,7 @@ private struct DataBrowseSection: View {
             } label: {
                 HStack {
                     Label(L10n.t("全部数据（原始字段）", "All data (raw fields)"), systemImage: "list.bullet.rectangle")
+                        .p4RowTint(P4Palette.teal)
                     Spacer()
                     Text(L10n.t("\(AppEnvironment.browseEndpoints.count) 个端点",
                                 "\(AppEnvironment.browseEndpoints.count) endpoints"))
@@ -732,9 +740,10 @@ private struct DataBrowseSection: View {
                 NetworkLogView()
             } label: {
                 Label(L10n.t("网络日志（抓包调试）", "Network log (debug)"), systemImage: "waveform.path.ecg.rectangle")
+                    .p4RowTint(P4Palette.purple)
             }
         } header: {
-            Label(L10n.t("数据浏览", "Data browser"), systemImage: "magnifyingglass")
+            Text(L10n.t("数据浏览", "Data browser"))
         } footer: {
             Text(L10n.t("按端点查看固件 /api/* 的全部字段，支持搜索（can1 / can2 / can3 / gear / das 等）。",
                         "Browse every field of the firmware /api/* endpoints; search for can1 / can2 / can3 / gear / das."))
@@ -745,7 +754,7 @@ private struct DataBrowseSection: View {
 // MARK: - 日志导出
 
 private struct LogsSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var exportingLog: P4LogFile?
     @State private var exportingBundle = false
     @State private var exportedURL: URL?
@@ -759,8 +768,9 @@ private struct LogsSection: View {
                 exportBundle()
             } label: {
                 HStack {
-                    Label(L10n.t("诊断包（zip）", "Diagnostics bundle (zip)"), systemImage: "shippingbox")
+                    Label(L10n.t("诊断包（zip）", "Diagnostics bundle (zip)"), systemImage: "shippingbox.fill")
                         .foregroundStyle(.primary)
+                        .p4RowTint(P4Palette.orange)
                     Spacer()
                     if exportingBundle {
                         ProgressView()
@@ -779,6 +789,7 @@ private struct LogsSection: View {
                     HStack {
                         Label(log.title, systemImage: "doc.text.magnifyingglass")
                             .foregroundStyle(.primary)
+                            .p4RowTint(P4Palette.gray)
                         Spacer()
                         if exportingLog?.id == log.id {
                             ProgressView()
@@ -798,7 +809,7 @@ private struct LogsSection: View {
                     .foregroundStyle(.p4Err)
             }
         } header: {
-            Label(L10n.t("日志与跟踪导出", "Logs & traces"), systemImage: "list.bullet.rectangle")
+            Text(L10n.t("日志与跟踪导出", "Logs & traces"))
         } footer: {
             Text(L10n.t("诊断包内含：本机状态摘要、内置网络日志 CSV、最近一次快照 JSON。可直接分享给开发者排查。",
                         "The bundle contains a status summary, the in-app network log CSV and the latest snapshot JSON."))
@@ -807,7 +818,7 @@ private struct LogsSection: View {
             get: { exportedURL.map { ShareURLWrapper(url: $0) } },
             set: { if $0 == nil { exportedURL = nil } }
         )) { wrapper in
-            ActivityShareSheet(items: [wrapper.url])
+            P4ShareSheet(items: [wrapper.url])
         }
     }
 
@@ -843,17 +854,6 @@ private struct ShareURLWrapper: Identifiable {
     var id: String { url.absoluteString }
 }
 
-/// UIActivityViewController 的 SwiftUI 包装（Modal 提供系统滑动关闭路径）。
-private struct ActivityShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-}
-
 // MARK: - 关于
 
 /// 快捷指令：两个动作由 App Intent 提供，系统「快捷指令」会自动收录；
@@ -867,7 +867,9 @@ private struct ShortcutsSection: View {
             } label: {
                 Label(L10n.t("前大灯爆闪", "Headlight strobe"),
                       systemImage: "light.beacon.max.fill")
+                    .labelStyle(.p4Row)
             }
+            .p4RowTint(P4Palette.orange)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(L10n.t("前大灯爆闪，立即爆闪", "Headlight strobe, flash now"))
 
@@ -877,14 +879,16 @@ private struct ShortcutsSection: View {
             } label: {
                 Label(L10n.t("后雾灯爆闪", "Rear fog strobe"),
                       systemImage: "cloud.fog.fill")
+                    .labelStyle(.p4Row)
             }
+            .p4RowTint(P4Palette.red)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(L10n.t("后雾灯爆闪，开始爆闪", "Rear fog strobe, start"))
 
             // 系统提供的「添加到快捷指令」按钮，点击进入本 App 的动作列表。
             ShortcutsLink()
         } header: {
-            Label(L10n.t("快捷指令", "Shortcuts"), systemImage: "square.stack.3d.up.fill")
+            Text(L10n.t("快捷指令", "Shortcuts"))
         } footer: {
             Text(L10n.t(
                 "动作在后台执行，使用 App 内已保存的次数与间隔；运行前请确认手机已连上设备的 Wi-Fi。",
@@ -895,7 +899,7 @@ private struct ShortcutsSection: View {
 }
 
 private struct AboutSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var copied = false
 
     var body: some View {
@@ -915,11 +919,12 @@ private struct AboutSection: View {
             } label: {
                 Label(copied ? L10n.t("已复制诊断信息", "Diagnostics copied")
                              : L10n.t("复制诊断信息", "Copy diagnostics"),
-                      systemImage: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                      systemImage: copied ? "checkmark" : "doc.on.doc")
                     .foregroundStyle(copied ? Color.p4OK : Color.accentColor)
+                    .p4RowTint(copied ? P4Palette.green : P4Palette.blue)
             }
         } header: {
-            Label(L10n.t("关于", "About"), systemImage: "info.circle")
+            Text(L10n.t("关于", "About"))
         } footer: {
             Text(L10n.t("功能列表依据固件 v3.29.3 内嵌 API 路由与状态字段还原；个别参数含义以固件实际行为为准。",
                         "Feature list is derived from the API routes and status fields embedded in firmware v3.29.3."))

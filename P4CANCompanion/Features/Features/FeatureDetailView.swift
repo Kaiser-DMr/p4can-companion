@@ -5,7 +5,7 @@ import SwiftUI
 /// 与固件契约：所有写操作是 `POST path?key=value`；部分接口要求同时提交兄弟参数，
 /// 由 `FeatureControl.Kind` 的 `extra` 声明，值取自当前 stats。
 struct FeatureDetailView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     let module: FeatureModule
 
@@ -118,10 +118,11 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         HeadlightStrobeView()
                     } label: {
-                        NavRow(icon: "emoji:🎛️",
+                        NavRow(icon: "slider.horizontal.3",
                                title: L10n.t("爆闪设置与触发", "Strobe settings and trigger"),
                                subtitle: L10n.t("次数 / 时长 / 手动停止 / 触发入口",
-                                                "Count / duration / manual stop / trigger"))
+                                                "Count / duration / manual stop / trigger"),
+                               tint: P4Palette.orange)
                     }
                 } footer: {
                     Text(L10n.t("爆闪会实际控制远光灯；请只在安全环境使用，并确认周围没有对向车辆。",
@@ -134,9 +135,10 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         RearFogStrobeView()
                     } label: {
-                        NavRow(icon: "emoji:⏱️",
+                        NavRow(icon: "timer",
                                title: L10n.t("开始 / 停止爆闪", "Start / stop strobe"),
-                               subtitle: L10n.t("单次最长 30 秒 · 显示剩余时间", "Up to 30 s · live countdown"))
+                               subtitle: L10n.t("单次最长 30 秒 · 显示剩余时间", "Up to 30 s · live countdown"),
+                               tint: P4Palette.red)
                     }
                 } footer: {
                     Text(L10n.t("通过 0x273 的后雾灯位实现；需要车辆上电且能收到整车 0x273。",
@@ -149,10 +151,11 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         ResearchLabelsView()
                     } label: {
-                        NavRow(icon: "emoji:🏷️",
+                        NavRow(icon: "tag.fill",
                                title: L10n.t("捕获标签（A–D）", "Capture labels (A–D)"),
                                subtitle: L10n.t("给导出的 CSV segment 加注释",
-                                                "Annotate segments in the exported CSV"))
+                                                "Annotate segments in the exported CSV"),
+                               tint: P4Palette.purple)
                     }
                 }
             }
@@ -162,10 +165,11 @@ struct FeatureDetailView: View {
                     NavigationLink {
                         NagAdvancedView()
                     } label: {
-                        NavRow(icon: "emoji:🎚️",
+                        NavRow(icon: "dial.medium.fill",
                                title: L10n.t("高级参数（报文级）", "Advanced parameters"),
                                subtitle: L10n.t("目标 ID / 报文节奏 / 扭矩表（只读）",
-                                                "Frame IDs / timing / torque table (read-only)"))
+                                                "Frame IDs / timing / torque table (read-only)"),
+                               tint: P4Palette.indigo)
                     }
                 } footer: {
                     Text(L10n.t("修改 0x370 / 0x399 的报文级参数前，请确认你清楚每一字段的含义；AP 激活时禁止写入。",
@@ -178,6 +182,7 @@ struct FeatureDetailView: View {
         .navigationTitle(module.localizedTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.p4Background, for: .navigationBar)
+        .labelStyle(.p4Row)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .contentMargins(.top, Theme.spacing(0.5), for: .scrollContent)
@@ -244,12 +249,17 @@ struct FeatureDetailView: View {
     /// （`Theme.Icon` / `ModuleIconTile`），从列表点进来不会有"换了一套图标"的割裂感。
     private var heroHeader: some View {
         HStack(alignment: .center, spacing: Theme.Icon.gap) {
-            ModuleIconTile(name: module.icon, size: Theme.Icon.hero)
-            Text(module.localizedSummary)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            ModuleIconTile(name: module.icon, size: Theme.Icon.hero, tint: module.section.tint)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.t(module.section.rawValue, module.section.englishName))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(module.section.tint)
+                Text(module.localizedSummary)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(Theme.spacing(2))
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -266,11 +276,16 @@ struct FeatureDetailView: View {
         }
     }
 
-    /// 控件是否适用于当前固件：3.35.8 新增的 blockTxInPark 在旧固件上不存在时整行隐藏，
-    /// 而不是留一个永远「读取中」的占位行。
+    /// 只在部分固件版本存在的控件：设备没有上报对应字段时整行隐藏，
+    /// 而不是留一个永远「读取中」、提交还会被固件拒绝的占位行。
+    private static let firmwareOptionalKeys: [String: String] = [
+        "r79ap.blockPark": "blockTxInPark",
+        "nag.pauseLaneChange": "pauseDuringLaneChange",
+    ]
+
     private func isControlAvailable(_ control: FeatureControl) -> Bool {
-        if control.id == "r79ap.blockPark" { return stats?["blockTxInPark"] != nil }
-        return true
+        guard let key = Self.firmwareOptionalKeys[control.id] else { return true }
+        return statsObject(for: control)?[key] != nil
     }
 
     private func load() async {
@@ -451,6 +466,7 @@ struct FeatureDetailView: View {
                     } label: {
                         Label(L10n.t("同时提交", "Submit both"), systemImage: "arrow.up.circle")
                             .font(.footnote.weight(.medium))
+                            .labelStyle(.titleAndIcon)
                     }
                     .disabled(!canWrite || environment.isBusy || pendingWrites.contains(control.id))
                 }
@@ -805,7 +821,7 @@ struct FeatureDetailView: View {
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                Label(L10n.t("捕获状态", "Capture status"), systemImage: "record.circle")
+                Text(L10n.t("捕获状态", "Capture status"))
             } footer: {
                 Text(captureFooterText(object))
             }

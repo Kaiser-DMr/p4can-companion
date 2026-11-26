@@ -8,7 +8,7 @@ import SwiftUI
 /// - `POST /api/rear-fog-strobe/start` → 409 表示已在运行或还没收到整车 0x273
 /// - `POST /api/rear-fog-strobe/stop`
 struct RearFogStrobeView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     /// 与功能列表共用同一份端点缓存。
     private var stats: P4JSON? { environment.endpointValue(P4Route.rearFogStrobeStats) }
@@ -73,6 +73,7 @@ struct RearFogStrobeView: View {
                         Label(isActive ? L10n.t("爆闪中…", "Strobing…") : L10n.t("开始爆闪", "Start strobe"),
                               systemImage: "light.beacon.max")
                             .font(.body.weight(.semibold))
+                            .labelStyle(.titleAndIcon)
                         Spacer()
                     }
                 }
@@ -113,7 +114,7 @@ struct RearFogStrobeView: View {
                         .foregroundStyle(age > 5 ? Color.p4Warn : Color.primary)
                 }
             } header: {
-                Label(L10n.t("运行状态", "Status"), systemImage: "gauge.with.dots.needle.33percent")
+                Text(L10n.t("运行状态", "Status"))
             }
 
             if let errorText {
@@ -134,6 +135,7 @@ struct RearFogStrobeView: View {
         .navigationTitle(L10n.t("后雾灯爆闪", "Rear Fog Strobe"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.p4Background, for: .navigationBar)
+        .labelStyle(.p4Row)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
         .overlay(alignment: .bottom) { ToastOverlay() }

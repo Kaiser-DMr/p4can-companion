@@ -46,15 +46,22 @@ chmod +x run_on_simulator.sh
 
 ## 4. 数据层回归（无需模拟器）
 
+Core 源码依赖 UIKit（`L10n.swift`），因此按 Mac Catalyst 目标编译后在本机运行；产物放在已忽略的 `.derived/`。
+
 ```bash
-cd P4CAN-Companion
-xcrun swiftc -O \
+cd p4can-companion
+SDK="$(xcrun --sdk macosx --show-sdk-path)"
+xcrun swiftc -target arm64-apple-ios17.0-macabi -sdk "$SDK" \
+  -Fsystem "$SDK/System/iOSSupport/System/Library/Frameworks" \
+  -I "$SDK/System/iOSSupport/usr/lib/swift" -L "$SDK/System/iOSSupport/usr/lib/swift" \
   P4CANCompanion/Core/P4JSON.swift \
+  P4CANCompanion/Core/L10n.swift \
   P4CANCompanion/Core/Models.swift \
   P4CANCompanion/Core/P4APIClient.swift \
   P4CANCompanion/Core/NetworkLog.swift \
-  build/mock/CoreSmokeTest.swift -o /tmp/p4coretest
-/tmp/p4coretest
+  P4CANCompanion/Core/DeviceSupport.swift \
+  build/mock/CoreSmokeTest.swift -o .derived/p4coretest
+./.derived/p4coretest
 ```
 
 覆盖：分组快照解析、三路总线（BODY/CHASSIS/PARTY）、能力位、S3XY 设备/扫描、写接口

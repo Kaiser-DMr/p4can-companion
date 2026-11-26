@@ -7,7 +7,7 @@ set -euo pipefail
 TAB="${1:-0}"
 BUNDLE_ID="com.p4can.companion"
 APP_PATH="$(ls -d "$HOME"/Library/Developer/Xcode/DerivedData/P4CANCompanion-*/Build/Products/Debug-iphonesimulator/P4CANCompanion.app 2>/dev/null | head -1)"
-MOCK="$HOME/WorkBuddy/2026-11-17-19-25-27/P4CAN-Companion/build/mock/mock_p4can.py"
+MOCK="$(cd "$(dirname "$0")" && pwd)/mock_p4can.py"
 SHOT="/tmp/p4can_tab${TAB}_$(date +%H%M%S).png"
 
 if [[ -z "${APP_PATH}" ]]; then

@@ -3,8 +3,8 @@ import Foundation
 /// 单路 CAN 总线（固件 p4CanWriteStatus：can1*/can2*/can3*）。
 ///
 /// 固件固定三路：CAN 1 BODY（TWAI0）、CAN 2 CHASSIS（TWAI1）、CAN 3 PARTY（TWAI2）。
-struct CanBusSnapshot: Identifiable, Sendable {
-    struct Field: Identifiable, Sendable {
+struct CanBusSnapshot: Identifiable, Sendable, Equatable {
+    struct Field: Identifiable, Sendable, Equatable {
         let key: String
         let value: P4JSON
         var id: String { key }
@@ -310,8 +310,13 @@ struct P4LogFile: Identifiable, Sendable {
         id: "research", title: "CAN 研究捕获", path: "/api/researchcapture/log.csv",
         fileName: "CAN_Research_Capture.csv"
     )
+    /// 固件 `httpCanErrorsJson`：三路 TWAI 错误计数、Bus-Off 记录与驱动快照（与网页「诊断」导出同一文件）。
+    static let canErrors = P4LogFile(
+        id: "canerrors", title: "CAN 错误记录（JSON）", path: "/api/system/can-errors.json",
+        fileName: "P4-CAN_CAN_ERRORS.json"
+    )
 
     static let all: [P4LogFile] = [
-        .bootCapture, .canATrace, .canBTrace, .s3xyLog, .driverMonitorLog, .researchCaptureLog,
+        .bootCapture, .canATrace, .canBTrace, .canErrors, .s3xyLog, .driverMonitorLog, .researchCaptureLog,
     ]
 }

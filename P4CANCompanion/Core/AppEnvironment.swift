@@ -1,5 +1,5 @@
 import Foundation
-import Combine
+import Observation
 
 /// 全局应用状态：设备连接、分组快照轮询、命令执行与结果提示。
 ///
@@ -9,8 +9,12 @@ import Combine
 /// - S3XY / OTA / Wi-Fi / 系统统计同频慢刷；
 /// - 全部写操作用 query 参数 POST（与网页 `post(url?k=v)` 一致）；
 /// - 客户端禁用 HTTP 缓存并发送 no-cache。
+///
+/// 使用 Observation 按属性追踪：视图只在自己读到的属性变化时重绘。
+/// 轮询每拍都会回写的字段经 `setIfChanged` 赋值，值相同不发通知，避免滚动时整页重算。
 @MainActor
-final class AppEnvironment: ObservableObject {
+@Observable
+final class AppEnvironment {
 
     enum Phase: Equatable {
         case idle
@@ -21,11 +25,11 @@ final class AppEnvironment: ObservableObject {
 
     // MARK: - 连接状态
 
-    @Published private(set) var phase: Phase = .idle
-    @Published private(set) var lastUpdated: Date?
-    @Published private(set) var host: String
-    @Published private(set) var isBusy = false
-    @Published private(set) var otaUploading = false
+    private(set) var phase: Phase = .idle
+    private(set) var lastUpdated: Date?
+    private(set) var host: String
+    private(set) var isBusy = false
+    private(set) var otaUploading = false
     /// OTA 上传阶段：上传 → 等待设备重启确认 → 完成 / 失败。
     enum OTAUploadPhase: Equatable {
         case idle
@@ -34,18 +38,18 @@ final class AppEnvironment: ObservableObject {
         case done
         case failed
     }
-    @Published private(set) var otaUploadPhase: OTAUploadPhase = .idle
+    private(set) var otaUploadPhase: OTAUploadPhase = .idle
     /// 已发送 / 总字节（UI 进度条）。
-    @Published private(set) var otaUploadSent = 0
-    @Published private(set) var otaUploadTotal = 0
-    @Published var toast: P4Toast?
+    private(set) var otaUploadSent = 0
+    private(set) var otaUploadTotal = 0
+    var toast: P4Toast?
 
     // MARK: - 离线缓存
 
     /// 当前展示的是否为磁盘缓存（连不上设备时读上一次成功的数据）。
-    @Published private(set) var isShowingCachedData = false
+    private(set) var isShowingCachedData = false
     /// 缓存写入时间（用于界面上的「数据时间」）。
-    @Published private(set) var cachedAt: Date?
+    private(set) var cachedAt: Date?
 
     /// 是否有任何可渲染的数据（实时或缓存），用于决定首页显示真实内容还是「等待设备」。
     var hasRenderableData: Bool {
@@ -57,56 +61,56 @@ final class AppEnvironment: ObservableObject {
     // MARK: - 快照分组（网页同源）
 
     /// `snapshot?groups=home-fast` 的 `fast` 对象
-    @Published private(set) var fastGroups: [String: P4JSON] = [:]
+    private(set) var fastGroups: [String: P4JSON] = [:]
     /// 附带 `&slow=1` 时的 `slow` 对象
-    @Published private(set) var slowGroups: [String: P4JSON] = [:]
+    private(set) var slowGroups: [String: P4JSON] = [:]
 
     // MARK: - 慢变端点
 
-    @Published private(set) var profileStatus: P4JSON?
-    @Published private(set) var featuresStatus: P4JSON?
-    @Published private(set) var wifiStatus: P4JSON?
-    @Published private(set) var otaStatus: P4JSON?
-    @Published private(set) var systemStats: P4JSON?
-    @Published private(set) var s3xyStats: P4JSON?
-    @Published private(set) var dasStats: P4JSON?
+    private(set) var profileStatus: P4JSON?
+    private(set) var featuresStatus: P4JSON?
+    private(set) var wifiStatus: P4JSON?
+    private(set) var otaStatus: P4JSON?
+    private(set) var systemStats: P4JSON?
+    private(set) var s3xyStats: P4JSON?
+    private(set) var dasStats: P4JSON?
     /// 完整 NAG 配置（含 enabled / method / mode），用于首页快捷开关。
-    @Published private(set) var nagConfig: P4JSON?
+    private(set) var nagConfig: P4JSON?
     /// 固件是否提供前后爆闪接口（v3.35.2 官方固件已移除这两个端点）。
     /// nil = 尚未探测或离线不确定；false 时功能列表隐藏两个灯光入口。
-    @Published private(set) var strobeSupported: Bool?
+    private(set) var strobeSupported: Bool?
     /// 固件是否带 v3.35.2 新功能（预热 / FSD / Service Mode / SmartShift / R79 时序）。
     /// nil = 尚未探测；只有确认存在时才展示这些入口，避免在 v3.29.3 上留下死模块。
-    @Published private(set) var newFeaturesSupported: Bool?
+    private(set) var newFeaturesSupported: Bool?
     /// 固件是否带 v3.35.3 的 Lighting Features（AP 强制远光 / 动态刹车灯）。
-    @Published private(set) var lightingSupported: Bool?
+    private(set) var lightingSupported: Bool?
     /// 固件是否带 v3.35.6 功能（Developer Test / 召唤版本）。
-    @Published private(set) var v356Supported: Bool?
+    private(set) var v356Supported: Bool?
     /// 固件是否支持网页语言切换（3.35.5 起；3.35.8 仍保留，独立探测）。
-    @Published private(set) var dashboardLanguageSupported: Bool?
+    private(set) var dashboardLanguageSupported: Bool?
     /// 当前设备家族（P4-CAN / T2CAN）；由 system/stats 的字段结构判断。
-    @Published private(set) var deviceFamily: DeviceFamily = .unknown
+    private(set) var deviceFamily: DeviceFamily = .unknown
     /// 设备显示名，用于界面上的「重启 P4-CAN / T2CAN」等文案。
     var deviceName: String { deviceFamily.displayName }
     /// 上次探测爆闪接口的时间：为 false 时每分钟复探一次，方便重新刷回带爆闪的固件后自动恢复入口。
-    private var lastStrobeProbe: Date?
-    private var lastNewFeaturesProbe: Date?
-    private var lastLightingProbe: Date?
-    private var lastV356Probe: Date?
-    private var lastLanguageProbe: Date?
+    @ObservationIgnored private var lastStrobeProbe: Date?
+    @ObservationIgnored private var lastNewFeaturesProbe: Date?
+    @ObservationIgnored private var lastLightingProbe: Date?
+    @ObservationIgnored private var lastV356Probe: Date?
+    @ObservationIgnored private var lastLanguageProbe: Date?
 
     /// 三路 CAN 总线（CAN 1 BODY / CAN 2 CHASSIS / CAN 3 PARTY）。
-    @Published private(set) var canBuses: [CanBusSnapshot] = []
+    private(set) var canBuses: [CanBusSnapshot] = []
     /// 全部字段扁平合并（供通用键值展示与搜索）。
-    @Published private(set) var mergedStats: [String: P4JSON] = [:]
-    /// 扭矩趋势采样（Swift Charts 使用，约保留 120 个点 ≈ 3 分钟）。
-    @Published private(set) var trendSamples: [TrendSample] = []
+    private(set) var mergedStats: [String: P4JSON] = [:]
+    /// 扭矩趋势采样（Swift Charts 使用，180 s 时间窗，最多 1 s 一点）。
+    private(set) var trendSamples: [TrendSample] = []
     /// 是否开启锁屏 / 灵动岛实时活动（持久化）。
-    @Published private(set) var liveActivityEnabled = false
+    private(set) var liveActivityEnabled = false
     /// 蓝牙标签是否显示：与网页一致，由固件 S3XY 功能闸门决定（功能页的 S3XY 开关）。
     /// 「蓝牙」标签是否显示：与 BLE 总开关解耦。
     /// 开关关闭只影响连接，不应把唯一的重开入口一起删掉。
-    @Published private(set) var showsS3XYTab = UserDefaults.standard.bool(forKey: "p4can.tab.s3xy")
+    private(set) var showsS3XYTab = UserDefaults.standard.bool(forKey: "p4can.tab.s3xy")
 
     var isS3XYEnabled: Bool {
         #if DEBUG
@@ -117,21 +121,18 @@ final class AppEnvironment: ObservableObject {
         return featuresStatus?["s3xy"]?.boolValue ?? false
     }
     /// 根控制器注入：标签显隐变化时重建标签栏（避免 Combine 跨隔离域捕获）。
-    var onBluetoothTabVisibilityChange: (@MainActor () -> Void)?
-    /// 实验室（LAB）开关变化时重建标签栏：LAB 开启才显示「实验室」页。
-    var onLabVisibilityChange: (@MainActor () -> Void)?
+    @ObservationIgnored var onBluetoothTabVisibilityChange: (@MainActor () -> Void)?
     /// 语言变化时刷新标签栏标题等 VC 级文案。
-    var onLanguageChange: (@MainActor () -> Void)?
+    @ObservationIgnored var onLanguageChange: (@MainActor () -> Void)?
     /// 语言（持久化；system = 跟随系统）
-    @Published private(set) var language: AppLanguage = .system
+    private(set) var language: AppLanguage = .system
     /// 界面外观（持久化；与网页 Settings → Appearance 一致）
-    @Published private(set) var appearance: AppAppearance = .system
+    private(set) var appearance: AppAppearance = .system
     /// 主页刷新间隔（毫秒，250 / 500 / 1000；与网页 Settings → Data Refresh Interval 一致）
-    @Published private(set) var pollIntervalMs: Int = 500
+    private(set) var pollIntervalMs: Int = 500
     /// 根窗口注入：外观变化时同步 overrideUserInterfaceStyle（含 UIKit 侧页面）。
-    var onAppearanceChange: (@MainActor () -> Void)?
-    private var lastLabVisible = false
-    private var lastS3XYVisible = false
+    @ObservationIgnored var onAppearanceChange: (@MainActor () -> Void)?
+    @ObservationIgnored private var lastS3XYVisible = false
     private static let languageDefaultsKey = "p4can.language"
     private static let appearanceDefaultsKey = "p4can.appearance"
     private static let pollIntervalDefaultsKey = "p4can.poll.ms"
@@ -145,44 +146,67 @@ final class AppEnvironment: ObservableObject {
 
     // MARK: - 数据浏览
 
-    @Published private(set) var endpointPayloads: [String: P4JSON] = [:]
-    @Published private(set) var endpointErrors: [String: String] = [:]
-    @Published private(set) var endpointsUpdatedAt: Date?
-    @Published private(set) var isScanningEndpoints = false
+    private(set) var endpointPayloads: [String: P4JSON] = [:]
+    /// 「全部数据」批量扫描的失败原因；页面轮询的失败记在各自的端点槽位里。
+    private(set) var endpointErrors: [String: String] = [:]
+    private(set) var endpointsUpdatedAt: Date?
+    private(set) var isScanningEndpoints = false
 
     // MARK: - 端点级共享快照
+
+    /// 单个端点的共享状态：每个路径一个可观察对象。
+    ///
+    /// 页面只在自己读取的端点变化时重绘；详情页每 0.5–1 s 轮询自己的端点时，
+    /// 不会牵连蓝牙页、诊断页等读取其它端点的页面。
+    @MainActor
+    @Observable
+    final class EndpointSlot {
+        fileprivate(set) var value: P4JSON?
+        fileprivate(set) var fetchedAt: Date?
+        fileprivate(set) var error: String?
+
+        fileprivate func clear() {
+            value = nil
+            fetchedAt = nil
+            error = nil
+        }
+    }
 
     /// 页面共用的端点数据：同一路径只保留最新一次成功回包与时间戳。
     ///
     /// 以前详情页、灯光两页、功能列表各自持有 `stats` 并各自轮询同一端点，
     /// 同一份数据有多个真相源：A 页写入成功后 B 页要等下一拍，离线时各页新旧不一。
     /// 现在统一走这里，页面只读，不再自己存。
-    @Published private(set) var endpointValues: [String: P4JSON] = [:]
-    @Published private(set) var endpointFetchedAt: [String: Date] = [:]
+    @ObservationIgnored private var endpointSlots: [String: EndpointSlot] = [:]
     /// 同一路径正在请求中：并发调用复用这次请求，避免多页同时挂载时重复打设备。
-    private var endpointInFlight: Set<String> = []
+    @ObservationIgnored private var endpointInFlight: Set<String> = []
+
+    private func endpointSlot(_ path: String) -> EndpointSlot {
+        if let slot = endpointSlots[path] { return slot }
+        let slot = EndpointSlot()
+        endpointSlots[path] = slot
+        return slot
+    }
 
     /// 端点最新一次成功回包（nil = 从未成功）。
-    func endpointValue(_ path: String) -> P4JSON? { endpointValues[path] }
-
-    /// 端点最近一次成功时间（用于新鲜度提示）。
-    func endpointUpdatedAt(_ path: String) -> Date? { endpointFetchedAt[path] }
+    func endpointValue(_ path: String) -> P4JSON? { endpointSlot(path).value }
 
     /// 端点数据年龄（秒）；nil 表示从未成功。
     func endpointAge(_ path: String) -> TimeInterval? {
-        guard let at = endpointFetchedAt[path] else { return nil }
+        guard let at = endpointSlot(path).fetchedAt else { return nil }
         return Date().timeIntervalSince(at)
     }
 
     /// 端点最近一次失败原因（成功后清除）。
-    func endpointError(_ path: String) -> String? { endpointErrors[path] }
+    func endpointError(_ path: String) -> String? { endpointSlot(path).error }
 
     /// 写入共享缓存（写接口的回包本身就是最新状态，直接落进来，
     /// 其它页面下一拍就能看到，不必等各自轮询）。
-    func storeEndpoint(_ path: String, _ value: P4JSON) {
-        endpointValues[path] = value
-        endpointFetchedAt[path] = Date()
-        endpointErrors[path] = nil
+    func storeEndpoint(_ path: String, _ value: P4JSON, at date: Date = Date()) {
+        let slot = endpointSlot(path)
+        if slot.value != value { slot.value = value }
+        slot.fetchedAt = date
+        if slot.error != nil { slot.error = nil }
     }
 
     /// 读取一个端点；`maxAge` 内的缓存直接复用。
@@ -191,21 +215,31 @@ final class AppEnvironment: ObservableObject {
     /// - 同一路径已有请求在飞：不重复发，直接返回当前缓存，等下一拍再取。
     @discardableResult
     func refreshEndpoint(_ path: String, maxAge: TimeInterval = 0) async -> P4JSON? {
-        if maxAge > 0, let at = endpointFetchedAt[path],
+        let slot = endpointSlot(path)
+        if maxAge > 0, let at = slot.fetchedAt,
            Date().timeIntervalSince(at) <= maxAge {
-            return endpointValues[path]
+            return slot.value
         }
-        guard !endpointInFlight.contains(path) else { return endpointValues[path] }
+        guard !endpointInFlight.contains(path) else { return slot.value }
         endpointInFlight.insert(path)
-        defer { endpointInFlight.remove(path) }
+        let currentClient = client
+        defer { if isCurrent(currentClient) { endpointInFlight.remove(path) } }
         do {
-            let value = try await api.get(path)
+            let value = try await currentClient.get(path)
+            guard isCurrent(currentClient) else { return nil }
             storeEndpoint(path, value)
             return value
         } catch {
-            endpointErrors[path] = AppEnvironment.friendly(error)
+            guard isCurrent(currentClient) else { return nil }
+            let message = AppEnvironment.friendly(error)
+            if slot.error != message { slot.error = message }
             return nil
         }
+    }
+
+    /// 请求发出后设备地址可能已切换：旧地址的迟到回包不能写进新设备的状态。
+    private func isCurrent(_ requestClient: P4APIClient) -> Bool {
+        requestClient === client
     }
 
     /// 是否处于独占操作（OTA / 批量扫描）——页面级轮询应据此暂停。
@@ -248,21 +282,23 @@ final class AppEnvironment: ObservableObject {
 
     /// 离线时放慢重试；在线间隔由用户设置（默认 500 ms，与网页一致）。
     private var onlineInterval: Duration { .milliseconds(pollIntervalMs) }
-    private var offlineInterval: Duration = .seconds(5)
+    @ObservationIgnored private var offlineInterval: Duration = .seconds(5)
 
     private static let hostDefaultsKey = "p4can.device.host"
     private static let liveActivityDefaultsKey = "p4can.liveactivity.enabled"
-    private var pollTask: Task<Void, Never>?
+    @ObservationIgnored private var pollTask: Task<Void, Never>?
     private var client: P4APIClient
-    private var tick = 0
-    private var isRefreshing = false
-    private var lastLiveActivityAttempt: Date?
+    @ObservationIgnored private var tick = 0
+    @ObservationIgnored private var isRefreshing = false
+    @ObservationIgnored private var lastLiveActivityAttempt: Date?
     /// 连续离线起点：超过 1 分钟就结束实时活动，避免锁屏长期显示旧状态。
-    private var liveActivityOfflineSince: Date?
+    @ObservationIgnored private var liveActivityOfflineSince: Date?
+    /// 上次推送给实时活动的状态：相同则不再调用 `Activity.update`。
+    @ObservationIgnored private var lastLiveActivityState: CanActivityAttributes.ContentState?
     /// 上次写缓存的时间（节流用）。
-    private var lastCacheWriteAt: Date?
+    @ObservationIgnored private var lastCacheWriteAt: Date?
     /// 上次写入包含的端点数量（新端点出现时立刻补写）。
-    private var lastCachedEntryCount = 0
+    @ObservationIgnored private var lastCachedEntryCount = 0
     /// >0 时暂停后台轮询（OTA 上传/等待重启期间），避免和单线程的固件 WebServer 抢连接。
     private var exclusiveOperationDepth = 0
 
@@ -384,6 +420,12 @@ final class AppEnvironment: ObservableObject {
         lightingSupported = nil
         v356Supported = nil
         dashboardLanguageSupported = nil
+        // 探测时间也要清空，否则新设备要等 60 s 冷却才会被探测，期间新版功能入口全部隐藏。
+        lastStrobeProbe = nil
+        lastNewFeaturesProbe = nil
+        lastLightingProbe = nil
+        lastV356Probe = nil
+        lastLanguageProbe = nil
         deviceFamily = .unknown
         DeviceRoute.family = .unknown
         mergedStats = [:]
@@ -391,14 +433,13 @@ final class AppEnvironment: ObservableObject {
         trendSamples = []
         endpointPayloads = [:]
         endpointErrors = [:]
-        endpointValues = [:]
-        endpointFetchedAt = [:]
+        // 页面可能正观察着这些槽位：逐个清空而不是换掉字典，否则页面看不到变化。
+        for slot in endpointSlots.values { slot.clear() }
         endpointInFlight = []
         endpointsUpdatedAt = nil
         isShowingCachedData = false
         cachedAt = nil
         lastUpdated = nil
-        lastLabVisible = false
         lastS3XYVisible = false
     }
 
@@ -453,16 +494,26 @@ final class AppEnvironment: ObservableObject {
         let system = await systemTask
         let das = await dasTask
         let nagCfg = await nagConfigTask
+        guard isCurrent(currentClient) else { return }
 
         if let snapshot {
-            if let fast = snapshot["fast"]?.objectValue { fastGroups = fast }
-            if let slow = snapshot["slow"]?.objectValue { slowGroups = slow }
+            if let fast = snapshot["fast"]?.objectValue { setIfChanged(\.fastGroups, fast) }
+            if let slow = snapshot["slow"]?.objectValue { setIfChanged(\.slowGroups, slow) }
         }
-        if let profile { profileStatus = profile }
-        if let features { featuresStatus = features }
+        if let profile { setIfChanged(\.profileStatus, profile) }
+        if let features { setIfChanged(\.featuresStatus, features) }
+        // T2CAN 固件（t2can-universal-unlock 3.30.x）没有爆闪、灯光、Developer Test 与网页语言接口：
+        // 直接判定为不支持，不再每 60 s 探测一次单线程 WebServer，也让功能页停止轮询爆闪状态。
+        let familyNow = DeviceFamily.detect(system: (system ?? systemStats)?.objectValue ?? [:])
+        if familyNow == .t2can {
+            setIfChanged(\.strobeSupported, false)
+            setIfChanged(\.lightingSupported, false)
+            setIfChanged(\.v356Supported, false)
+            setIfChanged(\.dashboardLanguageSupported, false)
+        }
         // v3.35.2 起官方固件移除了爆闪接口：探测一次 404 就把两个入口隐藏，
         // 避免列表里留着点进去只有报错的模块。网络错误不判定为“不支持”。
-        if includeMeta, strobeSupported != true, features != nil {
+        if includeMeta, familyNow != .t2can, strobeSupported != true, features != nil {
             let due = lastStrobeProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeStrobeSupport(using: currentClient) }
         }
@@ -470,36 +521,32 @@ final class AppEnvironment: ObservableObject {
             let due = lastNewFeaturesProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeNewFeatures(using: currentClient) }
         }
-        if includeMeta, lightingSupported != true, features != nil {
+        if includeMeta, familyNow != .t2can, lightingSupported != true, features != nil {
             let due = lastLightingProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeLighting(using: currentClient) }
         }
-        if includeMeta, v356Supported != true, features != nil {
+        if includeMeta, familyNow != .t2can, v356Supported != true, features != nil {
             let due = lastV356Probe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeV356(using: currentClient) }
         }
-        if includeMeta, dashboardLanguageSupported != true, features != nil {
+        if includeMeta, familyNow != .t2can, dashboardLanguageSupported != true, features != nil {
             let due = lastLanguageProbe.map { Date().timeIntervalSince($0) > 60 } ?? true
             if due { await probeDashboardLanguage(using: currentClient) }
         }
-        if let s3xy { s3xyStats = s3xy }
+        guard isCurrent(currentClient) else { return }
+        if let s3xy { setIfChanged(\.s3xyStats, s3xy) }
         if isS3XYEnabled && !showsS3XYTab {
             showsS3XYTab = true
             UserDefaults.standard.set(true, forKey: "p4can.tab.s3xy")
         }
-        if let ota { otaStatus = ota }
-        if let wifi { wifiStatus = wifi }
-        if let system { systemStats = system }
-        if let das { dasStats = das }
-        if let nagCfg { nagConfig = nagCfg }
+        if let ota { setIfChanged(\.otaStatus, ota) }
+        if let wifi { setIfChanged(\.wifiStatus, wifi) }
+        if let system { setIfChanged(\.systemStats, system) }
+        if let das { setIfChanged(\.dasStats, das) }
+        if let nagCfg { setIfChanged(\.nagConfig, nagCfg) }
 
         rebuildDerived()
 
-        let labVisible = isLabEnabled
-        if labVisible != lastLabVisible {
-            lastLabVisible = labVisible
-            onLabVisibilityChange?()
-        }
         let s3xyVisible = isS3XYEnabled
         if s3xyVisible != lastS3XYVisible {
             lastS3XYVisible = s3xyVisible
@@ -510,7 +557,7 @@ final class AppEnvironment: ObservableObject {
         let gotMeta = includeMeta && (profile != nil || features != nil || system != nil)
 
         if gotSnapshot || gotMeta {
-            phase = .online
+            setIfChanged(\.phase, .online)
             // 「已同步」只认快照：任一慢端点成功不代表挡位/扭矩是新的。
             // 缓存标记也只在快照成功时清除，否则会出现「已同步 + 缓存数据」。
             if gotSnapshot {
@@ -531,7 +578,8 @@ final class AppEnvironment: ObservableObject {
             #endif
         } else {
             let reason = await Self.probeReason(client: currentClient)
-            phase = .offline(reason: reason)
+            guard isCurrent(currentClient) else { return }
+            setIfChanged(\.phase, .offline(reason: reason))
             restoreCacheIfNeeded()
         }
     }
@@ -596,19 +644,27 @@ final class AppEnvironment: ObservableObject {
                 merged.merge(object) { _, new in new }
             }
         }
-        mergedStats = merged
+        setIfChanged(\.mergedStats, merged)
         let family = DeviceFamily.detect(system: systemStats?.objectValue ?? [:])
         if family != .unknown {
-            deviceFamily = family
+            setIfChanged(\.deviceFamily, family)
             DeviceRoute.family = family
         }
-        canBuses = CanBusResolver.resolve(
+        setIfChanged(\.canBuses, CanBusResolver.resolve(
             traffic: fastGroups["cantraffic"]?.objectValue ?? [:],
             profile: profileStatus?.objectValue ?? [:],
             system: systemStats?.objectValue ?? [:]
-        )
+        ))
         if appendSample { appendTrendSample() }
         if pushLiveActivity { refreshLiveActivity() }
+    }
+
+    /// 值相同则不写：Observation 每次赋值都会通知读取者，轮询回写相同数据会让页面无谓重绘。
+    private func setIfChanged<Value: Equatable>(
+        _ keyPath: ReferenceWritableKeyPath<AppEnvironment, Value>,
+        _ value: Value
+    ) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
     }
 
     /// 追加扭矩采样：按 180 s 时间窗（与「近 3 分钟」文案一致），最多 1 s 一点。
@@ -645,86 +701,73 @@ final class AppEnvironment: ObservableObject {
 
     /// 单独拉取车型状态（更改车型、从后台返回时使用）。
     func refreshProfile() async {
-        guard let profile = try? await client.get(P4Route.profileStatus) else { return }
+        let currentClient = client
+        guard let profile = try? await currentClient.get(P4Route.profileStatus),
+              isCurrent(currentClient) else { return }
         profileStatus = profile
         rebuildDerived()
     }
 
-    /// 探测固件是否提供前后爆闪接口。
-    private func probeStrobeSupport(using client: P4APIClient) async {
-        lastStrobeProbe = Date()
+    /// 用代表接口探测固件能力：200 → true，404 → false；
+    /// 离线、超时或地址已切换 → nil（保持未知，不能把“没连上”当成“不支持”）。
+    private func probeEndpoint(_ path: String, using client: P4APIClient) async -> Bool? {
         do {
-            _ = try await client.get(P4Route.headlightStrobeStats)
-            strobeSupported = true
+            _ = try await client.get(path)
+            return isCurrent(client) ? true : nil
         } catch let error as P4APIError {
-            if error.status == 404 { strobeSupported = false }
+            return isCurrent(client) && error.status == 404 ? false : nil
         } catch {
-            // 离线/超时：保持未知，下一轮再试；不能把“没连上”当成“不支持”。
+            return nil
         }
     }
 
-    /// 探测固件是否带 v3.35.2 新功能。用预热接口做代表：200 即新版，404 即旧版。
+    /// 探测固件是否提供前后爆闪接口（v3.35.2 起官方固件移除）。
+    private func probeStrobeSupport(using client: P4APIClient) async {
+        lastStrobeProbe = Date()
+        if let result = await probeEndpoint(P4Route.headlightStrobeStats, using: client) {
+            strobeSupported = result
+        }
+    }
+
+    /// 探测固件是否带 v3.35.2 新功能，以预热接口为代表。
     private func probeNewFeatures(using client: P4APIClient) async {
         lastNewFeaturesProbe = Date()
-        do {
-            _ = try await client.get(P4Route.preheatStats)
-            newFeaturesSupported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { newFeaturesSupported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.preheatStats, using: client) {
+            newFeaturesSupported = result
         }
     }
 
     /// 探测 v3.35.3 的 Lighting Features。
     private func probeLighting(using client: P4APIClient) async {
         lastLightingProbe = Date()
-        do {
-            _ = try await client.get(P4Route.lightingStats)
-            lightingSupported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { lightingSupported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.lightingStats, using: client) {
+            lightingSupported = result
         }
     }
 
     /// 探测 v3.35.6 功能（Developer Test / 语言 / 召唤版本）。
     private func probeV356(using client: P4APIClient) async {
         lastV356Probe = Date()
-        do {
-            _ = try await client.get(P4Route.developerTestStats)
-            v356Supported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { v356Supported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.developerTestStats, using: client) {
+            v356Supported = result
         }
     }
 
     /// 探测网页语言接口；3.35.8 起 Developer Test 被移除，语言不能再跟着它判断。
     private func probeDashboardLanguage(using client: P4APIClient) async {
         lastLanguageProbe = Date()
-        do {
-            _ = try await client.get(P4Route.dashboardLanguage)
-            dashboardLanguageSupported = true
-        } catch let error as P4APIError {
-            if error.status == 404 { dashboardLanguageSupported = false }
-        } catch {
-            // 离线/超时：保持未知，下一轮再试。
+        if let result = await probeEndpoint(P4Route.dashboardLanguage, using: client) {
+            dashboardLanguageSupported = result
         }
     }
 
-    /// 单独拉取功能闸门（LAB Menu / S3XY / 封禁方案），用于开关后立即刷新标签栏。
+    /// 单独拉取功能闸门（S3XY / 封禁方案），用于开关后立即刷新标签栏。
     func refreshFeatures() async {
-        guard let features = try? await client.get(P4Route.featuresStatus) else { return }
+        let currentClient = client
+        guard let features = try? await currentClient.get(P4Route.featuresStatus),
+              isCurrent(currentClient) else { return }
         featuresStatus = features
         rebuildDerived()
-        let visible = isLabEnabled
-        if visible != lastLabVisible {
-            lastLabVisible = visible
-            onLabVisibilityChange?()
-        }
         let s3xyVisible = isS3XYEnabled
         if s3xyVisible != lastS3XYVisible {
             lastS3XYVisible = s3xyVisible
@@ -812,9 +855,18 @@ final class AppEnvironment: ObservableObject {
         let state = activityState()
         guard !state.buses.isEmpty else { return }
         if liveActivity.isActive {
+            // updatedAt 每拍都变，比较时排除；内容相同就不再跨进程推送，
+            // 但每 60 s 至少推一次，避免触发 5 分钟的陈旧提示。
+            if let last = lastLiveActivityState {
+                var comparable = state
+                comparable.updatedAt = last.updatedAt
+                if comparable == last, state.updatedAt.timeIntervalSince(last.updatedAt) < 60 { return }
+            }
+            lastLiveActivityState = state
             liveActivity.update(state: state)
         } else if lastLiveActivityAttempt.map({ Date().timeIntervalSince($0) > 10 }) ?? true {
             lastLiveActivityAttempt = Date()
+            lastLiveActivityState = state
             Task { await liveActivity.start(deviceName: host, state: state) }
         }
     }
@@ -874,6 +926,7 @@ final class AppEnvironment: ObservableObject {
                 for await item in group { collected.append(item) }
                 return collected
             }
+            guard isCurrent(currentClient) else { return }
             for (path, value, error) in results {
                 if let value { payloads[path] = value }
                 if let error { errors[path] = error }
@@ -882,17 +935,16 @@ final class AppEnvironment: ObservableObject {
 
         endpointPayloads = payloads
         endpointErrors = errors
-        endpointsUpdatedAt = Date()
-        // 扫描结果也是「刚读到的真相」：同步进共享缓存，页面切过去不用再等一轮。
         let scannedAt = Date()
+        endpointsUpdatedAt = scannedAt
+        // 扫描结果也是「刚读到的真相」：同步进共享缓存，页面切过去不用再等一轮。
         for (path, value) in payloads {
-            endpointValues[path] = value
-            endpointFetchedAt[path] = scannedAt
+            storeEndpoint(path, value, at: scannedAt)
         }
 
         if let snapshot = payloads["/api/snapshot?groups=home-fast&slow=1"] {
-            if let fast = snapshot["fast"]?.objectValue { fastGroups = fast }
-            if let slow = snapshot["slow"]?.objectValue { slowGroups = slow }
+            if let fast = snapshot["fast"]?.objectValue { setIfChanged(\.fastGroups, fast) }
+            if let slow = snapshot["slow"]?.objectValue { setIfChanged(\.slowGroups, slow) }
         }
         if let value = payloads[P4Route.systemStats] { systemStats = value }
         if let value = payloads[P4Route.profileStatus] { profileStatus = value }
@@ -942,7 +994,6 @@ final class AppEnvironment: ObservableObject {
 
     // MARK: - 命令
 
-    /// 执行固件写接口：POST + query 参数，然后刷新。
     /// 执行固件写接口：POST + query 参数，然后刷新。
     /// - Returns: 是否真的把命令发出去了。忙时返回 false（调用方不要当成已提交）。
     @discardableResult
@@ -1006,7 +1057,7 @@ final class AppEnvironment: ObservableObject {
     private func performUpload(named name: String, data: Data) async {
         let attemptBefore = otaStatus?["attempt"]?.intValue ?? 0
         do {
-            let json = try await client.uploadFirmware(fileName: name, data: data) { @Sendable sent, total in
+            let json = try await client.uploadFirmware(fileName: name, data: data) { @Sendable [weak self] sent, total in
                 Task { @MainActor [weak self] in
                     self?.otaUploadSent = sent
                     self?.otaUploadTotal = max(total, 1)
@@ -1088,17 +1139,7 @@ final class AppEnvironment: ObservableObject {
 
     var isOnline: Bool { phase == .online }
 
-    var s3xyDevices: [S3XYDevice] { S3XYDevice.devices(from: s3xyStats) }
-    var s3xyScanResults: [S3XYScanResult] { S3XYScanResult.results(from: s3xyStats) }
-
     var isBluetoothEnabled: Bool { s3xyStats?["bluetoothEnabled"]?.boolValue ?? false }
-    var isLabEnabled: Bool {
-        #if DEBUG
-        // 本地联调：SIMCTL_CHILD_P4CAN_LAB=1 强制显示实验室标签
-        if ProcessInfo.processInfo.environment["P4CAN_LAB"] == "1" { return true }
-        #endif
-        return featuresStatus?["lab"]?.boolValue ?? false
-    }
     var isSetupMode: Bool { profileStatus?["setupMode"]?.boolValue ?? false }
     var profileName: String? { profileStatus?["profileName"]?.stringValue }
     var topologyName: String? { profileStatus?["topologyName"]?.stringValue }
@@ -1137,7 +1178,9 @@ final class AppEnvironment: ObservableObject {
             lines.append("当前显示缓存 · \(cachedAt.formatted(date: .abbreviated, time: .standard))")
         }
         for bus in buses {
-            lines.append("· \(bus.displayName) \(bus.stateText) rx=\(bus.rxCount) tx=\(bus.txAccepted)")
+            let rx = bus.rxCount.map(String.init) ?? "—"
+            let tx = bus.txAccepted.map(String.init) ?? "—"
+            lines.append("· \(bus.displayName) \(bus.stateText) rx=\(rx) tx=\(tx)")
         }
         if let ota = otaStatus?.objectValue {
             let stage = ota["stage"]?.stringValue ?? "-"

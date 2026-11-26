@@ -5,7 +5,7 @@ import SwiftUI
 /// 与网页契约一致：13 个参数必须**一次提交**到 `/api/nag/h-profile/update`；
 /// 停车行为单独走 `/api/nag/update?modeHStopBehavior=`。
 struct ModeHView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     // 可编辑参数（首次从设备读取，之后不覆盖用户正在调的值）
     @State private var peakMin = 1.0
@@ -64,7 +64,7 @@ struct ModeHView: View {
                 sliderRow(L10n.t("主峰值上限", "Primary peak max"), value: $peakMax,
                           range: 1...3, step: 0.05, unit: "Nm")
             } header: {
-                Label(L10n.t("主事件峰值", "Primary peak"), systemImage: "waveform.path")
+                Text(L10n.t("主事件峰值", "Primary peak"))
             } footer: {
                 Text(L10n.t("每次合格的原厂 0x370 接收都会在区间内重新抽取峰值；80% 为负向、20% 为正向。",
                             "Every eligible stock 0x370 RX draws a new peak in range; 80% negative, 20% positive."))
@@ -80,7 +80,7 @@ struct ModeHView: View {
                 sliderRow(L10n.t("不应期上限", "Refractory max"), value: $refractoryMax,
                           range: 0.3...2.5, step: 0.1, unit: "s")
             } header: {
-                Label(L10n.t("等待与不应期", "Wait & refractory"), systemImage: "timer")
+                Text(L10n.t("等待与不应期", "Wait & refractory"))
             }
 
             Section {
@@ -89,7 +89,7 @@ struct ModeHView: View {
                 sliderRow(L10n.t("载波上限", "Carrier max"), value: $carrierMax,
                           range: 0.1...0.8, step: 0.05, unit: "Nm")
             } header: {
-                Label(L10n.t("反向载波", "Opposite carrier"), systemImage: "arrow.left.arrow.right")
+                Text(L10n.t("反向载波", "Opposite carrier"))
             } footer: {
                 Text(L10n.t("非零原厂扭矩会镜像到反号并叠加载波；原厂 ≤ 0.05 Nm 直接透传。",
                             "Non-zero stock torque is mirrored to the opposite sign plus carrier; stock ≤ 0.05 Nm passes through."))
@@ -107,7 +107,7 @@ struct ModeHView: View {
                 sliderRow(L10n.t("HO=2 阈值", "HO=2 threshold"), value: $ho2,
                           range: 0.1...3, step: 0.05, unit: "Nm")
             } header: {
-                Label(L10n.t("Hands-On 覆盖", "Hands-On policy"), systemImage: "hand.raised")
+                Text(L10n.t("Hands-On 覆盖", "Hands-On policy"))
             } footer: {
                 Text(L10n.t("固件会完整覆盖 2 位 HO 字段，生成值不会超过 HO=2。阈值模式下低于 HO=1 阈值时保留原厂 HO。",
                             "The firmware overwrites the full 2-bit HO field and never generates HO=3. Below the HO=1 threshold the stock HO field is kept."))
@@ -126,7 +126,7 @@ struct ModeHView: View {
                           range: 0...2, step: 0.1, unit: "s")
                     .disabled(!rescueEnabled)
             } header: {
-                Label(L10n.t("视觉救援", "Visual rescue"), systemImage: "eye.trianglebadge.exclamationmark")
+                Text(L10n.t("视觉救援", "Visual rescue"))
             }
 
             Section {
@@ -136,7 +136,7 @@ struct ModeHView: View {
                 }
                 .pickerStyle(.menu)
             } header: {
-                Label(L10n.t("停车行为", "Stop behavior"), systemImage: "parkingsign")
+                Text(L10n.t("停车行为", "Stop behavior"))
             } footer: {
                 Text(L10n.t("停车状态只暂停事件引擎；STOCK CARRIER 会保留原厂扭矩与 HO，只推进计数与校验和。速度失效或确认移动时始终硬暂停。",
                             "STOPPED only pauses the event engine. STOCK CARRIER preserves stock torque and HO. Speed-stale and move-confirming states always hard-pause."))
@@ -171,6 +171,7 @@ struct ModeHView: View {
             liveSection
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("Mode H 调参", "Mode H Tuning"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
@@ -209,7 +210,7 @@ struct ModeHView: View {
                 MetricRow(key: "stopCarrierActive", value: object["stopCarrierActive"] ?? .null)
             }
         } header: {
-            Label(L10n.t("实时引擎", "Live engine"), systemImage: "waveform.path.ecg")
+            Text(L10n.t("实时引擎", "Live engine"))
         } footer: {
             Text(L10n.t("只读监视当前 Phase / 事件类型 / 输出扭矩；数据来自 /api/nag/h-profile/stats。",
                         "Read-only monitor of phase, event type and output torque from /api/nag/h-profile/stats."))

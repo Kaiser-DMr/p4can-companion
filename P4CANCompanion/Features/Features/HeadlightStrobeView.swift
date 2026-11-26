@@ -11,7 +11,7 @@ import SwiftUI
 /// - `stop`：立即中断并恢复；
 /// - `stats`：active / state / flashesDone / flashesTotal / elapsedMs / totalMs / mode / blockReason。
 struct HeadlightStrobeView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     /// 结束方式（App 侧语义，落盘时映射为固件的 `stopMode` + `durationMs`）。
     private enum Ending: Int, CaseIterable, Identifiable {
@@ -200,7 +200,6 @@ struct HeadlightStrobeView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .tint(.accentColor)
                 // 固件在爆闪进行中对任何 config POST 都回 409，开关此时必然写失败：
                 // 先禁用并说明，避免「点了开关又被弹回去」。
                 .disabled(active || busy)
@@ -278,7 +277,7 @@ struct HeadlightStrobeView: View {
                 }
                 .frame(maxWidth: .infinity)
             } header: {
-                Label(L10n.t("触发", "Trigger"), systemImage: "bolt.fill")
+                Text(L10n.t("触发", "Trigger"))
             }
 
             statusSection
@@ -347,7 +346,7 @@ struct HeadlightStrobeView: View {
                 }
                 .pickerStyle(.segmented)
             } header: {
-                Label(L10n.t("参数", "Parameters"), systemImage: "slider.horizontal.3")
+                Text(L10n.t("参数", "Parameters"))
             } footer: {
                 Text(ending == .count
                      ? L10n.t("刻度按 \(intervalStepText) ms 吸附；参数改动需保存后才会用于下一次触发。",
@@ -413,6 +412,7 @@ struct HeadlightStrobeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         // 自定义标签栏浮在底部：给最后两行留出空间，避免按钮贴着/压到栏上。
         .contentMargins(.bottom, 28, for: .scrollContent)
         #if DEBUG
@@ -472,38 +472,29 @@ struct HeadlightStrobeView: View {
     @ViewBuilder
     private var statusSection: some View {
         Section {
-            HStack {
-                Text(L10n.t("结束方式", "Ending"))
-                Spacer()
-                Text(runModeText).foregroundStyle(.secondary)
-            }
-            .font(.subheadline)
+            LabeledContent(L10n.t("结束方式", "Ending"), value: runModeText)
 
-            HStack {
-                Text(L10n.t("进度", "Progress"))
-                Spacer()
-                Text(progressText).monospacedDigit().foregroundStyle(.secondary)
+            LabeledContent(L10n.t("进度", "Progress")) {
+                Text(progressText).monospacedDigit()
             }
-            .font(.subheadline)
+
+            LabeledContent(L10n.t("长按触发", "Hold delay")) {
+                Text(String(format: "%.1f s", Double(holdDelayMs) / 1000)).monospacedDigit()
+            }
+
+            if let tx = stats?["txOk"]?.intValue, let fail = stats?["txFail"]?.intValue {
+                LabeledContent(L10n.t("发送 / 失败", "TX / fail")) {
+                    Text("\(tx) / \(fail)").monospacedDigit()
+                }
+            }
 
             if let age = environment.endpointAge(P4Route.headlightStrobeStats) {
-                HStack {
-                    Text(L10n.t("数据", "Data"))
-                    Spacer()
+                LabeledContent(L10n.t("数据", "Data")) {
                     Text(freshnessText(age))
                         .monospacedDigit()
                         .foregroundStyle(age > 5 ? Color.p4Warn : Color.secondary)
                 }
-                .font(.caption)
             }
-
-            HStack {
-                Text(L10n.t("长按触发", "Hold delay"))
-                Spacer()
-                Text(String(format: "%.1f s", Double(holdDelayMs) / 1000))
-                    .monospacedDigit().foregroundStyle(.secondary)
-            }
-            .font(.subheadline)
 
             if let blockReason {
                 // 颜色只表语义：完成=绿、手动停止=次要、可继续的拦截=橙、真失败=红。
@@ -511,17 +502,8 @@ struct HeadlightStrobeView: View {
                     .font(.footnote)
                     .foregroundStyle(reasonTone(blockReason))
             }
-
-            if let tx = stats?["txOk"]?.intValue, let fail = stats?["txFail"]?.intValue {
-                HStack {
-                    Text(L10n.t("发送 / 失败", "TX / fail"))
-                    Spacer()
-                    Text("\(tx) / \(fail)").monospacedDigit().foregroundStyle(.secondary)
-                }
-                .font(.caption)
-            }
         } header: {
-            Label(L10n.t("运行状态", "Runtime"), systemImage: "gauge.with.dots.needle.33percent")
+            Text(L10n.t("运行状态", "Runtime"))
         } footer: {
             Text(L10n.t("0x249 高灯 PULL/IDLE；爆闪期间暂停其他 0x249 注入，结束后自动解除。",
                         "0x249 high-beam PULL/IDLE. Other 0x249 injections are paused while active."))

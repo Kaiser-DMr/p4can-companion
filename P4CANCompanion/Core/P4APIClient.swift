@@ -27,7 +27,6 @@ enum P4Route {
 
     // 功能闸门
     static let featuresStatus = "/api/features/status"
-    static let featuresLab = "/api/features/lab"
     static let featuresS3XY = "/api/features/s3xy"
     static let featuresBanned = "/api/features/banned"
     static let featuresAPDriveProfile = "/api/features/ap-drive-profile"
@@ -233,6 +232,11 @@ final class P4APIClient: Sendable {
             delegate: P4RedirectBlocker(),
             delegateQueue: nil
         )
+    }
+
+    /// 带 delegate 的 URLSession 不会自行释放：切换设备地址时旧客户端被丢弃，必须显式作废。
+    deinit {
+        session.finishTasksAndInvalidate()
     }
 
     /// 校验用户输入：只允许 http(s)://host[:port] 或 host[:port]，

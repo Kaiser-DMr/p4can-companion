@@ -43,6 +43,7 @@ struct NetworkLogView: View {
                 }
             }
         }
+        .p4ListStyle()
         .navigationTitle(L10n.t("网络日志", "Network log"))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: L10n.t("搜索路径或 query", "Search path or query"))

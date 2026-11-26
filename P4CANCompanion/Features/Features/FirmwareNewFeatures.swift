@@ -42,7 +42,7 @@ private func fwNumber(_ value: P4JSON?, _ digits: Int = 1) -> String {
 // MARK: - 电池预热
 
 struct PreheatView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.preheatStats) }
@@ -79,11 +79,13 @@ struct PreheatView: View {
         return L10n.t("加热中", "Heating")
     }
 
-    private var packText: String {
-        guard object["packSeen"]?.boolValue == true else { return "—" }
-        let minC = fwNumber(object["packTempMinC"]), maxC = fwNumber(object["packTempMaxC"])
-        let avg = fwNumber(object["packTempAvgC"])
-        return "\(avg) °C（\(minC)–\(maxC)）"
+    private var statusTone: P4Tone {
+        guard supported else { return .neutral }
+        if object["targetReached"]?.boolValue == true || object["batteryWarm"]?.boolValue == true { return .ok }
+        guard object["active"]?.boolValue == true else { return .neutral }
+        if object["blocked"]?.boolValue == true || (object["evalAgeMs"]?.intValue ?? 0) > 3000 { return .warn }
+        if (object["txOk"]?.intValue ?? 0) == 0 && (object["txFail"]?.intValue ?? 0) > 0 { return .err }
+        return .info
     }
 
     private var bmsText: String {
@@ -94,8 +96,52 @@ struct PreheatView: View {
         return L10n.t("不需要加热", "Not needed")
     }
 
+    // MARK: 数值读取（与固件网页 Thermal 面板同一套规则）
+
+    /// 热管理帧的新鲜度窗口：10 Hz 帧 5 s，慢帧（PCS / 逆变器 / AP / 信息娱乐）15 s；超时显示为无数据。
+    private static let thermalFreshMs: Int64 = 5_000
+    private static let thermalSlowMs: Int64 = 15_000
+
+    private func fresh(_ ageKey: String, window: Int64 = thermalFreshMs) -> Bool {
+        guard let age = object[ageKey]?.intValue else { return false }
+        return age <= window
+    }
+
+    private func seen(_ key: String) -> Bool { object[key]?.boolValue == true }
+
+    private func value(_ key: String, digits: Int = 1, unit: String) -> String? {
+        guard let number = object[key]?.doubleValue else { return nil }
+        return String(format: "%.\(digits)f \(unit)", number)
+    }
+
+    /// 冷却回路模式：0x201 阀门位置 + 热泵请求（SERIES_BYPASS = 2）。
+    private var thermalModeText: String? {
+        guard fresh("thModeAgeMs") else { return nil }
+        let valve = (object["thValveMode"]?.intValue ?? 0) & 3
+        let pumpsStopped = fresh("thVitalsAgeMs")
+            && (object["thPumpBatRpm"]?.intValue ?? 0) == 0 && (object["thPumpPtRpm"]?.intValue ?? 0) == 0
+        if pumpsStopped { return L10n.t("停止", "Off") }
+        switch valve {
+        case 3: return L10n.t("环境热源", "Ambient source")
+        case 1: return L10n.t("并联", "Parallel")
+        default:
+            return object["thHpReq"]?.intValue == 2 ? L10n.t("串联 · 散热器旁通", "Series · radiator bypass")
+                                                    : L10n.t("串联", "Series")
+        }
+    }
+
+    private var packAvg: Double? { seen("packSeen") ? object["packTempAvgC"]?.doubleValue : nil }
+
+    // MARK: 视图
+
     var body: some View {
         List {
+            Section {
+                heroCard
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
+
             Section {
                 Toggle(L10n.t("启用电池预热", "Enable battery preheat"),
                        isOn: Binding(get: { enabled }, set: { value in
@@ -117,19 +163,111 @@ struct PreheatView: View {
                             "Preheat asks the BMS to heat the pack while the car is powered; it stops at the target or when warm."))
             }
 
-            Section(L10n.t("状态", "Status")) {
-                FWStatusRows(rows: [
-                    (L10n.t("状态", "State"), statusText),
-                    (L10n.t("电池温度", "Pack temperature"), packText),
-                    (L10n.t("BMS", "BMS"), bmsText),
-                    (L10n.t("发送 / 失败", "TX / fail"),
-                     "\(object["txOk"]?.intValue ?? 0) / \(object["txFail"]?.intValue ?? 0)"),
-                    (L10n.t("目标", "Target"), "\(fwNumber(object["targetC"], 1)) °C"),
-                    (L10n.t("车型帧", "Trip frame"), object["tripId"]?.stringValue ?? "—"),
-                ])
+            Section {
+                LabeledContent("BMS", value: bmsText)
+                optionalRow(L10n.t("定子加热功率", "Stator heat"),
+                            seen("statorFrontSeen") || seen("statorRearSeen")
+                                ? value("statorHeatKw", digits: 2, unit: "kW") : nil,
+                            detail: statorDetail)
+                optionalRow(L10n.t("热泵功率", "Heat pump power"),
+                            seen("ptHpPowerSeen") ? value("ptHpPowerW", digits: 0, unit: "W") : nil)
+                optionalRow(L10n.t("加热上限", "Heat limit"),
+                            seen("ptHeatLimitSeen") ? value("ptHeatLimitKw", digits: 2, unit: "kW") : nil)
+                optionalRow(L10n.t("冷却液流量", "Coolant flow"),
+                            seen("coolantSeen") ? value("coolantFlowLpm", unit: "L/min") : nil)
+                optionalRow(L10n.t("BMS 需求流量", "BMS flow request"),
+                            seen("ptFlowReqSeen") ? value("ptFlowReqLpm", digits: 2, unit: "L/min") : nil)
+                optionalRow(L10n.t("电芯目标温度", "Cell target"),
+                            seen("ptCellTargetSeen") ? value("ptCellTargetC", unit: "°C") : nil)
+                optionalRow(L10n.t("最高电池温度", "Max pack temperature"),
+                            seen("ptMaxPackSeen") ? value("ptMaxPackC", unit: "°C") : nil)
+                optionalRow(L10n.t("环境温度", "Ambient"),
+                            seen("ptAmbientSeen") ? value("ptAmbientC", unit: "°C") : nil)
+                if seen("bmsSeen") {
+                    LabeledContent(L10n.t("保温请求", "Keep-warm request"),
+                                   value: seen("bmsKeepWarmRequest") ? L10n.t("是", "Yes") : L10n.t("否", "No"))
+                }
+            } header: {
+                Text(L10n.t("加热", "Heating"))
+            }
+
+            Section {
+                if let mode = thermalModeText {
+                    LabeledContent(L10n.t("回路模式", "Loop mode"), value: mode)
+                }
+                if fresh("thSysAgeMs") {
+                    LabeledContent(L10n.t("阀门", "Valve"),
+                                   value: seen("thHeatPump") ? "Octovalve" : L10n.t("四通阀", "Coolant valve"))
+                }
+                if fresh("thVitalsAgeMs") {
+                    LabeledContent(L10n.t("电池泵 / 动力泵", "Battery / PT pump"),
+                                   value: "\(object["thPumpBatRpm"]?.intValue ?? 0) / \(object["thPumpPtRpm"]?.intValue ?? 0) rpm")
+                    LabeledContent(L10n.t("风扇", "Fan"), value: "\(object["thFanRpm"]?.intValue ?? 0) rpm")
+                }
+                if fresh("thInletsAgeMs") {
+                    optionalRow(L10n.t("电池进口", "Battery inlet"), value("thBatInletC", unit: "°C"))
+                    optionalRow(L10n.t("动力总成进口", "Powertrain inlet"), value("thPtInletC", unit: "°C"))
+                }
+                if fresh("thFlowsAgeMs") {
+                    optionalRow(L10n.t("电池流量", "Battery flow"), value("thFlowBatLpm", unit: "L/min"))
+                    optionalRow(L10n.t("动力总成流量", "Powertrain flow"), value("thFlowPtLpm", unit: "L/min"))
+                }
+                if fresh("thPcsAgeMs", window: Self.thermalSlowMs) {
+                    optionalRow("DC-DC", value("thDcdcC", digits: 0, unit: "°C"))
+                    optionalRow(L10n.t("车载充电机", "Charger"), value("thChargerC", digits: 0, unit: "°C"))
+                }
+                if fresh("thInvFrontAgeMs", window: Self.thermalSlowMs) {
+                    optionalRow(L10n.t("前逆变器", "Front inverter"), value("thInvFrontC", digits: 0, unit: "°C"))
+                }
+                if fresh("thInvRearAgeMs", window: Self.thermalSlowMs) {
+                    optionalRow(L10n.t("后逆变器", "Rear inverter"), value("thInvRearC", digits: 0, unit: "°C"))
+                }
+                if fresh("thApAgeMs", window: Self.thermalSlowMs) {
+                    optionalRow(L10n.t("AP 计算机", "AP computer"), value("thApC", digits: 0, unit: "°C"))
+                }
+                if fresh("thInfoAgeMs", window: Self.thermalSlowMs) {
+                    optionalRow(L10n.t("信息娱乐", "Infotainment"), value("thInfoC", digits: 0, unit: "°C"))
+                }
+                if !hasThermalData {
+                    Text(L10n.t("暂无热管理数据（需车辆上电，帧超过 5–15 秒未更新视为无数据）。",
+                                "No thermal data (the car must be awake; frames older than 5–15 s are treated as missing)."))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text(L10n.t("热管理", "Thermal"))
+            }
+
+            Section {
+                LabeledContent(L10n.t("发送 / 失败", "TX / fail")) {
+                    Text("\(object["txOk"]?.intValue ?? 0) / \(object["txFail"]?.intValue ?? 0)").monospacedDigit()
+                }
+                if object["replyTx"] != nil {
+                    LabeledContent(L10n.t("应答 发送 / 失败", "Replies sent / failed")) {
+                        Text("\(object["replyTx"]?.intValue ?? 0) / \(object["replyFail"]?.intValue ?? 0)").monospacedDigit()
+                    }
+                    LabeledContent(L10n.t("应答延迟 最近 / 最大", "Reply latency last / max")) {
+                        Text("\(object["replyLatLastMs"]?.intValue ?? 0) / \(object["replyLatMaxMs"]?.intValue ?? 0) ms").monospacedDigit()
+                    }
+                }
+                if let drops = object["heatDrops"]?.intValue {
+                    LabeledContent(L10n.t("加热中断（近车端）", "Heat drops (near car)")) {
+                        Text("\(drops)（\(object["heatDropsNearCar"]?.intValue ?? 0)）").monospacedDigit()
+                    }
+                }
+                if let count = object["autoOffCount"]?.intValue {
+                    LabeledContent(L10n.t("自动关闭次数", "Auto-off count")) { Text("\(count)").monospacedDigit() }
+                }
+                if let skip = object["lastSkipReason"]?.stringValue, !skip.isEmpty, skip != "NONE" {
+                    LabeledContent(L10n.t("最近跳过原因", "Last skip"), value: skip)
+                }
+                LabeledContent(L10n.t("车型帧", "Trip frame"), value: object["tripId"]?.stringValue ?? "—")
+            } header: {
+                Text(L10n.t("注入", "Injection"))
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -137,6 +275,68 @@ struct PreheatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) { ToastOverlay() }
         .task { await poll() }
+    }
+
+    /// 顶部主卡：平均电池温度大字 + 状态胶囊 + 温度刻度条（最低–最高区间与目标线）。
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: Theme.spacing(1.5)) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("电池平均温度", "Pack average"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(packAvg.map { String(format: "%.1f", $0) } ?? "—")
+                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                        Text("°C").font(.title3.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: Theme.spacing(1))
+                StatusChip(text: statusText, systemImage: statusTone.symbol, tone: statusTone)
+            }
+            TemperatureScale(
+                minC: seen("packSeen") ? object["packTempMinC"]?.doubleValue : nil,
+                maxC: seen("packSeen") ? object["packTempMaxC"]?.doubleValue : nil,
+                targetC: targetC
+            )
+        }
+        .padding(Theme.spacing(2))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [P4Palette.orange.opacity(0.14), .clear],
+                           startPoint: .topTrailing, endPoint: .bottomLeading),
+            in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        )
+        .p4CardSurface()
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statorDetail: String? {
+        guard seen("statorFrontSeen") || seen("statorRearSeen") else { return nil }
+        let front = value("statorHeatFrontKw", digits: 2, unit: "kW") ?? "—"
+        let rear = value("statorHeatRearKw", digits: 2, unit: "kW") ?? "—"
+        return L10n.t("前 \(front) · 后 \(rear)", "Front \(front) · Rear \(rear)")
+    }
+
+    private var hasThermalData: Bool {
+        ["thModeAgeMs", "thSysAgeMs", "thVitalsAgeMs", "thInletsAgeMs", "thFlowsAgeMs"].contains { fresh($0) }
+            || ["thPcsAgeMs", "thInvFrontAgeMs", "thInvRearAgeMs", "thApAgeMs", "thInfoAgeMs"]
+                .contains { fresh($0, window: Self.thermalSlowMs) }
+    }
+
+    /// 只有设备报告了该值才显示这一行，避免一屏「—」。
+    @ViewBuilder
+    private func optionalRow(_ title: String, _ value: String?, detail: String? = nil) -> some View {
+        if let value {
+            LabeledContent {
+                Text(value).monospacedDigit()
+            } label: {
+                Text(title)
+                if let detail { Text(detail) }
+            }
+        }
     }
 
     private func setEnabled(_ value: Bool) async {
@@ -166,10 +366,61 @@ struct PreheatView: View {
     }
 }
 
+/// 电池温度刻度条：0–50 °C（区间超出时自动扩展），填充段为电芯最低–最高温度，竖线为目标温度。
+private struct TemperatureScale: View {
+    let minC: Double?
+    let maxC: Double?
+    let targetC: Double
+
+    private var lower: Double { min(0, (minC ?? 0) - 5) }
+    private var upper: Double { max(50, (maxC ?? 0) + 5, targetC + 5) }
+
+    private func position(_ value: Double, width: CGFloat) -> CGFloat {
+        CGFloat((value - lower) / (upper - lower)) * width
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                let width = geo.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.p4Tile)
+                    if let minC, let maxC {
+                        let start = position(minC, width: width)
+                        Capsule()
+                            .fill(LinearGradient(colors: [P4Palette.blue, P4Palette.orange],
+                                                 startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(position(maxC, width: width) - start, 8))
+                            .offset(x: start)
+                    }
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.primary)
+                        .frame(width: 2, height: 16)
+                        .offset(x: position(targetC, width: width) - 1)
+                }
+                .frame(height: 10)
+                .frame(maxHeight: .infinity)
+            }
+            .frame(height: 16)
+            HStack {
+                Text(minC.map { String(format: "%.1f–%.1f °C", $0, maxC ?? $0) } ?? L10n.t("等待电池数据", "Waiting for pack data"))
+                Spacer()
+                Text(L10n.t("目标 \(Int(targetC.rounded())) °C", "Target \(Int(targetC.rounded())) °C"))
+            }
+            .font(.caption)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.t("电芯温度区间与目标温度", "Cell temperature range and target"))
+        .accessibilityValue(minC.map { String(format: "%.1f–%.1f °C", $0, maxC ?? $0) } ?? "—")
+    }
+}
+
 // MARK: - FSD 注入
 
 struct FSDInjectionView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.fsdStats) }
@@ -208,6 +459,7 @@ struct FSDInjectionView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -255,7 +507,7 @@ struct FSDInjectionView: View {
 /// T2CAN 的 FSD 在 `/api/lab/fsd/*`，写接口是 `field=enable|profile|pauseOnAp`
 /// 而不是 P4 的 `enabled/values/suspendDuringAp`，所以单独一页。
 struct T2FSDView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.fsdStats) }
@@ -317,6 +569,7 @@ struct T2FSDView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -349,7 +602,7 @@ struct T2FSDView: View {
 // MARK: - Service Mode
 
 struct ServiceModeView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var confirmEnter = false
     @State private var intervalDraft = "150"
@@ -384,6 +637,7 @@ struct ServiceModeView: View {
                     confirmEnter = true
                 } label: {
                     Label(L10n.t("进入 Service Mode", "Enter Service Mode"), systemImage: "wrench.and.screwdriver.fill")
+                        .labelStyle(.titleAndIcon)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -408,9 +662,7 @@ struct ServiceModeView: View {
                         Spacer()
                         TextField("150", text: $intervalDraft)
                             .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 96)
-                            .textFieldStyle(.roundedBorder)
+                            .p4NumberField()
                         Button(L10n.t("保存", "Save")) {
                             Task { await setForce(restoreForce, interval: Int(intervalDraft) ?? 150) }
                         }
@@ -471,6 +723,7 @@ struct ServiceModeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -575,7 +828,7 @@ struct ServiceModeView: View {
 // MARK: - SmartShift
 
 struct SmartShiftView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var numbers: [String: String] = [:]
     @State private var draftsLoaded = false
@@ -660,9 +913,7 @@ struct SmartShiftView: View {
                             set: { numbers[spec.key] = $0 }
                         ))
                         .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 96)
-                        .textFieldStyle(.roundedBorder)
+                        .p4NumberField()
                     }
                 }
                 Button(L10n.t("保存数值参数", "Save numeric settings")) {
@@ -688,6 +939,7 @@ struct SmartShiftView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -749,7 +1001,7 @@ struct SmartShiftView: View {
 // MARK: - R79 时序捕获
 
 struct R79TimingView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var shareURL: URL?
     @State private var showShare = false
@@ -828,6 +1080,7 @@ struct R79TimingView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -885,7 +1138,7 @@ private struct FWActivityView: UIViewControllerRepresentable {
 // MARK: - CAN GPIO 设置
 
 struct CanGpioView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var draft: [Int] = [20, 21, 22, 23, 26, 27]
     @State private var loaded = false
     @State private var busy = false
@@ -972,6 +1225,7 @@ struct CanGpioView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1038,7 +1292,7 @@ struct CanGpioView: View {
 // MARK: - Lighting Features（v3.35.3）
 
 struct LightingFeaturesView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var attempted = false
 
@@ -1130,6 +1384,7 @@ struct LightingFeaturesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1161,7 +1416,7 @@ struct LightingFeaturesView: View {
 // MARK: - Developer Test（v3.35.6）
 
 struct DeveloperTestView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private let fields = [
@@ -1208,6 +1463,7 @@ struct DeveloperTestView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1244,7 +1500,7 @@ struct DeveloperTestView: View {
 // MARK: - 召唤版本标识（v3.35.6）
 
 struct SummonVersionView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.summonVersionStats) }
@@ -1284,6 +1540,7 @@ struct SummonVersionView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())
@@ -1317,7 +1574,7 @@ struct SummonVersionView: View {
 // MARK: - 网页语言（v3.35.6）
 
 struct DashboardLanguageView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.dashboardLanguage) }
@@ -1348,6 +1605,7 @@ struct DashboardLanguageView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .contentMargins(.bottom, 28, for: .scrollContent)
         .scrollContentBackground(.hidden)
         .background(Color.p4Background.ignoresSafeArea())

@@ -16,15 +16,7 @@ struct P4GlassSurface: ViewModifier {
         if #available(iOS 26.0, *), !reduceTransparency {
             content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
         } else {
-            content
-                .background(
-                    Color.p4Card,
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
-                )
+            content.p4CardSurface(cornerRadius: cornerRadius)
         }
     }
 }

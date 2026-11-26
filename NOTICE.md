@@ -16,12 +16,6 @@ This repository contains or derives from the following projects:
   `/api/lab/fsd/*`, `/api/lab/service-mode/*` routes. No firmware source is
   bundled in this repository.
 
-## SnapKit
-
-- Upstream: https://github.com/SnapKit/SnapKit
-- License: MIT
-- Vendored under `P4CANCompanion/Vendor/SnapKit` to avoid a package-manager dependency.
-
 ## SwiftPieces
 
 - Components under `P4CANCompanion/SwiftPieces`

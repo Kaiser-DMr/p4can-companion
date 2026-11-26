@@ -5,7 +5,7 @@ import SwiftUI
 /// 内容与 `build/firmware-build/刷机与验证.md`、`开发说明-爆闪.md` 对齐；
 /// 固件版本号来自 `system/stats.fwVersion`，能对上就在标题上打勾。
 struct FirmwareChangelogView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     /// 一条变更：版本 + 主题 + 日期 + 要点。
     private struct Entry: Identifiable {
@@ -150,6 +150,7 @@ struct FirmwareChangelogView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .p4ListStyle()
         .navigationTitle(L10n.t("固件变更记录", "Firmware changelog"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.p4Background, for: .navigationBar)

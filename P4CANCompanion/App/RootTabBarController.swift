@@ -2,9 +2,8 @@ import UIKit
 import SwiftUI
 
 /// 根控制器：UIKit UITabBarController 承载主标签。
-/// - 状态 / 功能 / 系统：SwiftUI 视图通过 UIHostingController 挂载
-/// - 蓝牙（S3XY）：纯 UIKit + SnapKit + UICollectionView(CompositionalLayout + Diffable)
-///   —— 默认不出现在标签栏，可在「系统 → 界面」开启后显示（多数时间用不到，避免占位）
+/// - 状态 / 功能 / 蓝牙 / 系统：SwiftUI 视图通过 UIHostingController 挂载，共用 `p4RootPage` 页面框架；
+/// - 蓝牙标签在 S3XY 开启后才出现（多数时间用不到，避免占位）。
 ///
 /// 说明：不使用 hamburger 菜单，遵循 HIG 的 Tab 导航；
 /// 不覆盖系统返回手势；Modal 均提供取消路径。
@@ -68,21 +67,16 @@ final class RootTabBarController: UITabBarController {
             tag: 3
         )
 
-        let s3xy = S3XYDevicesViewController(environment: environment)
-        let s3xyItem = UITabBarItem(
+        s3xyController = makeHosting(
+            BluetoothView(),
             title: L10n.t("蓝牙", "Bluetooth"),
-            image: UIImage(systemName: "dot.radiowaves.left.and.right"),
+            image: "dot.radiowaves.left.and.right",
+            accessibilityLabel: L10n.t("S3XY 蓝牙设备管理", "S3XY Bluetooth devices"),
             tag: 2
         )
-        s3xyItem.accessibilityLabel = L10n.t("S3XY 蓝牙设备管理", "S3XY Bluetooth devices")
-        s3xy.tabBarItem = s3xyItem
-        s3xyController = s3xy
 
         // 蓝牙页默认隐藏，由「系统 → 界面」控制
         environment.onBluetoothTabVisibilityChange = { [weak self] in
-            self?.applyTabSet()
-        }
-        environment.onLabVisibilityChange = { [weak self] in
             self?.applyTabSet()
         }
         environment.onLanguageChange = { [weak self] in
@@ -162,7 +156,7 @@ final class RootTabBarController: UITabBarController {
         accessibilityLabel: String,
         tag: Int
     ) -> UIViewController {
-        let controller = UIHostingController(rootView: rootView.environmentObject(environment))
+        let controller = UIHostingController(rootView: rootView.environment(environment))
         // 宿主默认背景是纯白；页面底色铺不满时（转场、安全区、键盘收起）会从顶部漏出白条。
         controller.view.backgroundColor = .systemGroupedBackground
         let item = UITabBarItem(
