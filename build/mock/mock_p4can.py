@@ -37,6 +37,7 @@ def j(obj):
 
 # P4CAN_MOCK_GEAR_CYCLE=<秒>：挡位按 P → D → N → R 循环切换，用于验证状态页车辆视角随挡位变化
 GEAR_CYCLE = float(os.environ.get("P4CAN_MOCK_GEAR_CYCLE", "0"))
+START_TIME = time.time()
 
 
 def mock_gear():
@@ -75,7 +76,8 @@ def snapshot_fast():
             "canBusCount": 3,
             "can1Name": "BODY",
             "can1State": 1,
-            "can1RxCount": 128934,
+            # 收帧计数随时间增长（约 1.8k / 1.1k / 0.4k 帧每秒），用于验证实时活动里的帧率
+            "can1RxCount": 128934 + int((time.time() - START_TIME) * 1800),
             "can1TxAccepted": 1203,
             "can1TxRejected": 2,
             "can1BusOffCount": 0,
@@ -87,7 +89,7 @@ def snapshot_fast():
             "can1RxPin": 21,
             "can2Name": "CHASSIS",
             "can2State": 1,
-            "can2RxCount": 88210,
+            "can2RxCount": 88210 + int((time.time() - START_TIME) * 1100),
             "can2TxAccepted": 640,
             "can2TxRejected": 0,
             "can2BusOffCount": 1,
@@ -99,7 +101,7 @@ def snapshot_fast():
             "can2RxPin": 23,
             "can3Name": "PARTY",
             "can3State": 1 if STATE["can_alive"] else 2,
-            "can3RxCount": 33210,
+            "can3RxCount": 33210 + (int((time.time() - START_TIME) * 400) if STATE["can_alive"] else 0),
             "can3TxAccepted": 88,
             "can3TxRejected": 1,
             "can3BusOffCount": 0,

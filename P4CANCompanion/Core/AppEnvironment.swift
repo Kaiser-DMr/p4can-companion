@@ -295,6 +295,11 @@ final class AppEnvironment {
     @ObservationIgnored private var liveActivityOfflineSince: Date?
     /// 上次推送给实时活动的状态：相同则不再调用 `Activity.update`。
     @ObservationIgnored private var lastLiveActivityState: CanActivityAttributes.ContentState?
+    /// 上次计算收帧速率时的各总线收帧计数与时间。
+    @ObservationIgnored private var lastRxSample: (at: Date, counts: [Int: Int64])?
+    @ObservationIgnored private var lastRxRates: [Int: Int] = [:]
+    /// 上次真正推送给实时活动的时间（数值类字段节流用）。
+    @ObservationIgnored private var lastLiveActivityPushAt: Date?
     /// 上次写缓存的时间（节流用）。
     @ObservationIgnored private var lastCacheWriteAt: Date?
     /// 上次写入包含的端点数量（新端点出现时立刻补写）。
@@ -430,6 +435,9 @@ final class AppEnvironment {
         DeviceRoute.family = .unknown
         mergedStats = [:]
         canBuses = []
+        // 换设备后收帧计数从头开始，旧基准会算出错误的帧率
+        lastRxSample = nil
+        lastRxRates = [:]
         trendSamples = []
         endpointPayloads = [:]
         endpointErrors = [:]
@@ -817,14 +825,19 @@ final class AppEnvironment {
     }
 
     private func activityState() -> CanActivityAttributes.ContentState {
+        let now = Date()
+        let rates = rxRates(at: now)
         let buses = canBuses.map { bus in
             CanBusActivityState(
                 name: bus.displayName,
                 online: bus.isOnline,
-                detail: bus.rxCount.map { "收 \($0) 帧" } ?? bus.stateText
+                detail: bus.stateText,
+                shortName: bus.codeName,
+                rxPerSecond: rates[bus.index]
             )
         }
         let gear = group("r79")["gearName"]?.stringValue ?? "—"
+        let nag = group("nag")
         return CanActivityAttributes.ContentState(
             buses: buses,
             nagEnabled: nagConfig?["enabled"]?.boolValue ?? false,
@@ -834,8 +847,56 @@ final class AppEnvironment {
                 ?? false,
             gear: gear,
             vehicleModel: profileName,
-            updatedAt: Date()
+            updatedAt: now,
+            vehicleArtwork: activityArtwork(),
+            apActive: nag["apActive"]?.boolValue,
+            noaActive: group("blink")["noaActive"]?.boolValue,
+            torque: nag["torque"]?.doubleValue.map { ($0 * 10).rounded() / 10 },
+            batterySoc: ["batterySoc", "soc", "batteryLevel", "stateOfCharge"].lazy
+                .compactMap { self.stat($0)?.doubleValue }.first.map { $0.rounded() },
+            rangeKm: ["rangeKm", "batteryRangeKm", "ratedRangeKm", "idealRangeKm"].lazy
+                .compactMap { self.stat($0)?.doubleValue }.first.map { $0.rounded() },
+            english: L10n.isEnglish
         )
+    }
+
+    /// 需要立即反映到锁屏的字段：挡位、车型、总线在线、功能开关、AP / NOA、语言。
+    private static func keyFields(_ state: CanActivityAttributes.ContentState) -> [String] {
+        [state.gear, state.vehicleModel ?? "", state.vehicleArtwork ?? "",
+         state.buses.map { "\($0.name)\($0.online)" }.joined(),
+         "\(state.nagEnabled)\(state.blinkEnabled)\(state.tlsscEnabled)",
+         "\(String(describing: state.apActive))\(String(describing: state.noaActive))\(String(describing: state.english))"]
+    }
+
+    /// 实时活动里的车型侧视图：优先用户在「车辆外观」中指定的车型，否则按设备车型。
+    private func activityArtwork() -> String {
+        let chosen = UserDefaults.standard.string(forKey: VehicleAppearanceKeys.generation) ?? ""
+        let style = chosen.isEmpty
+            ? VehicleBodyStyle.resolve(profileID: profileID, name: profileName)
+            : VehicleBodyStyle(generationID: chosen)
+        return style.assetName
+    }
+
+    /// 各总线每秒收帧数：两次采样间隔不足 1 s 时沿用上次结果的计算基准；数值按量级取整，减少无意义的推送。
+    private func rxRates(at now: Date) -> [Int: Int] {
+        var counts: [Int: Int64] = [:]
+        for bus in canBuses { if let rx = bus.rxCount { counts[bus.index] = rx } }
+        guard let last = lastRxSample else {
+            lastRxSample = (now, counts)
+            return [:]
+        }
+        let elapsed = now.timeIntervalSince(last.at)
+        guard elapsed >= 1 else { return lastRxRates }
+        lastRxSample = (now, counts)
+        var rates: [Int: Int] = [:]
+        for (index, rx) in counts {
+            guard let previous = last.counts[index], rx >= previous else { continue }
+            let perSecond = Double(rx - previous) / elapsed
+            let step = perSecond >= 1000 ? 100.0 : (perSecond >= 100 ? 10.0 : 1.0)
+            rates[index] = Int((perSecond / step).rounded() * step)
+        }
+        lastRxRates = rates
+        return rates
     }
 
     /// 已开启时同步内容；首次联网时自动拉起活动（带 10s 冷却避免失败重试风暴）。
@@ -855,18 +916,24 @@ final class AppEnvironment {
         let state = activityState()
         guard !state.buses.isEmpty else { return }
         if liveActivity.isActive {
-            // updatedAt 每拍都变，比较时排除；内容相同就不再跨进程推送，
-            // 但每 60 s 至少推一次，避免触发 5 分钟的陈旧提示。
-            if let last = lastLiveActivityState {
-                var comparable = state
-                comparable.updatedAt = last.updatedAt
-                if comparable == last, state.updatedAt.timeIntervalSince(last.updatedAt) < 60 { return }
+            if let last = lastLiveActivityState, let pushedAt = lastLiveActivityPushAt {
+                let elapsed = state.updatedAt.timeIntervalSince(pushedAt)
+                if Self.keyFields(state) == Self.keyFields(last) {
+                    // 挡位、在线、开关都没变：数值（帧率、扭矩、电量）最多每 5 s 推一次；
+                    // 内容完全相同时每 60 s 心跳一次，避免触发 5 分钟的陈旧提示。
+                    var comparable = state
+                    comparable.updatedAt = last.updatedAt
+                    if comparable == last, elapsed < 60 { return }
+                    if elapsed < 5 { return }
+                }
             }
             lastLiveActivityState = state
+            lastLiveActivityPushAt = state.updatedAt
             liveActivity.update(state: state)
         } else if lastLiveActivityAttempt.map({ Date().timeIntervalSince($0) > 10 }) ?? true {
             lastLiveActivityAttempt = Date()
             lastLiveActivityState = state
+            lastLiveActivityPushAt = state.updatedAt
             Task { await liveActivity.start(deviceName: host, state: state) }
         }
     }
