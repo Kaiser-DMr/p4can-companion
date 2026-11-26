@@ -25,11 +25,11 @@ final class AppEnvironment {
 
     // MARK: - 连接状态
 
-private(set) var phase: Phase = .idle
-private(set) var lastUpdated: Date?
-private(set) var host: String
-private(set) var isBusy = false
-private(set) var otaUploading = false
+    private(set) var phase: Phase = .idle
+    private(set) var lastUpdated: Date?
+    private(set) var host: String
+    private(set) var isBusy = false
+    private(set) var otaUploading = false
     /// OTA 上传阶段：上传 → 等待设备重启确认 → 完成 / 失败。
     enum OTAUploadPhase: Equatable {
         case idle
@@ -38,18 +38,18 @@ private(set) var otaUploading = false
         case done
         case failed
     }
-private(set) var otaUploadPhase: OTAUploadPhase = .idle
+    private(set) var otaUploadPhase: OTAUploadPhase = .idle
     /// 已发送 / 总字节（UI 进度条）。
-private(set) var otaUploadSent = 0
-private(set) var otaUploadTotal = 0
-var toast: P4Toast?
+    private(set) var otaUploadSent = 0
+    private(set) var otaUploadTotal = 0
+    var toast: P4Toast?
 
     // MARK: - 离线缓存
 
     /// 当前展示的是否为磁盘缓存（连不上设备时读上一次成功的数据）。
-private(set) var isShowingCachedData = false
+    private(set) var isShowingCachedData = false
     /// 缓存写入时间（用于界面上的「数据时间」）。
-private(set) var cachedAt: Date?
+    private(set) var cachedAt: Date?
 
     /// 是否有任何可渲染的数据（实时或缓存），用于决定首页显示真实内容还是「等待设备」。
     var hasRenderableData: Bool {
@@ -61,35 +61,35 @@ private(set) var cachedAt: Date?
     // MARK: - 快照分组（网页同源）
 
     /// `snapshot?groups=home-fast` 的 `fast` 对象
-private(set) var fastGroups: [String: P4JSON] = [:]
+    private(set) var fastGroups: [String: P4JSON] = [:]
     /// 附带 `&slow=1` 时的 `slow` 对象
-private(set) var slowGroups: [String: P4JSON] = [:]
+    private(set) var slowGroups: [String: P4JSON] = [:]
 
     // MARK: - 慢变端点
 
-private(set) var profileStatus: P4JSON?
-private(set) var featuresStatus: P4JSON?
-private(set) var wifiStatus: P4JSON?
-private(set) var otaStatus: P4JSON?
-private(set) var systemStats: P4JSON?
-private(set) var s3xyStats: P4JSON?
-private(set) var dasStats: P4JSON?
+    private(set) var profileStatus: P4JSON?
+    private(set) var featuresStatus: P4JSON?
+    private(set) var wifiStatus: P4JSON?
+    private(set) var otaStatus: P4JSON?
+    private(set) var systemStats: P4JSON?
+    private(set) var s3xyStats: P4JSON?
+    private(set) var dasStats: P4JSON?
     /// 完整 NAG 配置（含 enabled / method / mode），用于首页快捷开关。
-private(set) var nagConfig: P4JSON?
+    private(set) var nagConfig: P4JSON?
     /// 固件是否提供前后爆闪接口（v3.35.2 官方固件已移除这两个端点）。
     /// nil = 尚未探测或离线不确定；false 时功能列表隐藏两个灯光入口。
-private(set) var strobeSupported: Bool?
+    private(set) var strobeSupported: Bool?
     /// 固件是否带 v3.35.2 新功能（预热 / FSD / Service Mode / SmartShift / R79 时序）。
     /// nil = 尚未探测；只有确认存在时才展示这些入口，避免在 v3.29.3 上留下死模块。
-private(set) var newFeaturesSupported: Bool?
+    private(set) var newFeaturesSupported: Bool?
     /// 固件是否带 v3.35.3 的 Lighting Features（AP 强制远光 / 动态刹车灯）。
-private(set) var lightingSupported: Bool?
+    private(set) var lightingSupported: Bool?
     /// 固件是否带 v3.35.6 功能（Developer Test / 召唤版本）。
-private(set) var v356Supported: Bool?
+    private(set) var v356Supported: Bool?
     /// 固件是否支持网页语言切换（3.35.5 起；3.35.8 仍保留，独立探测）。
-private(set) var dashboardLanguageSupported: Bool?
+    private(set) var dashboardLanguageSupported: Bool?
     /// 当前设备家族（P4-CAN / T2CAN）；由 system/stats 的字段结构判断。
-private(set) var deviceFamily: DeviceFamily = .unknown
+    private(set) var deviceFamily: DeviceFamily = .unknown
     /// 设备显示名，用于界面上的「重启 P4-CAN / T2CAN」等文案。
     var deviceName: String { deviceFamily.displayName }
     /// 上次探测爆闪接口的时间：为 false 时每分钟复探一次，方便重新刷回带爆闪的固件后自动恢复入口。
@@ -100,17 +100,17 @@ private(set) var deviceFamily: DeviceFamily = .unknown
     @ObservationIgnored private var lastLanguageProbe: Date?
 
     /// 三路 CAN 总线（CAN 1 BODY / CAN 2 CHASSIS / CAN 3 PARTY）。
-private(set) var canBuses: [CanBusSnapshot] = []
+    private(set) var canBuses: [CanBusSnapshot] = []
     /// 全部字段扁平合并（供通用键值展示与搜索）。
-private(set) var mergedStats: [String: P4JSON] = [:]
-    /// 扭矩趋势采样（Swift Charts 使用，约保留 120 个点 ≈ 3 分钟）。
-private(set) var trendSamples: [TrendSample] = []
+    private(set) var mergedStats: [String: P4JSON] = [:]
+    /// 扭矩趋势采样（Swift Charts 使用，180 s 时间窗，最多 1 s 一点）。
+    private(set) var trendSamples: [TrendSample] = []
     /// 是否开启锁屏 / 灵动岛实时活动（持久化）。
-private(set) var liveActivityEnabled = false
+    private(set) var liveActivityEnabled = false
     /// 蓝牙标签是否显示：与网页一致，由固件 S3XY 功能闸门决定（功能页的 S3XY 开关）。
     /// 「蓝牙」标签是否显示：与 BLE 总开关解耦。
     /// 开关关闭只影响连接，不应把唯一的重开入口一起删掉。
-private(set) var showsS3XYTab = UserDefaults.standard.bool(forKey: "p4can.tab.s3xy")
+    private(set) var showsS3XYTab = UserDefaults.standard.bool(forKey: "p4can.tab.s3xy")
 
     var isS3XYEnabled: Bool {
         #if DEBUG
@@ -125,11 +125,11 @@ private(set) var showsS3XYTab = UserDefaults.standard.bool(forKey: "p4can.tab.s3
     /// 语言变化时刷新标签栏标题等 VC 级文案。
     @ObservationIgnored var onLanguageChange: (@MainActor () -> Void)?
     /// 语言（持久化；system = 跟随系统）
-private(set) var language: AppLanguage = .system
+    private(set) var language: AppLanguage = .system
     /// 界面外观（持久化；与网页 Settings → Appearance 一致）
-private(set) var appearance: AppAppearance = .system
+    private(set) var appearance: AppAppearance = .system
     /// 主页刷新间隔（毫秒，250 / 500 / 1000；与网页 Settings → Data Refresh Interval 一致）
-private(set) var pollIntervalMs: Int = 500
+    private(set) var pollIntervalMs: Int = 500
     /// 根窗口注入：外观变化时同步 overrideUserInterfaceStyle（含 UIKit 侧页面）。
     @ObservationIgnored var onAppearanceChange: (@MainActor () -> Void)?
     @ObservationIgnored private var lastS3XYVisible = false
@@ -146,41 +146,67 @@ private(set) var pollIntervalMs: Int = 500
 
     // MARK: - 数据浏览
 
-private(set) var endpointPayloads: [String: P4JSON] = [:]
-private(set) var endpointErrors: [String: String] = [:]
-private(set) var endpointsUpdatedAt: Date?
-private(set) var isScanningEndpoints = false
+    private(set) var endpointPayloads: [String: P4JSON] = [:]
+    /// 「全部数据」批量扫描的失败原因；页面轮询的失败记在各自的端点槽位里。
+    private(set) var endpointErrors: [String: String] = [:]
+    private(set) var endpointsUpdatedAt: Date?
+    private(set) var isScanningEndpoints = false
 
     // MARK: - 端点级共享快照
+
+    /// 单个端点的共享状态：每个路径一个可观察对象。
+    ///
+    /// 页面只在自己读取的端点变化时重绘；详情页每 0.5–1 s 轮询自己的端点时，
+    /// 不会牵连蓝牙页、诊断页等读取其它端点的页面。
+    @MainActor
+    @Observable
+    final class EndpointSlot {
+        fileprivate(set) var value: P4JSON?
+        fileprivate(set) var fetchedAt: Date?
+        fileprivate(set) var error: String?
+
+        fileprivate func clear() {
+            value = nil
+            fetchedAt = nil
+            error = nil
+        }
+    }
 
     /// 页面共用的端点数据：同一路径只保留最新一次成功回包与时间戳。
     ///
     /// 以前详情页、灯光两页、功能列表各自持有 `stats` 并各自轮询同一端点，
     /// 同一份数据有多个真相源：A 页写入成功后 B 页要等下一拍，离线时各页新旧不一。
     /// 现在统一走这里，页面只读，不再自己存。
-private(set) var endpointValues: [String: P4JSON] = [:]
-private(set) var endpointFetchedAt: [String: Date] = [:]
+    @ObservationIgnored private var endpointSlots: [String: EndpointSlot] = [:]
     /// 同一路径正在请求中：并发调用复用这次请求，避免多页同时挂载时重复打设备。
     @ObservationIgnored private var endpointInFlight: Set<String> = []
 
+    private func endpointSlot(_ path: String) -> EndpointSlot {
+        if let slot = endpointSlots[path] { return slot }
+        let slot = EndpointSlot()
+        endpointSlots[path] = slot
+        return slot
+    }
+
     /// 端点最新一次成功回包（nil = 从未成功）。
-    func endpointValue(_ path: String) -> P4JSON? { endpointValues[path] }
+    func endpointValue(_ path: String) -> P4JSON? { endpointSlot(path).value }
 
     /// 端点数据年龄（秒）；nil 表示从未成功。
     func endpointAge(_ path: String) -> TimeInterval? {
-        guard let at = endpointFetchedAt[path] else { return nil }
+        guard let at = endpointSlot(path).fetchedAt else { return nil }
         return Date().timeIntervalSince(at)
     }
 
     /// 端点最近一次失败原因（成功后清除）。
-    func endpointError(_ path: String) -> String? { endpointErrors[path] }
+    func endpointError(_ path: String) -> String? { endpointSlot(path).error }
 
     /// 写入共享缓存（写接口的回包本身就是最新状态，直接落进来，
     /// 其它页面下一拍就能看到，不必等各自轮询）。
-    func storeEndpoint(_ path: String, _ value: P4JSON) {
-        if endpointValues[path] != value { endpointValues[path] = value }
-        endpointFetchedAt[path] = Date()
-        if endpointErrors[path] != nil { endpointErrors[path] = nil }
+    func storeEndpoint(_ path: String, _ value: P4JSON, at date: Date = Date()) {
+        let slot = endpointSlot(path)
+        if slot.value != value { slot.value = value }
+        slot.fetchedAt = date
+        if slot.error != nil { slot.error = nil }
     }
 
     /// 读取一个端点；`maxAge` 内的缓存直接复用。
@@ -189,11 +215,12 @@ private(set) var endpointFetchedAt: [String: Date] = [:]
     /// - 同一路径已有请求在飞：不重复发，直接返回当前缓存，等下一拍再取。
     @discardableResult
     func refreshEndpoint(_ path: String, maxAge: TimeInterval = 0) async -> P4JSON? {
-        if maxAge > 0, let at = endpointFetchedAt[path],
+        let slot = endpointSlot(path)
+        if maxAge > 0, let at = slot.fetchedAt,
            Date().timeIntervalSince(at) <= maxAge {
-            return endpointValues[path]
+            return slot.value
         }
-        guard !endpointInFlight.contains(path) else { return endpointValues[path] }
+        guard !endpointInFlight.contains(path) else { return slot.value }
         endpointInFlight.insert(path)
         let currentClient = client
         defer { if isCurrent(currentClient) { endpointInFlight.remove(path) } }
@@ -204,7 +231,8 @@ private(set) var endpointFetchedAt: [String: Date] = [:]
             return value
         } catch {
             guard isCurrent(currentClient) else { return nil }
-            endpointErrors[path] = AppEnvironment.friendly(error)
+            let message = AppEnvironment.friendly(error)
+            if slot.error != message { slot.error = message }
             return nil
         }
     }
@@ -405,8 +433,8 @@ private(set) var endpointFetchedAt: [String: Date] = [:]
         trendSamples = []
         endpointPayloads = [:]
         endpointErrors = [:]
-        endpointValues = [:]
-        endpointFetchedAt = [:]
+        // 页面可能正观察着这些槽位：逐个清空而不是换掉字典，否则页面看不到变化。
+        for slot in endpointSlots.values { slot.clear() }
         endpointInFlight = []
         endpointsUpdatedAt = nil
         isShowingCachedData = false
@@ -551,7 +579,7 @@ private(set) var endpointFetchedAt: [String: Date] = [:]
         } else {
             let reason = await Self.probeReason(client: currentClient)
             guard isCurrent(currentClient) else { return }
-            phase = .offline(reason: reason)
+            setIfChanged(\.phase, .offline(reason: reason))
             restoreCacheIfNeeded()
         }
     }
@@ -907,17 +935,16 @@ private(set) var endpointFetchedAt: [String: Date] = [:]
 
         endpointPayloads = payloads
         endpointErrors = errors
-        endpointsUpdatedAt = Date()
-        // 扫描结果也是「刚读到的真相」：同步进共享缓存，页面切过去不用再等一轮。
         let scannedAt = Date()
+        endpointsUpdatedAt = scannedAt
+        // 扫描结果也是「刚读到的真相」：同步进共享缓存，页面切过去不用再等一轮。
         for (path, value) in payloads {
-            endpointValues[path] = value
-            endpointFetchedAt[path] = scannedAt
+            storeEndpoint(path, value, at: scannedAt)
         }
 
         if let snapshot = payloads["/api/snapshot?groups=home-fast&slow=1"] {
-            if let fast = snapshot["fast"]?.objectValue { fastGroups = fast }
-            if let slow = snapshot["slow"]?.objectValue { slowGroups = slow }
+            if let fast = snapshot["fast"]?.objectValue { setIfChanged(\.fastGroups, fast) }
+            if let slow = snapshot["slow"]?.objectValue { setIfChanged(\.slowGroups, slow) }
         }
         if let value = payloads[P4Route.systemStats] { systemStats = value }
         if let value = payloads[P4Route.profileStatus] { profileStatus = value }
