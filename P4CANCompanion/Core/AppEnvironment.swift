@@ -589,6 +589,8 @@ final class AppEnvironment {
             guard isCurrent(currentClient) else { return }
             setIfChanged(\.phase, .offline(reason: reason))
             restoreCacheIfNeeded()
+            // 离线时没有新快照触发 rebuildDerived，需要在每轮失败后推进实时活动的离线处理
+            refreshLiveActivity()
         }
     }
 
@@ -902,7 +904,22 @@ final class AppEnvironment {
         guard liveActivityEnabled else { return }
         // 离线：不要继续显示离线前的绿勾。持续 1 分钟后结束活动，恢复在线会自动重建。
         if !isOnline {
-            if liveActivityOfflineSince == nil { liveActivityOfflineSince = Date() }
+            if liveActivityOfflineSince == nil {
+                let now = Date()
+                liveActivityOfflineSince = now
+                if liveActivity.isActive, var state = lastLiveActivityState {
+                    state.buses = state.buses.map { bus in
+                        var bus = bus
+                        bus.online = false
+                        bus.rxPerSecond = nil
+                        return bus
+                    }
+                    state.updatedAt = now
+                    lastLiveActivityState = state
+                    lastLiveActivityPushAt = now
+                    liveActivity.update(state: state)
+                }
+            }
             if let since = liveActivityOfflineSince,
                Date().timeIntervalSince(since) > 60,
                liveActivity.isActive {
