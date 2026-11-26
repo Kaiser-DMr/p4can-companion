@@ -1142,6 +1142,9 @@ final class AppEnvironment {
     var isBluetoothEnabled: Bool { s3xyStats?["bluetoothEnabled"]?.boolValue ?? false }
     var isSetupMode: Bool { profileStatus?["setupMode"]?.boolValue ?? false }
     var profileName: String? { profileStatus?["profileName"]?.stringValue }
+
+    /// 车型编号：1 YL / 2 YJ / 3 Y / 4 3H / 5 3 / 6 S·X（T2CAN 才有 6）。
+    var profileID: Int? { profileStatus?["profile"]?.intValue.map { Int($0) } }
     var topologyName: String? { profileStatus?["topologyName"]?.stringValue }
 
     /// 车型能力位（profile/status 与 features/status 共用命名）。

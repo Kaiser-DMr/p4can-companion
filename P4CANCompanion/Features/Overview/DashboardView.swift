@@ -200,17 +200,15 @@ private struct DashboardHeroCard: View {
                 }
                 Spacer(minLength: Theme.spacing(1))
                 if !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: "car.side.fill")
-                        .font(.system(size: 44, weight: .regular))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [tone.color, tone.color.opacity(0.45)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    VehicleSilhouette(
+                        style: VehicleBodyStyle.resolve(
+                            profileID: environment.profileID,
+                            name: environment.profileName
                         )
-                        .padding(.top, 2)
-                        .accessibilityHidden(true)
+                    )
+                    .frame(width: 128, height: 52)
+                    .padding(.top, 6)
+                    .accessibilityHidden(true)
                 }
             }
 
