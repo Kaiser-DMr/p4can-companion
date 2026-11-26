@@ -191,7 +191,8 @@ private struct DashboardHeroCard: View {
                     Text(environment.profileName ?? environment.deviceName)
                         .font(.system(.title, design: .rounded).weight(.bold))
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
-                        .minimumScaleFactor(0.7)
+                        // 连接后右侧放车图，长车型名（如 Model Y Juniper (T2)）需要缩得更小才能完整显示
+                        .minimumScaleFactor(0.55)
                         .padding(.top, 4)
                     Text(heroSubtitle)
                         .font(.caption)
@@ -473,19 +474,9 @@ private struct DashboardBatteryCard: View {
         }
     }
 
-    private var batterySoc: Double? {
-        for key in ["batterySoc", "soc", "batteryLevel", "stateOfCharge"] {
-            if let value = environment.stat(key)?.doubleValue { return value }
-        }
-        return nil
-    }
+    private var batterySoc: Double? { environment.batterySoc }
 
-    private var batteryRangeKm: Double? {
-        for key in ["rangeKm", "batteryRangeKm", "ratedRangeKm", "idealRangeKm"] {
-            if let value = environment.stat(key)?.doubleValue { return value }
-        }
-        return nil
-    }
+    private var batteryRangeKm: Double? { environment.batteryRangeKm }
 
     private func socTone(_ fraction: Double) -> Color {
         if fraction <= 0.15 { return .p4Err }
