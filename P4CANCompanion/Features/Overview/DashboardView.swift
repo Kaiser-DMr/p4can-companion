@@ -200,14 +200,15 @@ private struct DashboardHeroCard: View {
                 }
                 Spacer(minLength: Theme.spacing(1))
                 if !dynamicTypeSize.isAccessibilitySize {
-                    VehicleSilhouette(
-                        style: VehicleBodyStyle.resolve(
-                            profileID: environment.profileID,
-                            name: environment.profileName
-                        )
-                    )
-                    .frame(width: 128, height: 52)
-                    .padding(.top, 6)
+                    Image(VehicleBodyStyle.resolve(
+                        profileID: environment.profileID,
+                        name: environment.profileName
+                    ).assetName)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 138, height: 58)
+                    .padding(.top, 2)
                     .accessibilityHidden(true)
                 }
             }

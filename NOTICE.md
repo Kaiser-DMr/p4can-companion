@@ -21,6 +21,16 @@ This repository contains or derives from the following projects:
 - Components under `P4CANCompanion/SwiftPieces`
 - License: MIT with Commons Clause (original copyright headers retained in each file).
 
+## Vehicle imagery
+
+- Tesla Model 3 / Model Y / Model X side-view renders: StickPNG
+  (https://www.stickpng.com/cat/transport/cars/tesla), free for personal use.
+- Tesla Model S side-view render: SeekPNG (https://www.seekpng.com/), personal use.
+- Tesla, Model 3, Model Y, Model S and Model X are trademarks of Tesla, Inc.
+  This project is not affiliated with, endorsed by, or sponsored by Tesla.
+- These images are bundled for personal, non-commercial use only.
+  Remove them before any commercial distribution.
+
 ## Tesla / vehicle disclaimer
 
 This project is not affiliated with, endorsed by, or supported by Tesla, Inc.
