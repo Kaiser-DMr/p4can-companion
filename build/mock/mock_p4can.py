@@ -1135,6 +1135,32 @@ if T2_DEVICE:
     }
 
 
+# ── 车型档案覆盖：P4CAN_PROFILE=yl|yj|y|3h|3|sx ─────────────────
+# 用真实档案编号联调首页车型图，避免出现「图是 3、标题还是 Y」的假象。
+PROFILE_PRESETS = {
+    "yl": (1, "Model Y L", 1),
+    "yj": (2, "Model Y (Juniper)", 2),
+    "y": (3, "Model Y (Legacy)", 2),
+    "3h": (4, "Model 3 Highland", 2),
+    "3": (5, "Model 3 (Legacy)", 2),
+    "sx": (6, "Model S/X MCU2 HW3", 1),
+}
+_profile_override = os.environ.get("P4CAN_PROFILE", "").lower()
+if _profile_override in PROFILE_PRESETS and not T2_DEVICE:
+    _pid, _pname, _ptopo = PROFILE_PRESETS[_profile_override]
+    PROFILE.update({
+        "profile": _pid,
+        "profileName": _pname,
+        "topology": _ptopo,
+        "topologyName": "PARTY + VH" if _ptopo == 1 else "BODY + CHASSIS + PARTY",
+        "canA": "PARTY" if _ptopo == 1 else "BODY",
+        "canB": "VH" if _ptopo == 1 else "CHASSIS",
+    })
+    if _ptopo == 1:
+        PROFILE.pop("canExtra", None)
+    else:
+        PROFILE["canExtra"] = "PARTY"
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
