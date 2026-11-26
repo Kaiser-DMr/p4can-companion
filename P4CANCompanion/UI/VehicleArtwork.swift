@@ -45,11 +45,12 @@ enum VehicleBodyStyle {
         return .model3
     }
 
-    /// 资源名。Model Y L 与 Model Y 外观几乎一致，复用同一张图。
+    /// 资源名。五种车款都有独立素材，不再复用。
     var assetName: String {
         switch self {
         case .model3: return "VehicleModel3"
-        case .modelY, .modelYL: return "VehicleModelY"
+        case .modelY: return "VehicleModelY"
+        case .modelYL: return "VehicleModelYL"
         case .modelS: return "VehicleModelS"
         case .modelX: return "VehicleModelX"
         }
