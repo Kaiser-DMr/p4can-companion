@@ -4,9 +4,10 @@ import SwiftUI
 /// 不再使用通用的 `car.side.fill`，也不再手绘近似轮廓。
 ///
 /// profile 编号：1 Model Y L、2 Model Y Juniper、3 Model Y（旧款）、
-/// 4 Model 3 Highland、5 Model 3、6 Model S/X。
+/// 4 Model 3 Highland（新款）、5 Model 3（旧款）、6 Model S/X。
 enum VehicleBodyStyle {
     case model3
+    case model3Highland
     case modelY
     case modelYJuniper
     case modelYL
@@ -20,6 +21,7 @@ enum VehicleBodyStyle {
         if let forced = ProcessInfo.processInfo.environment["P4CAN_CAR_STYLE"]?.lowercased() {
             switch forced {
             case "3", "model3": return .model3
+            case "3h", "highland", "model3highland": return .model3Highland
             case "y", "modely": return .modelY
             case "yj", "juniper", "modelyjuniper": return .modelYJuniper
             case "yl", "modelyl": return .modelYL
@@ -34,7 +36,8 @@ enum VehicleBodyStyle {
         case 1: return .modelYL
         case 2: return .modelYJuniper
         case 3: return .modelY
-        case 4, 5: return .model3
+        case 4: return .model3Highland
+        case 5: return .model3
         case 6: return .modelS
         default: break
         }
@@ -43,6 +46,7 @@ enum VehicleBodyStyle {
         if text.contains("model y l") || text.contains(" yl") { return .modelYL }
         if text.contains("juniper") { return .modelYJuniper }
         if text.contains("model y") { return .modelY }
+        if text.contains("highland") { return .model3Highland }
         if text.contains("model 3") { return .model3 }
         if text.contains("model x") { return .modelX }
         if text.contains("model s") || text.contains("s/x") { return .modelS }
@@ -53,6 +57,7 @@ enum VehicleBodyStyle {
     var assetName: String {
         switch self {
         case .model3: return "VehicleModel3"
+        case .model3Highland: return "VehicleModel3Highland"
         case .modelY: return "VehicleModelY"
         case .modelYJuniper: return "VehicleModelYJuniper"
         case .modelYL: return "VehicleModelYL"
