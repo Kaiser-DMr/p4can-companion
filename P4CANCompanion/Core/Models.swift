@@ -3,8 +3,8 @@ import Foundation
 /// 单路 CAN 总线（固件 p4CanWriteStatus：can1*/can2*/can3*）。
 ///
 /// 固件固定三路：CAN 1 BODY（TWAI0）、CAN 2 CHASSIS（TWAI1）、CAN 3 PARTY（TWAI2）。
-struct CanBusSnapshot: Identifiable, Sendable {
-    struct Field: Identifiable, Sendable {
+struct CanBusSnapshot: Identifiable, Sendable, Equatable {
+    struct Field: Identifiable, Sendable, Equatable {
         let key: String
         let value: P4JSON
         var id: String { key }

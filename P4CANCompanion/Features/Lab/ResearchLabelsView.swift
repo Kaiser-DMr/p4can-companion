@@ -5,7 +5,7 @@ import SwiftUI
 /// `POST /api/researchcapture/labels?slot=A&label=…`，标签 1–63 UTF-8 字节；
 /// 标签只影响 CSV 的 segment 注释，不改变捕获内容。
 struct ResearchLabelsView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
 
     private let slots = ["A", "B", "C", "D"]

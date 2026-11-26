@@ -9,7 +9,7 @@ import SwiftUI
 /// - 扫描结果来自 stats 的 `scanResults[]`（含 registered 标记）；
 /// - 蓝牙总开关为独立端点。
 struct BluetoothView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var renaming: S3XYDevice?

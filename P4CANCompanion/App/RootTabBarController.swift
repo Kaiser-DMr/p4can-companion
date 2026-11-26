@@ -156,7 +156,7 @@ final class RootTabBarController: UITabBarController {
         accessibilityLabel: String,
         tag: Int
     ) -> UIViewController {
-        let controller = UIHostingController(rootView: rootView.environmentObject(environment))
+        let controller = UIHostingController(rootView: rootView.environment(environment))
         // 宿主默认背景是纯白；页面底色铺不满时（转场、安全区、键盘收起）会从顶部漏出白条。
         controller.view.backgroundColor = .systemGroupedBackground
         let item = UITabBarItem(

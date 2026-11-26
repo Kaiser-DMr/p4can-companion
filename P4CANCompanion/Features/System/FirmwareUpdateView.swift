@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 ///
 /// 只接受「应用升级版」`.ino.bin`；`.ino.merged.bin` 是串口全量镜像，不能用于 OTA。
 struct FirmwareUpdateView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var pickedURL: URL?
     @State private var showsImporter = false
     @State private var confirmsUpload = false

@@ -5,7 +5,7 @@ import SwiftUI
 /// 与固件契约：所有写操作是 `POST path?key=value`；部分接口要求同时提交兄弟参数，
 /// 由 `FeatureControl.Kind` 的 `extra` 声明，值取自当前 stats。
 struct FeatureDetailView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     let module: FeatureModule
 

@@ -6,7 +6,7 @@ import SwiftUI
 /// `POST /api/profile/select?profile=&topology=&turn=`，成功后设备**立即重启**，
 /// 在 CAN 初始化前应用新车型；错误会返回 400/409/503 的具体原因。
 struct VehicleProfileChangeView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
 
     /// 固件 `VehicleModel` 枚举（vehicle_profile.h）

@@ -3,6 +3,8 @@ import SwiftUI
 // MARK: - 卡片表面
 
 /// 卡片底：浅色模式靠极轻阴影从灰底上浮起，深色模式阴影不可见，改用 0.5pt 发丝描边分层。
+///
+/// 阴影只加在底板形状上：加在整块内容上时，每次内容重绘都要把文字、图表一起离屏合成再模糊。
 struct CardSurface: ViewModifier {
     var cornerRadius: CGFloat = Theme.Radius.card
 
@@ -11,16 +13,19 @@ struct CardSurface: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
-            .background(shape.fill(Color.p4Card))
+            .background {
+                if colorScheme == .dark {
+                    shape.fill(Color.p4Card)
+                } else {
+                    shape.fill(Color.p4Card)
+                        .shadow(color: .black.opacity(0.045), radius: 10, x: 0, y: 3)
+                }
+            }
             .overlay(
                 shape.strokeBorder(
                     Color.primary.opacity(colorScheme == .dark ? 0.10 : 0.04),
                     lineWidth: 0.5
                 )
-            )
-            .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0 : 0.045),
-                radius: 10, x: 0, y: 3
             )
     }
 }
@@ -338,7 +343,7 @@ struct SkeletonRows: View {
 /// 出现时是「材质化」而不是纯淡入（缩放 + 透明度同时进行）；
 /// 打开「降低透明度」时退回实色底，「增强对比度」时补一圈描边保证可读。
 struct ToastOverlay: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

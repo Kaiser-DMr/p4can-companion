@@ -6,7 +6,7 @@ import SwiftUI
 /// 灯光 → 驾驶辅助 → 车身与舒适 → 高级与兼容（实验室模块归「实验室」标签页）。
 /// 每个分组头显示 emoji + 名称 + 数量，搜索时退化为单一「搜索结果」分组。
 struct FeaturesView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     /// 详情页导航栈（DEBUG 下可由 P4CAN_MODULE 直接深链到某个模块）。
     @State private var path: [String] = []

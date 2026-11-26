@@ -9,7 +9,7 @@ import SwiftUI
 ///
 /// 固件对越界 ID 是**静默忽略**，所以这里严格校验，并在写入后回读比对。
 struct NagAdvancedView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     private struct Snapshot {
         var targetId: Int

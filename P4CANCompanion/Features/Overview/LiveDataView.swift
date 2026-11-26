@@ -8,7 +8,7 @@ import SwiftUI
 /// - 支持关键字搜索（如 canA、state、tx）；
 /// - 可开启 3 秒自动刷新，手动下拉亦可刷新。
 struct LiveDataView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     @State private var query = ""
     @State private var autoRefresh = true

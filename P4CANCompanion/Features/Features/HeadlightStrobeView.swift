@@ -11,7 +11,7 @@ import SwiftUI
 /// - `stop`：立即中断并恢复；
 /// - `stats`：active / state / flashesDone / flashesTotal / elapsedMs / totalMs / mode / blockReason。
 struct HeadlightStrobeView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     /// 结束方式（App 侧语义，落盘时映射为固件的 `stopMode` + `durationMs`）。
     private enum Ending: Int, CaseIterable, Identifiable {

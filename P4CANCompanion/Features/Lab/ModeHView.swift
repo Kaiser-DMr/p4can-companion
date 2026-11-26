@@ -5,7 +5,7 @@ import SwiftUI
 /// 与网页契约一致：13 个参数必须**一次提交**到 `/api/nag/h-profile/update`；
 /// 停车行为单独走 `/api/nag/update?modeHStopBehavior=`。
 struct ModeHView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     // 可编辑参数（首次从设备读取，之后不覆盖用户正在调的值）
     @State private var peakMin = 1.0

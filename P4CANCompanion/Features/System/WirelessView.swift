@@ -7,7 +7,7 @@ import SwiftUI
 /// - 设备热点（SoftAP）SSID / 密码
 /// - 清除全部蓝牙数据（危险，会重启设备）
 struct WirelessView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     @State private var bluetoothOn: Bool?
     @State private var autoConnect: Bool?

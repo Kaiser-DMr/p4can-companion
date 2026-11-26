@@ -3,7 +3,7 @@ import UIKit
 
 /// 首次连接引导：分步说明加入设备热点与本地网络权限。
 struct ConnectionGuideView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

@@ -7,7 +7,7 @@ import UIKit
 /// 重启与重置 → 维护（Service Mode）→ 封禁车辆 → App → 数据浏览 → 日志导出 → 快捷指令 → 关于。
 /// 功能开关统一放在「功能」页。
 struct SystemView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     @State private var destructiveAction: ResetAction?
     @State private var dangerToggle: DangerToggle?
@@ -182,7 +182,7 @@ struct SystemView: View {
     }
 }
 
-/// 让确认弹窗里的动作能拿到 environment（SwiftUI 的 enum 无法持有 EnvironmentObject）。
+/// 让确认弹窗里的动作能拿到 environment（SwiftUI 的 enum 无法读取环境值）。
 @MainActor
 final class AppEnvironmentActions {
     static let shared = AppEnvironmentActions()
@@ -198,7 +198,7 @@ final class AppEnvironmentActions {
 // MARK: - 车型卡片
 
 private struct ProfileSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var showsChange = false
 
     private var profile: [String: P4JSON] { environment.profileStatus?.objectValue ?? [:] }
@@ -305,7 +305,7 @@ private struct ProfileSection: View {
             .sheet(isPresented: $showsChange) {
                 NavigationStack {
                     VehicleProfileChangeView()
-                        .environmentObject(environment)
+                        .environment(environment)
                 }
             }
             .task {
@@ -344,7 +344,7 @@ private struct ProfileSection: View {
 // MARK: - 系统
 
 private struct SystemSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Binding var destructiveAction: SystemView.ResetAction?
 
     private var firmware: String {
@@ -547,7 +547,7 @@ private struct SystemSection: View {
 // MARK: - 封禁车辆（危险）
 
 private struct BannedSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @Binding var pending: SystemView.DangerToggle?
 
     private var banned: Bool { environment.featuresStatus?["banned"]?.boolValue ?? false }
@@ -647,7 +647,7 @@ private struct BannedSection: View {
 // MARK: - App 自身设置
 
 private struct AppSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var hostField = ""
     @State private var showsGuide = false
 
@@ -719,7 +719,7 @@ private struct AppSection: View {
 // MARK: - 数据浏览
 
 private struct DataBrowseSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
         Section {
@@ -754,7 +754,7 @@ private struct DataBrowseSection: View {
 // MARK: - 日志导出
 
 private struct LogsSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var exportingLog: P4LogFile?
     @State private var exportingBundle = false
     @State private var exportedURL: URL?
@@ -899,7 +899,7 @@ private struct ShortcutsSection: View {
 }
 
 private struct AboutSection: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var copied = false
 
     var body: some View {

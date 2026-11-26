@@ -8,7 +8,7 @@ import SwiftUI
 /// - `POST /api/rear-fog-strobe/start` → 409 表示已在运行或还没收到整车 0x273
 /// - `POST /api/rear-fog-strobe/stop`
 struct RearFogStrobeView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     /// 与功能列表共用同一份端点缓存。
     private var stats: P4JSON? { environment.endpointValue(P4Route.rearFogStrobeStats) }

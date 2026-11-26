@@ -5,7 +5,7 @@ import SwiftUI
 /// 只展示设备真实上报的字段；缺失就显示「—」，不补默认值。
 /// 恢复动作与网页一致：重置统计、硬重初始化三路 CAN、导出启动抓包。
 struct DiagnosticsView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
 
     /// 与首页 / 数据浏览共用同一份 system stats。
     private var stats: P4JSON? { environment.endpointValue(P4Route.systemStats) }

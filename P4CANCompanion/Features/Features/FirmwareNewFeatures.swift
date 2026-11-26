@@ -42,7 +42,7 @@ private func fwNumber(_ value: P4JSON?, _ digits: Int = 1) -> String {
 // MARK: - 电池预热
 
 struct PreheatView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.preheatStats) }
@@ -420,7 +420,7 @@ private struct TemperatureScale: View {
 // MARK: - FSD 注入
 
 struct FSDInjectionView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.fsdStats) }
@@ -507,7 +507,7 @@ struct FSDInjectionView: View {
 /// T2CAN 的 FSD 在 `/api/lab/fsd/*`，写接口是 `field=enable|profile|pauseOnAp`
 /// 而不是 P4 的 `enabled/values/suspendDuringAp`，所以单独一页。
 struct T2FSDView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.fsdStats) }
@@ -602,7 +602,7 @@ struct T2FSDView: View {
 // MARK: - Service Mode
 
 struct ServiceModeView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var confirmEnter = false
     @State private var intervalDraft = "150"
@@ -828,7 +828,7 @@ struct ServiceModeView: View {
 // MARK: - SmartShift
 
 struct SmartShiftView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var numbers: [String: String] = [:]
     @State private var draftsLoaded = false
@@ -1001,7 +1001,7 @@ struct SmartShiftView: View {
 // MARK: - R79 时序捕获
 
 struct R79TimingView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var shareURL: URL?
     @State private var showShare = false
@@ -1138,7 +1138,7 @@ private struct FWActivityView: UIViewControllerRepresentable {
 // MARK: - CAN GPIO 设置
 
 struct CanGpioView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var draft: [Int] = [20, 21, 22, 23, 26, 27]
     @State private var loaded = false
     @State private var busy = false
@@ -1292,7 +1292,7 @@ struct CanGpioView: View {
 // MARK: - Lighting Features（v3.35.3）
 
 struct LightingFeaturesView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
     @State private var attempted = false
 
@@ -1416,7 +1416,7 @@ struct LightingFeaturesView: View {
 // MARK: - Developer Test（v3.35.6）
 
 struct DeveloperTestView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private let fields = [
@@ -1500,7 +1500,7 @@ struct DeveloperTestView: View {
 // MARK: - 召唤版本标识（v3.35.6）
 
 struct SummonVersionView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.summonVersionStats) }
@@ -1574,7 +1574,7 @@ struct SummonVersionView: View {
 // MARK: - 网页语言（v3.35.6）
 
 struct DashboardLanguageView: View {
-    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(AppEnvironment.self) private var environment
     @State private var busy = false
 
     private var stats: P4JSON? { environment.endpointValue(P4Route.dashboardLanguage) }
