@@ -27,6 +27,8 @@ This repository contains or derives from the following projects:
   (https://www.stickpng.com/cat/transport/cars/tesla), free for personal use.
 - Tesla Model S side-view render: SeekPNG (https://www.seekpng.com/), personal use.
 - Tesla Model Y L, new Model Y (Juniper) and new Model 3 (Highland) renders: provided by the project owner.
+- Status page vehicle renders by trim, paint and wheel: loaded at runtime from Tesla's public configurator
+  image service (static-assets.tesla.cn) and cached on the device; they are not bundled in this repository.
 - Tesla, Model 3, Model Y, Model S and Model X are trademarks of Tesla, Inc.
   This project is not affiliated with, endorsed by, or sponsored by Tesla.
 - These images are bundled for personal, non-commercial use only.

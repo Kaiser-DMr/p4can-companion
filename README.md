@@ -10,7 +10,7 @@
 SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
 ![platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![version](https://img.shields.io/badge/version-3.57%20(78)-green)
+![version](https://img.shields.io/badge/version-3.58%20(79)-green)
 ![license](https://img.shields.io/badge/license-GPL--3.0-orange)
 
 **下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。

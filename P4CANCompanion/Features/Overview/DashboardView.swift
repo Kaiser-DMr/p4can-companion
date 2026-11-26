@@ -198,19 +198,19 @@ private struct DashboardHeroCard: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
                 }
-                Spacer(minLength: Theme.spacing(1))
-                if !dynamicTypeSize.isAccessibilitySize {
-                    Image(VehicleBodyStyle.resolve(
-                        profileID: environment.profileID,
-                        name: environment.profileName
-                    ).assetName)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(width: 138, height: 58)
-                    .padding(.top, 2)
-                    .accessibilityHidden(true)
+                Spacer(minLength: 0)
+                // 连接后车辆图缩小到标题右侧，把版面让给实时数据；未连接时下方展示大图
+                if compactVehicle {
+                    DashboardVehicleImage()
+                        .frame(width: 132, height: 74)
+                        .transition(.opacity)
                 }
+            }
+
+            if !compactVehicle {
+                DashboardVehicleImage()
+                    .frame(height: dynamicTypeSize.isAccessibilitySize ? 140 : 170)
+                    .transition(.opacity)
             }
 
             DashboardHeroChips()
@@ -243,8 +243,12 @@ private struct DashboardHeroCard: View {
         )
         .p4CardSurface()
         .animation(.easeInOut(duration: 0.4), value: tone)
+        .animation(.easeInOut(duration: 0.4), value: compactVehicle)
         .accessibilityElement(children: .combine)
     }
+
+    /// 大字号下标题需要整行宽度，车辆图始终放在下方
+    private var compactVehicle: Bool { environment.isOnline && !dynamicTypeSize.isAccessibilitySize }
 
     private func connectionChip(tone: P4Tone) -> some View {
         let text = DashboardConnection.text(environment)
@@ -280,6 +284,25 @@ private struct DashboardHeroCard: View {
             parts.append(L10n.t("拨杆 \(turn)", "Stalk \(turn)"))
         }
         return parts.isEmpty ? L10n.t("正在读取设备信息…", "Reading device info…") : parts.joined(separator: " · ")
+    }
+}
+
+/// 主视觉卡的车辆图：按设备车型（或用户在「车辆外观」中指定的车型）显示配置器图片，挡位决定视角。
+/// 挡位所在的快照分组每拍都会刷新，这里只把车型外观与视角这两个值交给图片视图，值不变时图片视图不重绘。
+private struct DashboardVehicleImage: View {
+    @Environment(AppEnvironment.self) private var environment
+    @AppStorage(VehicleAppearanceKeys.generation) private var generationID = ""
+    @AppStorage(VehicleAppearanceKeys.trim) private var trimCode = ""
+    @AppStorage(VehicleAppearanceKeys.paint) private var paintCode = ""
+    @AppStorage(VehicleAppearanceKeys.wheel) private var wheelCode = ""
+
+    var body: some View {
+        let device = VehicleBodyStyle.resolve(profileID: environment.profileID, name: environment.profileName)
+        let appearance = VehicleCatalog.resolve(generationID: generationID, trim: trimCode, paint: paintCode,
+                                                wheel: wheelCode, deviceGenerationID: device.generationID)
+        let gear = environment.isOnline ? environment.group("r79")["gearName"]?.stringValue : nil
+        VehicleHeroImage(appearance: appearance, angle: VehicleAngle.forGear(gear))
+            .equatable()
     }
 }
 

@@ -35,6 +35,16 @@ def j(obj):
     return json.dumps(obj, ensure_ascii=False)
 
 
+# P4CAN_MOCK_GEAR_CYCLE=<秒>：挡位按 P → D → N → R 循环切换，用于验证状态页车辆视角随挡位变化
+GEAR_CYCLE = float(os.environ.get("P4CAN_MOCK_GEAR_CYCLE", "0"))
+
+
+def mock_gear():
+    if GEAR_CYCLE <= 0:
+        return "D"
+    return ["P", "D", "N", "R"][int(time.time() / GEAR_CYCLE) % 4]
+
+
 def snapshot_fast():
     t = 1.35
     return {
@@ -105,7 +115,7 @@ def snapshot_fast():
             "apWaitRemainingMs": 0,
             "apGateReason": "AP_ACTIVE",
             "txReason": "OK",
-            "gearName": "D",
+            "gearName": mock_gear(),
             "dasState": 4,
             "dasStateValid": True,
             "txOk": 532,
@@ -420,7 +430,7 @@ STATS = {
         "tlsscBlockInNoa": False, "tlsscInjectedActive": True, "tlsscClearPending": False,
         "roadContextValid": True, "roadClass": 2, "navRouteActive": True,
         "controlledAccess": True, "summonRouteValid": True,
-        "gearSourceName": "CHASSIS", "gearName": "D",
+        "gearSourceName": "CHASSIS", "gearName": mock_gear(),
         "txOk": 88, "txFail": 0, "canState": 1, "canStateName": "RUNNING", "uptimeS": 5321,
     },
     "/api/blinkA/stats": {

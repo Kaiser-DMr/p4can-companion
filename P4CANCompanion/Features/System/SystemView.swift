@@ -666,6 +666,15 @@ private struct AppSection: View {
             .p4RowTint(P4Palette.blue)
             .accessibilityLabel(L10n.t("界面语言", "Interface language"))
 
+            NavigationLink {
+                VehicleAppearanceView()
+            } label: {
+                IconRow(title: L10n.t("车辆外观", "Vehicle Appearance"),
+                        subtitle: L10n.t("状态页车型、车漆与轮毂", "Model, paint and wheels on the status page"),
+                        systemImage: "car.side.fill",
+                        tint: P4Palette.red)
+            }
+
             Toggle(isOn: Binding(
                 get: { environment.liveActivityEnabled },
                 set: { environment.setLiveActivity($0) }
