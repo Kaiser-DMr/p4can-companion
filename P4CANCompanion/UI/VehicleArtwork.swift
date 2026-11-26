@@ -53,6 +53,32 @@ enum VehicleBodyStyle {
         return .model3
     }
 
+    /// 对应 `VehicleCatalog` 中的车型（配置器车图跟随设备车型时使用）；固件 S/X 档案为 MCU2 HW3，对应改款前车型。
+    var generationID: String {
+        switch self {
+        case .model3: return "m3-legacy"
+        case .model3Highland: return "m3-highland"
+        case .modelY: return "my-legacy"
+        case .modelYJuniper: return "my-juniper"
+        case .modelYL: return "my-l"
+        case .modelS: return "ms-legacy"
+        case .modelX: return "mx-legacy"
+        }
+    }
+
+    /// 配置器车型对应的内置车图，联网车图不可用时显示。
+    init(generationID: String) {
+        switch generationID {
+        case "m3-legacy": self = .model3
+        case "m3-highland": self = .model3Highland
+        case "my-legacy": self = .modelY
+        case "my-l": self = .modelYL
+        case "ms-legacy", "ms-refresh": self = .modelS
+        case "mx-legacy", "mx-refresh": self = .modelX
+        default: self = .modelYJuniper
+        }
+    }
+
     /// 资源名。每种车款都有独立素材。
     var assetName: String {
         switch self {
