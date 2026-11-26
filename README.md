@@ -22,6 +22,8 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 ![status](docs/screenshots/status.png)
 ![features](docs/screenshots/features.png)
 ![lighting](docs/screenshots/lighting.png)
+![vehicle appearance](docs/screenshots/vehicle-appearance.png)
+![live activity](docs/screenshots/live-activity.jpg)
 
 ### 硬件兼容 / Hardware
 
