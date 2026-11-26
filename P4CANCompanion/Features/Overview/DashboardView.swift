@@ -474,19 +474,9 @@ private struct DashboardBatteryCard: View {
         }
     }
 
-    private var batterySoc: Double? {
-        for key in ["batterySoc", "soc", "batteryLevel", "stateOfCharge"] {
-            if let value = environment.stat(key)?.doubleValue { return value }
-        }
-        return nil
-    }
+    private var batterySoc: Double? { environment.batterySoc }
 
-    private var batteryRangeKm: Double? {
-        for key in ["rangeKm", "batteryRangeKm", "ratedRangeKm", "idealRangeKm"] {
-            if let value = environment.stat(key)?.doubleValue { return value }
-        }
-        return nil
-    }
+    private var batteryRangeKm: Double? { environment.batteryRangeKm }
 
     private func socTone(_ fraction: Double) -> Color {
         if fraction <= 0.15 { return .p4Err }

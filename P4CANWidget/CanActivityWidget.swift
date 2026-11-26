@@ -33,7 +33,7 @@ struct CanActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     VStack(alignment: .trailing, spacing: 3) {
-                        GearBadge(gear: state.gear, size: 34)
+                        GearBadge(gear: state.gear, size: 34, text: text)
                         BusSummary(state: state, text: text)
                     }
                     .padding(.trailing, 4)
@@ -49,11 +49,11 @@ struct CanActivityWidget: Widget {
                     .padding(.top, 2)
                 }
             } compactLeading: {
-                GearBadge(gear: state.gear, size: 22)
+                GearBadge(gear: state.gear, size: 22, text: text)
             } compactTrailing: {
                 CompactValue(state: state)
             } minimal: {
-                GearBadge(gear: state.gear, size: 22)
+                GearBadge(gear: state.gear, size: 22, text: text)
             }
             .keylineTint(gearTint(state.gear))
         }
@@ -92,7 +92,7 @@ struct LockScreenView: View {
                     .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
-                GearBadge(gear: state.gear, size: 38)
+                GearBadge(gear: state.gear, size: 38, text: text)
             }
 
             MetricRow(state: state, text: text, compact: false)
@@ -130,6 +130,7 @@ struct Copy {
 struct GearBadge: View {
     let gear: String
     let size: CGFloat
+    let text: Copy
 
     var body: some View {
         let value = validGear(gear)
@@ -138,7 +139,7 @@ struct GearBadge: View {
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             .background(gearTint(gear).gradient, in: Circle())
-            .accessibilityLabel(value.map { "挡位 \($0)" } ?? "挡位未知")
+            .accessibilityLabel(value.map { text.t("挡位 \($0)", "Gear \($0)") } ?? text.t("挡位未知", "Gear unknown"))
     }
 }
 

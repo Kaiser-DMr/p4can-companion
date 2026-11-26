@@ -17,6 +17,7 @@ struct VehicleHeroImage: View, Equatable {
 
     private struct Layer: Identifiable, Equatable {
         let url: URL
+        let appearance: VehicleAppearance
         let angle: VehicleAngle
         let image: VehicleImage
         var id: URL { url }
@@ -78,13 +79,15 @@ struct VehicleHeroImage: View, Equatable {
         } catch {
             guard !Task.isCancelled else { return }
             failed = true
+            // 只有视角加载失败时保留当前车图；车型、车漆或轮毂已变时不能继续显示旧外观
+            if shown?.appearance != appearance { shown = nil }
         }
     }
 
     private func show(_ target: URL, _ image: VehicleImage) {
         guard shown?.url != target else { return }
         let effective = VehicleCatalog.effectiveAngle(appearance, angle)
-        let next = Layer(url: target, angle: effective, image: image)
+        let next = Layer(url: target, appearance: appearance, angle: effective, image: image)
         let turns = shown.map { $0.angle != effective } ?? false
         if let current = shown, turns {
             direction = effective.rawValue > current.angle.rawValue ? 1 : -1

@@ -17,7 +17,12 @@ enum VehicleImageError: Error {
 final class VehicleImageStore {
     static let shared = VehicleImageStore()
 
-    private var memory: [URL: VehicleImage] = [:]
+    /// 解码后的车图每张约 2 MB；在「车辆外观」里连续切换车漆、轮毂时限制常驻数量。
+    private let memory: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.countLimit = 24
+        return cache
+    }()
     private var inFlight: [URL: Task<VehicleImage, Error>] = [:]
     private let directory: URL
     private let session: URLSession
@@ -32,33 +37,35 @@ final class VehicleImageStore {
         session = URLSession(configuration: config)
     }
 
-    func cached(_ url: URL) -> VehicleImage? { memory[url] }
+    func cached(_ url: URL) -> VehicleImage? {
+        memory.object(forKey: url as NSURL).map(VehicleImage.init(image:))
+    }
 
     func image(for url: URL) async throws -> VehicleImage {
-        if let hit = memory[url] { return hit }
+        if let hit = cached(url) { return hit }
         if let task = inFlight[url] { return try await task.value }
         let file = directory.appendingPathComponent(Self.fileName(url))
         let session = session
         let task = Task.detached(priority: .userInitiated) { () throws -> VehicleImage in
-            let data: Data
             if let disk = try? Data(contentsOf: file) {
-                data = disk
-            } else {
-                var request = URLRequest(url: url)
-                request.setValue("image/png,image/*", forHTTPHeaderField: "Accept")
-                let (body, response) = try await session.data(for: request)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                guard status == 200 else { throw VehicleImageError.http(status) }
-                guard (response.mimeType ?? "").hasPrefix("image/") else { throw VehicleImageError.notImage }
-                data = body
-                try? body.write(to: file, options: .atomic)
+                if let image = try? Self.decode(disk) { return image }
+                // 磁盘缓存损坏：删除后重新下载，否则每次读取都会失败
+                try? FileManager.default.removeItem(at: file)
             }
-            return try Self.decode(data)
+            var request = URLRequest(url: url)
+            request.setValue("image/png,image/*", forHTTPHeaderField: "Accept")
+            let (body, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200 else { throw VehicleImageError.http(status) }
+            guard (response.mimeType ?? "").hasPrefix("image/") else { throw VehicleImageError.notImage }
+            let image = try Self.decode(body)
+            try? body.write(to: file, options: .atomic)
+            return image
         }
         inFlight[url] = task
         defer { inFlight[url] = nil }
         let result = try await task.value
-        memory[url] = result
+        memory.setObject(result.image, forKey: url as NSURL)
         return result
     }
 

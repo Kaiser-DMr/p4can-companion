@@ -852,10 +852,8 @@ final class AppEnvironment {
             apActive: nag["apActive"]?.boolValue,
             noaActive: group("blink")["noaActive"]?.boolValue,
             torque: nag["torque"]?.doubleValue.map { ($0 * 10).rounded() / 10 },
-            batterySoc: ["batterySoc", "soc", "batteryLevel", "stateOfCharge"].lazy
-                .compactMap { self.stat($0)?.doubleValue }.first.map { $0.rounded() },
-            rangeKm: ["rangeKm", "batteryRangeKm", "ratedRangeKm", "idealRangeKm"].lazy
-                .compactMap { self.stat($0)?.doubleValue }.first.map { $0.rounded() },
+            batterySoc: batterySoc?.rounded(),
+            rangeKm: batteryRangeKm?.rounded(),
             english: L10n.isEnglish
         )
     }
@@ -960,6 +958,16 @@ final class AppEnvironment {
             if let value = group[key] { return value }
         }
         return nil
+    }
+
+    /// 电池电量（%）：固件不同版本字段名不同，没有上报时为 nil。
+    var batterySoc: Double? {
+        ["batterySoc", "soc", "batteryLevel", "stateOfCharge"].lazy.compactMap { self.stat($0)?.doubleValue }.first
+    }
+
+    /// 剩余续航（km），没有上报时为 nil。
+    var batteryRangeKm: Double? {
+        ["rangeKm", "batteryRangeKm", "ratedRangeKm", "idealRangeKm"].lazy.compactMap { self.stat($0)?.doubleValue }.first
     }
 
     func loadAllEndpoints() async {
