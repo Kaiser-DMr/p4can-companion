@@ -303,6 +303,7 @@ final class AppEnvironment {
     /// 实时活动车图：已导出到共享目录的侧视图 URL 与文件名；正在导出的 URL
     @ObservationIgnored private var activityThumbnail: (url: URL, key: String)?
     @ObservationIgnored private var activityThumbnailExporting: URL?
+    @ObservationIgnored private var activityThumbnailFailure: (url: URL, at: Date)?
     /// 上次写缓存的时间（节流用）。
     @ObservationIgnored private var lastCacheWriteAt: Date?
     /// 上次写入包含的端点数量（新端点出现时立刻补写）。
@@ -897,16 +898,21 @@ final class AppEnvironment {
     private func activityImageKey() -> String? {
         let url = VehicleCatalog.imageURL(vehicleAppearance, angle: .side)
         if let thumbnail = activityThumbnail, thumbnail.url == url { return thumbnail.key }
-        if activityThumbnailExporting != url {
-            activityThumbnailExporting = url
-            Task {
-                let key = await VehicleImageStore.shared.exportSharedThumbnail(for: url)
-                guard activityThumbnailExporting == url else { return }
-                activityThumbnailExporting = nil
-                guard let key else { return }
-                activityThumbnail = (url, key)
-                refreshLiveActivity()
+        // 没有 App Group（重签未保留）时不导出；车内 Wi-Fi 常无外网，失败后 60 s 内不再重试，避免每次轮询都发起下载
+        guard SharedVehicleImage.directory != nil, activityThumbnailExporting != url else { return nil }
+        if let failure = activityThumbnailFailure, failure.url == url, Date().timeIntervalSince(failure.at) < 60 { return nil }
+        activityThumbnailExporting = url
+        Task {
+            let key = await VehicleImageStore.shared.exportSharedThumbnail(for: url)
+            guard activityThumbnailExporting == url else { return }
+            activityThumbnailExporting = nil
+            guard let key else {
+                activityThumbnailFailure = (url, Date())
+                return
             }
+            activityThumbnailFailure = nil
+            activityThumbnail = (url, key)
+            refreshLiveActivity()
         }
         return nil
     }
