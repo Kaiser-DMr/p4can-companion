@@ -1,35 +1,55 @@
+<div align="center">
+
 # P4管家 · P4CAN Companion
 
-[简体中文](#简体中文) | [English](#english)
+P4-CAN Universal / T2CAN Universal 的原生 iOS / iPadOS / macOS 控制台<br>
+Native iOS / iPadOS / macOS companion for P4-CAN Universal and T2CAN Universal
 
-原生 iOS / iPadOS / macOS 控制台，支持两种硬件：
+[![version](https://img.shields.io/badge/version-3.61%20(82)-34C759?style=flat-square)](https://github.com/Kaiser-DMr/p4can-companion/releases/latest) [![iOS](https://img.shields.io/badge/iOS-17%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![macOS](https://img.shields.io/badge/macOS-14%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![license](https://img.shields.io/badge/license-GPL--3.0-FF9500?style=flat-square)](LICENSE)
+
+**[下载 / Download](https://github.com/Kaiser-DMr/p4can-companion/releases/latest)** · [简体中文](#简体中文) · [English](#english)
+
+</div>
+
+> [!WARNING]
+> 本项目与 Tesla, Inc. 无关联。CAN 注入有风险，请只在驻车或封闭场地使用，并遵守当地法律。<br>
+> Not affiliated with Tesla, Inc. CAN injection is risky. Use only while parked or on a closed course, and follow local laws.
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/screenshots/status.png" width="230" alt="状态页"><br><sub><b>状态</b> · Status</sub></td>
+    <td align="center"><img src="docs/screenshots/features.png" width="230" alt="功能页"><br><sub><b>功能</b> · Features</sub></td>
+    <td align="center"><img src="docs/screenshots/lighting.png" width="230" alt="灯光功能"><br><sub><b>灯光</b> · Lighting</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/vehicle-appearance.png" width="230" alt="车辆外观"><br><sub><b>车辆外观</b> · Vehicle Appearance</sub></td>
+    <td align="center"><img src="docs/screenshots/live-activity.jpg" width="230" alt="锁屏实时活动"><br><sub><b>锁屏实时活动</b> · Live Activity</sub></td>
+    <td align="center"><img src="docs/screenshots/t2-status.png" width="230" alt="T2CAN 状态页"><br><sub><b>T2CAN 状态</b> · T2CAN Status</sub></td>
+  </tr>
+</table>
+
+---
+
+## 简体中文
+
+### 简介
+
+支持两种硬件：
 
 - **P4-CAN Universal**（ESP32-P4，三路 CAN）
 - **T2CAN Universal**（LilyGO T-2Can，MCP2515 + TWAI 两路 CAN）
 
 SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
-![platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![version](https://img.shields.io/badge/version-3.61%20(82)-green)
-![license](https://img.shields.io/badge/license-GPL--3.0-orange)
+### 下载与安装
 
-**下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
+- 从 [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) 下载 ad-hoc IPA，用 AltStore / Sideloadly 以自己的 Apple ID 重签安装
+- **系统要求：** 最低 iOS / iPadOS 17.0（Mac 需 macOS 14 及以上）。不支持 iOS 15 / 16：用巨魔（TrollStore）等方式强行安装后会启动即闪退
+- 锁屏 / 灵动岛实时活动要求主 App 与 Widget 用同一 Team 签名；显示「车辆外观」车图还需要重签时保留 App Group `group.com.p4can.companion`，否则显示内置车型图
+- **更新提示：** App 回到前台时检查本仓库 Release（每 6 小时最多一次），有新版本时弹窗，可选择前往更新、下次再说或不再提示该版本
+- **App 内一键爆闪固件：** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 中文 + 前后爆闪（含免重启版），App 直接触发
 
-**系统要求：** 最低 iOS / iPadOS 17.0（Mac 需 macOS 14 及以上）。不支持 iOS 15 / 16：用巨魔（TrollStore）等方式强行安装后会启动即闪退。
-
-**更新提示：** App 回到前台时会检查本仓库 Release（每 6 小时最多一次），有新版本时弹窗，可选择前往更新、下次再说或不再提示该版本。
-
-**App 内一键爆闪固件 / Strobe firmware：** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 中文 + 前后爆闪（含免重启版），App 直接触发。
-
-> 本项目与 Tesla, Inc. 无关联。CAN 注入有风险，请只在驻车或封闭场地使用，并遵守当地法律。
-
-![status](docs/screenshots/status.png)
-![features](docs/screenshots/features.png)
-![lighting](docs/screenshots/lighting.png)
-![vehicle appearance](docs/screenshots/vehicle-appearance.png)
-![live activity](docs/screenshots/live-activity.jpg)
-
-### 硬件兼容 / Hardware
+### 硬件兼容
 
 | 硬件 | CAN | App 适配 |
 |---|---|---|
@@ -38,22 +58,24 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 
 设备家族由 `/api/system/stats` 自动识别（P4 看 `chipModel`，T2 看 `mcpReady`），无需手动切换。
 
-![T2CAN 状态页](docs/screenshots/t2-status.png)
-
----
-
-## 简体中文
-
 ### 功能
 
 底部四个标签：**状态 / 功能 / 蓝牙 / 系统**。
 
-| 模块 | 内容 |
-|---|---|
-| **状态** | 设备在线、固件版本、CAN 收发与 Bus-Off（P4 三路；T2 两路 MCP2515 + TWAI）、扭矩趋势、电池信息（固件提供时）、锁屏/灵动岛实时活动 |
-| **功能** | **灯光**（P4 专属爆闪）→ **功能**（NAG、ISA、DMS、限速、BlinkA、召唤、TLSSC、ALC、踏板、AP 加速/回收、灯光功能、电池预热，以及 R79 AP/状态、车窗、研究捕获、DMS 捕获、Mode H 等实验工具）→ **实验**（R79、FSD、SmartShift、地区、Lane Change、常驻 AP、Developer Test）。两列圆角卡片，支持搜索、长按置顶 |
-| **蓝牙** | S3XY 按键扫描/配对/连接、单击/双击/长按动作绑定、自动重连、日志导出 |
-| **系统** | 车型卡片与更改车型（P4 5 种 / T2 6 种含 Model S/X）、语言（P4 设备网页 EN/简中/繁中）、无线、外观、刷新间隔、CAN GPIO（仅 P4）、诊断/恢复、OTA 升级、重启、两级重置、恢复出厂、Service Mode、诊断导出 |
+- **状态**：车辆图、设备在线、固件版本、CAN 收发与 Bus-Off（P4 三路；T2 两路 MCP2515 + TWAI）、挡位 / AP / NOA / 扭矩、扭矩趋势、电池信息（固件提供时）
+- **功能**：**灯光**（P4 专属爆闪）→ **功能**（NAG、ISA、DMS、限速、BlinkA、召唤、TLSSC、ALC、踏板、AP 加速/回收、灯光功能、电池预热，以及 R79 AP/状态、车窗、研究捕获、DMS 捕获、Mode H 等实验工具）→ **实验**（R79、FSD、SmartShift、地区、Lane Change、常驻 AP、Developer Test）。两列圆角卡片，支持搜索、长按置顶
+- **蓝牙**：S3XY 按键扫描/配对/连接、单击/双击/长按动作绑定、自动重连、日志导出
+- **系统**：车型卡片与更改车型（P4 5 种 / T2 6 种含 Model S/X）、车辆外观、锁屏/灵动岛实时活动、语言（P4 设备网页 EN/简中/繁中）、无线、外观、刷新间隔、CAN GPIO（仅 P4）、诊断/恢复、OTA 升级、重启、两级重置、恢复出厂、Service Mode、诊断导出
+
+#### 车辆图与实时活动
+
+- **车辆图：** 特斯拉配置器官方车图，覆盖 Model Y（新款、旧款、Model Y L）、Model 3（新款、旧款）、Model S / X（2016–2021、2021 起）共 88 个版本，可在「系统 → 车辆外观」选择车型、版本、车漆与轮毂；默认跟随设备车型
+- 按挡位切换视角（P 斜前方、D / N 侧面、R 斜后方）；未连接时大图，连接后缩小到标题右侧
+- 车图首次显示需要联网，之后保存在本机，启动即显示；无网络时显示内置车型图
+- **锁屏 / 灵动岛：** 「车辆外观」车图、挡位徽章、电量 / 续航 / AP / 扭矩、三路总线在线与每秒收帧数、NAG / 爆闪 / TLSSC；断开连接时显示总线离线，1 分钟后结束
+- 实时活动只在 App 运行时更新：切到后台后继续更新约 30 秒，之后停在最后一次数据（iOS 不允许 App 在后台长期轮询局域网设备）
+
+#### 按固件显示的页面
 
 新功能页面按固件能力自动显示，不会在旧固件上留下死入口：
 
@@ -111,9 +133,8 @@ open P4CANCompanion.xcodeproj
 
 - Scheme：`P4CANCompanion`
 - 无 SPM / CocoaPods 依赖
-- 真机安装需要在 Signing & Capabilities 选择自己的 Team
+- 真机安装需要在 Signing & Capabilities 选择自己的 Team，并为主 App 与 Widget 配置 App Group `group.com.p4can.companion`
 - Release 构建可导出 ad-hoc IPA，用 AltStore / Sideloadly 自签安装
-- 主 App 与 Widget 通过 App Group `group.com.p4can.companion` 共享「车辆外观」车图；重签时没有保留 App Group，锁屏 / 灵动岛改为显示内置车型图
 
 ### 构建固件
 
@@ -151,16 +172,22 @@ GNU GPL v3.0，见 [LICENSE](LICENSE)。固件部分基于
 
 ## English
 
-Native iOS / iPadOS / macOS companion for two boards:
+### Overview
+
+Two boards are supported:
 
 - **P4-CAN Universal** (ESP32-P4, three CAN buses)
 - **T2CAN Universal** (LilyGO T-2Can, MCP2515 + TWAI, two CAN buses)
 
 Built with SwiftUI + UIKit — not a web wrapper. Every value comes from the device HTTP API, and writes are read back for confirmation.
 
-**Requirements:** iOS / iPadOS 17.0 or later (macOS 14 or later on Mac). iOS 15 and 16 are not supported; installing anyway (for example with TrollStore) crashes on launch.
+### Download and install
 
-**Update check:** when the app returns to the foreground it checks this repository's Releases (at most once every 6 hours) and offers Update, Later, or Don't Remind Me for that version.
+- Download the ad-hoc IPA from [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) and re-sign it with your own Apple ID using AltStore / Sideloadly
+- **Requirements:** iOS / iPadOS 17.0 or later (macOS 14 or later on Mac). iOS 15 and 16 are not supported; installing anyway (for example with TrollStore) crashes on launch
+- The Lock Screen / Dynamic Island Live Activity needs the app and the widget signed with the same Team. Showing the Vehicle Appearance image there also needs the App Group `group.com.p4can.companion` kept when re-signing; otherwise the built-in model image is shown
+- **Update check:** when the app returns to the foreground it checks this repository's Releases (at most once every 6 hours) and offers Update, Later, or Don't Remind Me for that version
+- **One-tap strobe firmware:** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 Chinese + front/rear strobes (including the no-reboot build), triggered from the app
 
 ### Hardware support
 
@@ -171,18 +198,24 @@ Built with SwiftUI + UIKit — not a web wrapper. Every value comes from the dev
 
 The app detects the board from `/api/system/stats` (`chipModel` on P4, `mcpReady` on T2); no manual switch.
 
-> Not affiliated with Tesla, Inc. CAN injection is risky. Use only while parked or on a closed course, and follow local laws.
-
 ### Features
 
 Four tabs: **Status / Features / Bluetooth / Settings**.
 
-| Tab | Contents |
-|---|---|
-| **Status** | Device online state, firmware, memory, CAN buses (three on P4; MCP2515 + TWAI on T2) with RX/TX and bus-off counters, torque trend, battery info when provided, Live Activity |
-| **Features** | **Lighting** (P4 only) → **Features** (NAG, ISA, DMS, vision speed, BlinkA, Summon, TLSSC, ALC, pedal, AP accel/regen, Lighting Features, preheat, plus lab tools such as R79 AP/status, window, research capture, DMS capture, Mode H) → **Experimental** (R79, FSD, SmartShift, country, lane change, continuous AP, Developer Test). Two-column rounded cards with search and long-press pinning |
-| **Bluetooth** | S3XY button scan/pair/connect, single/double/long-press action mapping, auto-reconnect, log export |
-| **Settings** | Vehicle profile (5 on P4, 6 on T2 including Model S/X), language (P4 dashboard EN/简体/繁體), wireless, appearance, refresh interval, CAN GPIO (P4 only), diagnostics/recovery, OTA, reboot, resets, factory reset, Service Mode, diagnostics export |
+- **Status**: vehicle image, device online state, firmware, CAN buses (three on P4; MCP2515 + TWAI on T2) with RX/TX and bus-off counters, gear / AP / NOA / torque, torque trend, battery info when provided
+- **Features**: **Lighting** (P4 only) → **Features** (NAG, ISA, DMS, vision speed, BlinkA, Summon, TLSSC, ALC, pedal, AP accel/regen, Lighting Features, preheat, plus lab tools such as R79 AP/status, window, research capture, DMS capture, Mode H) → **Experimental** (R79, FSD, SmartShift, country, lane change, continuous AP, Developer Test). Two-column rounded cards with search and long-press pinning
+- **Bluetooth**: S3XY button scan/pair/connect, single/double/long-press action mapping, auto-reconnect, log export
+- **Settings**: vehicle profile (5 on P4, 6 on T2 including Model S/X), Vehicle Appearance, Live Activity, language (P4 dashboard EN/简体/繁體), wireless, appearance, refresh interval, CAN GPIO (P4 only), diagnostics/recovery, OTA, reboot, resets, factory reset, Service Mode, diagnostics export
+
+#### Vehicle image and Live Activity
+
+- **Vehicle image:** official Tesla configurator renders for 88 trims across Model Y (Juniper, legacy, Model Y L), Model 3 (Highland, legacy) and Model S / X (2016–2021, 2021+). Pick model, trim, paint and wheels in Settings → Vehicle Appearance; it follows the device's vehicle profile by default
+- The view follows the gear (P front three-quarter, D / N side, R rear three-quarter); large while disconnected, compact beside the title once connected
+- Images need a network connection the first time, are then stored on the device and appear on launch; without a network the built-in model image is shown
+- **Lock Screen / Dynamic Island:** the Vehicle Appearance image, gear badge, battery / range / AP / torque, online state and frames per second for each bus, NAG / strobe / TLSSC; buses show offline after a disconnect and the activity ends after one minute
+- The Live Activity updates only while the app is running: it keeps updating for about 30 seconds after the app goes to the background, then keeps the last data (iOS does not allow long-running background polling of a LAN device)
+
+#### Firmware-gated pages
 
 New pages appear only when the firmware supports them:
 
@@ -240,9 +273,8 @@ open P4CANCompanion.xcodeproj
 
 - Scheme: `P4CANCompanion`
 - No SPM / CocoaPods dependencies
-- Select your own Team for on-device builds
+- For on-device builds, select your own Team and register the App Group `group.com.p4can.companion` for the app and the widget
 - Export an ad-hoc IPA for AltStore / Sideloadly
-- The app and the widget share the Vehicle Appearance image through the App Group `group.com.p4can.companion`; if re-signing drops the App Group, the Lock Screen and Dynamic Island show the built-in model image instead
 
 ### Build the firmware
 
