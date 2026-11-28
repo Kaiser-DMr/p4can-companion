@@ -42,12 +42,45 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// 以前 `start()` 只在 `willConnectTo` 调一次，`stop()` 全仓没有调用点，
     /// 于是退到后台仍在按 500 ms 打设备（直到系统挂起），回前台也不会立即更新。
     func sceneDidBecomeActive(_ scene: UIScene) {
+        endBackgroundGrace()
         environment.start()
         UpdatePrompt.checkIfDue(from: window)
     }
 
-    /// 退到后台/被系统遮挡（控制中心、来电横幅）：停掉轮询，省电也避免和设备抢连接。
+    /// 被系统遮挡（控制中心、来电横幅）：没有开实时活动时停掉轮询，省电也避免和设备抢连接；
+    /// 开着实时活动时继续轮询，锁屏与灵动岛保持更新。
     func sceneWillResignActive(_ scene: UIScene) {
-        environment.stop()
+        if !environment.liveActivityEnabled { environment.stop() }
+    }
+
+    /// 进入后台：开着实时活动时再轮询约 30 秒（系统给后台任务的时长），短暂切出 App 时锁屏与灵动岛仍在更新，之后停止。
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        guard environment.liveActivityEnabled else {
+            environment.stop()
+            return
+        }
+        endBackgroundGrace()
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "LiveActivityGrace") { [weak self] in
+            self?.environment.stop()
+            self?.endBackgroundGrace()
+        }
+        graceTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.backgroundGrace))
+            guard !Task.isCancelled else { return }
+            self?.environment.stop()
+            self?.endBackgroundGrace()
+        }
+    }
+
+    private static let backgroundGrace: TimeInterval = 28
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var graceTimer: Task<Void, Never>?
+
+    private func endBackgroundGrace() {
+        graceTimer?.cancel()
+        graceTimer = nil
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
     }
 }
