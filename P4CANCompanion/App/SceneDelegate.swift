@@ -43,6 +43,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// 于是退到后台仍在按 500 ms 打设备（直到系统挂起），回前台也不会立即更新。
     func sceneDidBecomeActive(_ scene: UIScene) {
         environment.start()
+        UpdatePrompt.checkIfDue(from: window)
     }
 
     /// 退到后台/被系统遮挡（控制中心、来电横幅）：停掉轮询，省电也避免和设备抢连接。
