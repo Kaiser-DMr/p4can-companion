@@ -15,6 +15,8 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 
 **下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
 
+**系统要求：** 最低 iOS / iPadOS 17.0（Mac 需 macOS 14 及以上）。不支持 iOS 15 / 16：用巨魔（TrollStore）等方式强行安装后会启动即闪退。
+
 **App 内一键爆闪固件 / Strobe firmware：** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 中文 + 前后爆闪（含免重启版），App 直接触发。
 
 > 本项目与 Tesla, Inc. 无关联。CAN 注入有风险，请只在驻车或封闭场地使用，并遵守当地法律。
@@ -152,6 +154,8 @@ Native iOS / iPadOS / macOS companion for two boards:
 - **T2CAN Universal** (LilyGO T-2Can, MCP2515 + TWAI, two CAN buses)
 
 Built with SwiftUI + UIKit — not a web wrapper. Every value comes from the device HTTP API, and writes are read back for confirmation.
+
+**Requirements:** iOS / iPadOS 17.0 or later (macOS 14 or later on Mac). iOS 15 and 16 are not supported; installing anyway (for example with TrollStore) crashes on launch.
 
 ### Hardware support
 
