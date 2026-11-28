@@ -114,21 +114,8 @@ struct PreheatView: View {
         return String(format: "%.\(digits)f \(unit)", number)
     }
 
-    /// 冷却回路模式：0x201 阀门位置 + 热泵请求（SERIES_BYPASS = 2）。
-    private var thermalModeText: String? {
-        guard fresh("thModeAgeMs") else { return nil }
-        let valve = (object["thValveMode"]?.intValue ?? 0) & 3
-        let pumpsStopped = fresh("thVitalsAgeMs")
-            && (object["thPumpBatRpm"]?.intValue ?? 0) == 0 && (object["thPumpPtRpm"]?.intValue ?? 0) == 0
-        if pumpsStopped { return L10n.t("停止", "Off") }
-        switch valve {
-        case 3: return L10n.t("环境热源", "Ambient source")
-        case 1: return L10n.t("并联", "Parallel")
-        default:
-            return object["thHpReq"]?.intValue == 2 ? L10n.t("串联 · 散热器旁通", "Series · radiator bypass")
-                                                    : L10n.t("串联", "Series")
-        }
-    }
+
+    private var thermalState: ThermalLoopState { ThermalLoopState(object) }
 
     private var packAvg: Double? { seen("packSeen") ? object["packTempAvgC"]?.doubleValue : nil }
 
@@ -192,50 +179,22 @@ struct PreheatView: View {
             }
 
             Section {
-                if let mode = thermalModeText {
-                    LabeledContent(L10n.t("回路模式", "Loop mode"), value: mode)
-                }
-                if fresh("thSysAgeMs") {
-                    LabeledContent(L10n.t("阀门", "Valve"),
-                                   value: seen("thHeatPump") ? "Octovalve" : L10n.t("四通阀", "Coolant valve"))
-                }
-                if fresh("thVitalsAgeMs") {
-                    LabeledContent(L10n.t("电池泵 / 动力泵", "Battery / PT pump"),
-                                   value: "\(object["thPumpBatRpm"]?.intValue ?? 0) / \(object["thPumpPtRpm"]?.intValue ?? 0) rpm")
-                    LabeledContent(L10n.t("风扇", "Fan"), value: "\(object["thFanRpm"]?.intValue ?? 0) rpm")
-                }
-                if fresh("thInletsAgeMs") {
-                    optionalRow(L10n.t("电池进口", "Battery inlet"), value("thBatInletC", unit: "°C"))
-                    optionalRow(L10n.t("动力总成进口", "Powertrain inlet"), value("thPtInletC", unit: "°C"))
-                }
-                if fresh("thFlowsAgeMs") {
-                    optionalRow(L10n.t("电池流量", "Battery flow"), value("thFlowBatLpm", unit: "L/min"))
-                    optionalRow(L10n.t("动力总成流量", "Powertrain flow"), value("thFlowPtLpm", unit: "L/min"))
-                }
-                if fresh("thPcsAgeMs", window: Self.thermalSlowMs) {
-                    optionalRow("DC-DC", value("thDcdcC", digits: 0, unit: "°C"))
-                    optionalRow(L10n.t("车载充电机", "Charger"), value("thChargerC", digits: 0, unit: "°C"))
-                }
-                if fresh("thInvFrontAgeMs", window: Self.thermalSlowMs) {
-                    optionalRow(L10n.t("前逆变器", "Front inverter"), value("thInvFrontC", digits: 0, unit: "°C"))
-                }
-                if fresh("thInvRearAgeMs", window: Self.thermalSlowMs) {
-                    optionalRow(L10n.t("后逆变器", "Rear inverter"), value("thInvRearC", digits: 0, unit: "°C"))
-                }
-                if fresh("thApAgeMs", window: Self.thermalSlowMs) {
-                    optionalRow(L10n.t("AP 计算机", "AP computer"), value("thApC", digits: 0, unit: "°C"))
-                }
-                if fresh("thInfoAgeMs", window: Self.thermalSlowMs) {
-                    optionalRow(L10n.t("信息娱乐", "Infotainment"), value("thInfoC", digits: 0, unit: "°C"))
-                }
-                if !hasThermalData {
-                    Text(L10n.t("暂无热管理数据（需车辆上电，帧超过 5–15 秒未更新视为无数据）。",
-                                "No thermal data (the car must be awake; frames older than 5–15 s are treated as missing)."))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                ThermalLoopDiagram(state: thermalState)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
             } header: {
-                Text(L10n.t("热管理", "Thermal"))
+                HStack {
+                    Text(L10n.t("热管理", "Thermal"))
+                    Spacer()
+                    Text(thermalState.modeLabel)
+                        .textCase(nil)
+                        .contentTransition(.opacity)
+                }
+            } footer: {
+                Text(hasThermalData
+                     ? L10n.t("冷却回路随阀门模式变化，泵在转时管路显示流动方向。绿点为最近收到的数据，灰点为超时（10 Hz 帧 5 秒、慢帧 15 秒）。",
+                              "Pipes follow the valve mode and show flow while a pump runs. Green dots are fresh; grey dots are stale (5 s for 10 Hz frames, 15 s for slow frames).")
+                     : L10n.t("暂无热管理数据（需车辆上电，帧超过 5–15 秒未更新视为无数据）。",
+                              "No thermal data (the car must be awake; frames older than 5–15 s are treated as missing)."))
             }
 
             Section {
