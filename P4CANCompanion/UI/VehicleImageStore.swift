@@ -13,6 +13,7 @@ enum VehicleImageError: Error {
 }
 
 /// 下载并缓存特斯拉配置器车辆图片：内存缓存 + Caches 目录磁盘缓存，同一 URL 并发请求只下载一次。
+/// 磁盘只保存裁剪、渐隐后的成品图，之后启动直接读取，不再重复下载和裁剪。
 @MainActor
 final class VehicleImageStore {
     static let shared = VehicleImageStore()
@@ -35,23 +36,42 @@ final class VehicleImageStore {
         config.timeoutIntervalForRequest = 20
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         session = URLSession(configuration: config)
+        let directory = directory
+        // 旧版本缓存的是未裁剪原图，已不再读取
+        Task.detached(priority: .utility) {
+            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+            for file in files where !file.lastPathComponent.hasSuffix(Self.fileSuffix) {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
     }
 
+    /// 内存或磁盘里已有的成品车图。读文件只建立延迟解码的 `UIImage`，可以在主线程同步调用。
     func cached(_ url: URL) -> VehicleImage? {
-        memory.object(forKey: url as NSURL).map(VehicleImage.init(image:))
+        if let hit = memory.object(forKey: url as NSURL) { return VehicleImage(image: hit) }
+        guard let image = UIImage(contentsOfFile: file(for: url).path) else { return nil }
+        memory.setObject(image, forKey: url as NSURL)
+        return VehicleImage(image: image)
     }
 
     func image(for url: URL) async throws -> VehicleImage {
         if let hit = cached(url) { return hit }
-        if let task = inFlight[url] { return try await task.value }
-        let file = directory.appendingPathComponent(Self.fileName(url))
+        return try await download(url).value
+    }
+
+    /// 后台预取同一外观的其余视角，挡位切换时不必等待下载。
+    func prefetch(_ urls: [URL]) {
+        for url in Set(urls) where cached(url) == nil {
+            _ = download(url)
+        }
+    }
+
+    /// 同一 URL 只建立一个下载任务；完成后写入内存缓存。
+    private func download(_ url: URL) -> Task<VehicleImage, Error> {
+        if let task = inFlight[url] { return task }
+        let file = file(for: url)
         let session = session
         let task = Task.detached(priority: .userInitiated) { () throws -> VehicleImage in
-            if let disk = try? Data(contentsOf: file) {
-                if let image = try? Self.decode(disk) { return image }
-                // 磁盘缓存损坏：删除后重新下载，否则每次读取都会失败
-                try? FileManager.default.removeItem(at: file)
-            }
             var request = URLRequest(url: url)
             request.setValue("image/png,image/*", forHTTPHeaderField: "Accept")
             let (body, response) = try await session.data(for: request)
@@ -59,19 +79,56 @@ final class VehicleImageStore {
             guard status == 200 else { throw VehicleImageError.http(status) }
             guard (response.mimeType ?? "").hasPrefix("image/") else { throw VehicleImageError.notImage }
             let image = try Self.decode(body)
-            try? body.write(to: file, options: .atomic)
+            try? image.image.pngData()?.write(to: file, options: .atomic)
             return image
         }
         inFlight[url] = task
-        defer { inFlight[url] = nil }
-        let result = try await task.value
-        memory.setObject(result.image, forKey: url as NSURL)
-        return result
+        Task { @MainActor in
+            if let result = try? await task.value {
+                memory.setObject(result.image, forKey: url as NSURL)
+            }
+            inFlight[url] = nil
+        }
+        return task
+    }
+
+    /// 实时活动用的车图：缩到 360 px 宽写入 App Group 共享目录，返回文件名（不含扩展名）。
+    /// 共享目录只保留当前这一张；没有 App Group 或下载失败时返回 nil。
+    func exportSharedThumbnail(for url: URL) async -> String? {
+        let key = String(Self.fileName(url).dropLast(Self.fileSuffix.count))
+        guard let directory = SharedVehicleImage.directory, let target = SharedVehicleImage.file(key) else { return nil }
+        if FileManager.default.fileExists(atPath: target.path) { return key }
+        guard let source = try? await image(for: url) else { return nil }
+        let image = source.image
+        let written = await Task.detached(priority: .utility) { () -> Bool in
+            let width = min(360, image.size.width)
+            let size = CGSize(width: width, height: (image.size.height * width / image.size.width).rounded())
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1
+            let thumbnail = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: size))
+            }
+            guard let data = thumbnail.pngData() else { return false }
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            guard (try? data.write(to: target, options: .atomic)) != nil else { return false }
+            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+            for file in files where file.lastPathComponent != target.lastPathComponent {
+                try? FileManager.default.removeItem(at: file)
+            }
+            return true
+        }.value
+        return written ? key : nil
+    }
+
+    private nonisolated static let fileSuffix = ".v2.png"
+
+    private func file(for url: URL) -> URL {
+        directory.appendingPathComponent(Self.fileName(url))
     }
 
     private nonisolated static func fileName(_ url: URL) -> String {
         let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined() + ".png"
+        return digest.map { String(format: "%02x", $0) }.joined() + fileSuffix
     }
 
     /// 解码图片并按透明度找出车身范围后裁剪，不同视角因此能按同一规则对齐和缩放。

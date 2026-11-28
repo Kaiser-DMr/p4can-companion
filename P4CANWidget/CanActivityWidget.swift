@@ -22,7 +22,7 @@ struct CanActivityWidget: Widget {
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 2) {
-                        VehicleArt(name: state.vehicleArtwork)
+                        VehicleArt(name: state.vehicleArtwork, imageKey: state.vehicleImageKey)
                             .frame(width: 84, height: 32, alignment: .leading)
                         Text(vehicleTitle(state, fallback: context.attributes.deviceName))
                             .font(.caption2.weight(.semibold))
@@ -72,7 +72,7 @@ struct LockScreenView: View {
     var body: some View {
         VStack(spacing: 7) {
             HStack(alignment: .center, spacing: 10) {
-                VehicleArt(name: state.vehicleArtwork)
+                VehicleArt(name: state.vehicleArtwork, imageKey: state.vehicleImageKey)
                     .frame(width: 92, height: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(vehicleTitle(state, fallback: deviceName))
@@ -135,6 +135,7 @@ struct GearBadge: View {
     var body: some View {
         let value = validGear(gear)
         Text(value ?? "–")
+            .contentTransition(.interpolate)
             .font(.system(size: size * 0.52, weight: .heavy, design: .rounded))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
@@ -143,11 +144,20 @@ struct GearBadge: View {
     }
 }
 
+/// 车图：优先 App 写入共享目录的本机「车辆外观」车图，其次内置车型侧视图。
 struct VehicleArt: View {
     let name: String?
+    let imageKey: String?
 
     var body: some View {
-        if let name {
+        if let imageKey, let file = SharedVehicleImage.file(imageKey),
+           let image = UIImage(contentsOfFile: file.path) {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .accessibilityHidden(true)
+        } else if let name {
             Image(name)
                 .resizable()
                 .interpolation(.high)
@@ -180,6 +190,7 @@ struct MetricRow: View {
                         .lineLimit(1)
                     HStack(alignment: .firstTextBaseline, spacing: 1) {
                         Text(item.value)
+                            .contentTransition(.numericText())
                             .font(.system(size: compact ? 14 : 15, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                             .lineLimit(1)
@@ -258,6 +269,7 @@ struct BusPill: View {
                 .layoutPriority(1)
             Spacer(minLength: 2)
             Text(rateText)
+                .contentTransition(.numericText())
                 .font(.system(size: 10, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
@@ -333,6 +345,7 @@ struct CompactValue: View {
     var body: some View {
         if let soc = state.batterySoc {
             Text(String(format: "%.0f%%", soc))
+                .contentTransition(.numericText())
                 .font(.caption2.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(soc <= 20 ? Color.red : Color.green)

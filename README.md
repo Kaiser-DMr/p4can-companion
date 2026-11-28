@@ -10,10 +10,14 @@
 SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API，写入后回读校验。
 
 ![platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)
-![version](https://img.shields.io/badge/version-3.60%20(81)-green)
+![version](https://img.shields.io/badge/version-3.61%20(82)-green)
 ![license](https://img.shields.io/badge/license-GPL--3.0-orange)
 
 **下载 / Download：** [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) · ad-hoc IPA，需要自签（AltStore / Sideloadly）。
+
+**系统要求：** 最低 iOS / iPadOS 17.0（Mac 需 macOS 14 及以上）。不支持 iOS 15 / 16：用巨魔（TrollStore）等方式强行安装后会启动即闪退。
+
+**更新提示：** App 回到前台时会检查本仓库 Release（每 6 小时最多一次），有新版本时弹窗，可选择前往更新、下次再说或不再提示该版本。
 
 **App 内一键爆闪固件 / Strobe firmware：** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 中文 + 前后爆闪（含免重启版），App 直接触发。
 
@@ -109,6 +113,7 @@ open P4CANCompanion.xcodeproj
 - 无 SPM / CocoaPods 依赖
 - 真机安装需要在 Signing & Capabilities 选择自己的 Team
 - Release 构建可导出 ad-hoc IPA，用 AltStore / Sideloadly 自签安装
+- 主 App 与 Widget 通过 App Group `group.com.p4can.companion` 共享「车辆外观」车图；重签时没有保留 App Group，锁屏 / 灵动岛改为显示内置车型图
 
 ### 构建固件
 
@@ -152,6 +157,10 @@ Native iOS / iPadOS / macOS companion for two boards:
 - **T2CAN Universal** (LilyGO T-2Can, MCP2515 + TWAI, two CAN buses)
 
 Built with SwiftUI + UIKit — not a web wrapper. Every value comes from the device HTTP API, and writes are read back for confirmation.
+
+**Requirements:** iOS / iPadOS 17.0 or later (macOS 14 or later on Mac). iOS 15 and 16 are not supported; installing anyway (for example with TrollStore) crashes on launch.
+
+**Update check:** when the app returns to the foreground it checks this repository's Releases (at most once every 6 hours) and offers Update, Later, or Don't Remind Me for that version.
 
 ### Hardware support
 
@@ -233,6 +242,7 @@ open P4CANCompanion.xcodeproj
 - No SPM / CocoaPods dependencies
 - Select your own Team for on-device builds
 - Export an ad-hoc IPA for AltStore / Sideloadly
+- The app and the widget share the Vehicle Appearance image through the App Group `group.com.p4can.companion`; if re-signing drops the App Group, the Lock Screen and Dynamic Island show the built-in model image instead
 
 ### Build the firmware
 

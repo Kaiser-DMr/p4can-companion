@@ -11,8 +11,7 @@ struct VehicleAppearanceView: View {
 
     /// 设备车型对应的配置器车型（跟随设备时使用）
     private var deviceGeneration: VehicleGeneration {
-        let id = VehicleBodyStyle.resolve(profileID: environment.profileID, name: environment.profileName).generationID
-        return VehicleCatalog.generation(id: id) ?? VehicleCatalog.generations[0]
+        VehicleCatalog.generation(id: environment.vehicleDeviceGenerationID) ?? VehicleCatalog.generations[0]
     }
 
     var body: some View {
