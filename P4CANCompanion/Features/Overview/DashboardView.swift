@@ -181,6 +181,8 @@ private struct DashboardStaleBanner: View {
 private struct DashboardHeroCard: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// 连接前后车图在下方大图与标题右侧小图之间平滑移动、缩放
+    @Namespace private var vehicleSpace
 
     var body: some View {
         let tone = DashboardConnection.tone(environment)
@@ -204,14 +206,14 @@ private struct DashboardHeroCard: View {
                 if compactVehicle {
                     DashboardVehicleImage()
                         .frame(width: 132, height: 74)
-                        .transition(.opacity)
+                        .matchedGeometryEffect(id: "vehicle", in: vehicleSpace)
                 }
             }
 
             if !compactVehicle {
                 DashboardVehicleImage()
                     .frame(height: dynamicTypeSize.isAccessibilitySize ? 140 : 170)
-                    .transition(.opacity)
+                    .matchedGeometryEffect(id: "vehicle", in: vehicleSpace)
             }
 
             DashboardHeroChips()
@@ -298,12 +300,14 @@ private struct DashboardVehicleImage: View {
     @AppStorage(VehicleAppearanceKeys.wheel) private var wheelCode = ""
 
     var body: some View {
-        let device = VehicleBodyStyle.resolve(profileID: environment.profileID, name: environment.profileName)
         let appearance = VehicleCatalog.resolve(generationID: generationID, trim: trimCode, paint: paintCode,
-                                                wheel: wheelCode, deviceGenerationID: device.generationID)
+                                                wheel: wheelCode, deviceGenerationID: environment.vehicleDeviceGenerationID)
         let gear = environment.isOnline ? environment.group("r79")["gearName"]?.stringValue : nil
         VehicleHeroImage(appearance: appearance, angle: VehicleAngle.forGear(gear))
             .equatable()
+            .task(id: appearance) {
+                VehicleImageStore.shared.prefetch(VehicleAngle.allCases.map { VehicleCatalog.imageURL(appearance, angle: $0) })
+            }
     }
 }
 

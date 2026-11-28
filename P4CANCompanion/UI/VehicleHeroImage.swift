@@ -15,6 +15,16 @@ struct VehicleHeroImage: View, Equatable {
     @State private var direction: CGFloat = 1
     @State private var failed = false
 
+    /// 已缓存的车图在首帧直接显示，不经过空白再淡入
+    init(appearance: VehicleAppearance, angle: VehicleAngle) {
+        self.appearance = appearance
+        self.angle = angle
+        let url = VehicleCatalog.imageURL(appearance, angle: angle)
+        _shown = State(initialValue: VehicleImageStore.shared.cached(url).map {
+            Layer(url: url, appearance: appearance, angle: VehicleCatalog.effectiveAngle(appearance, angle), image: $0)
+        })
+    }
+
     private struct Layer: Identifiable, Equatable {
         let url: URL
         let appearance: VehicleAppearance

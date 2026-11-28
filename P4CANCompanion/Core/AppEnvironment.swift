@@ -300,6 +300,9 @@ final class AppEnvironment {
     @ObservationIgnored private var lastRxRates: [Int: Int] = [:]
     /// 上次真正推送给实时活动的时间（数值类字段节流用）。
     @ObservationIgnored private var lastLiveActivityPushAt: Date?
+    /// 实时活动车图：已导出到共享目录的侧视图 URL 与文件名；正在导出的 URL
+    @ObservationIgnored private var activityThumbnail: (url: URL, key: String)?
+    @ObservationIgnored private var activityThumbnailExporting: URL?
     /// 上次写缓存的时间（节流用）。
     @ObservationIgnored private var lastCacheWriteAt: Date?
     /// 上次写入包含的端点数量（新端点出现时立刻补写）。
@@ -665,8 +668,37 @@ final class AppEnvironment {
             profile: profileStatus?.objectValue ?? [:],
             system: systemStats?.objectValue ?? [:]
         ))
+        if profileStatus != nil {
+            let generation = vehicleDeviceGenerationID
+            let key = Self.deviceGenerationKey(host)
+            if UserDefaults.standard.string(forKey: key) != generation {
+                UserDefaults.standard.set(generation, forKey: key)
+            }
+        }
         if appendSample { appendTrendSample() }
         if pushLiveActivity { refreshLiveActivity() }
+    }
+
+    /// 设备对应的配置器车型：有车型档案时按档案推断；档案还没拿到（刚启动）时用该设备地址上次的结果，
+    /// 车图不会先显示默认车型再切换。
+    var vehicleDeviceGenerationID: String {
+        if profileStatus == nil, let remembered = UserDefaults.standard.string(forKey: Self.deviceGenerationKey(host)) {
+            return remembered
+        }
+        return VehicleBodyStyle.resolve(profileID: profileID, name: profileName).generationID
+    }
+
+    private static func deviceGenerationKey(_ host: String) -> String { "vehicle.deviceGeneration.\(host)" }
+
+    /// 状态页与实时活动当前显示的车辆外观（用户在「车辆外观」中的选择优先，否则跟随设备车型）。
+    var vehicleAppearance: VehicleAppearance {
+        let defaults = UserDefaults.standard
+        return VehicleCatalog.resolve(
+            generationID: defaults.string(forKey: VehicleAppearanceKeys.generation) ?? "",
+            trim: defaults.string(forKey: VehicleAppearanceKeys.trim) ?? "",
+            paint: defaults.string(forKey: VehicleAppearanceKeys.paint) ?? "",
+            wheel: defaults.string(forKey: VehicleAppearanceKeys.wheel) ?? "",
+            deviceGenerationID: vehicleDeviceGenerationID)
     }
 
     /// 值相同则不写：Observation 每次赋值都会通知读取者，轮询回写相同数据会让页面无谓重绘。
@@ -856,25 +888,40 @@ final class AppEnvironment {
             torque: nag["torque"]?.doubleValue.map { ($0 * 10).rounded() / 10 },
             batterySoc: batterySoc?.rounded(),
             rangeKm: batteryRangeKm?.rounded(),
-            english: L10n.isEnglish
+            english: L10n.isEnglish,
+            vehicleImageKey: activityImageKey()
         )
+    }
+
+    /// 本机外观侧视图在共享目录中的文件名；还没导出时在后台导出，完成后立即推送一次。
+    private func activityImageKey() -> String? {
+        let url = VehicleCatalog.imageURL(vehicleAppearance, angle: .side)
+        if let thumbnail = activityThumbnail, thumbnail.url == url { return thumbnail.key }
+        if activityThumbnailExporting != url {
+            activityThumbnailExporting = url
+            Task {
+                let key = await VehicleImageStore.shared.exportSharedThumbnail(for: url)
+                guard activityThumbnailExporting == url else { return }
+                activityThumbnailExporting = nil
+                guard let key else { return }
+                activityThumbnail = (url, key)
+                refreshLiveActivity()
+            }
+        }
+        return nil
     }
 
     /// 需要立即反映到锁屏的字段：挡位、车型、总线在线、功能开关、AP / NOA、语言。
     private static func keyFields(_ state: CanActivityAttributes.ContentState) -> [String] {
-        [state.gear, state.vehicleModel ?? "", state.vehicleArtwork ?? "",
+        [state.gear, state.vehicleModel ?? "", state.vehicleArtwork ?? "", state.vehicleImageKey ?? "",
          state.buses.map { "\($0.name)\($0.online)" }.joined(),
          "\(state.nagEnabled)\(state.blinkEnabled)\(state.tlsscEnabled)",
          "\(String(describing: state.apActive))\(String(describing: state.noaActive))\(String(describing: state.english))"]
     }
 
-    /// 实时活动里的车型侧视图：优先用户在「车辆外观」中指定的车型，否则按设备车型。
+    /// 共享目录车图不可用时的内置车型侧视图，与「车辆外观」当前车型一致。
     private func activityArtwork() -> String {
-        let chosen = UserDefaults.standard.string(forKey: VehicleAppearanceKeys.generation) ?? ""
-        let style = chosen.isEmpty
-            ? VehicleBodyStyle.resolve(profileID: profileID, name: profileName)
-            : VehicleBodyStyle(generationID: chosen)
-        return style.assetName
+        VehicleBodyStyle(generationID: vehicleAppearance.generation.id).assetName
     }
 
     /// 各总线每秒收帧数：两次采样间隔不足 1 s 时沿用上次结果的计算基准；数值按量级取整，减少无意义的推送。
