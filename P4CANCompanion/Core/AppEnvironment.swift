@@ -300,10 +300,6 @@ final class AppEnvironment {
     @ObservationIgnored private var lastRxRates: [Int: Int] = [:]
     /// 上次真正推送给实时活动的时间（数值类字段节流用）。
     @ObservationIgnored private var lastLiveActivityPushAt: Date?
-    /// 实时活动车图：已导出到共享目录的侧视图 URL 与文件名；正在导出的 URL
-    @ObservationIgnored private var activityThumbnail: (url: URL, key: String)?
-    @ObservationIgnored private var activityThumbnailExporting: URL?
-    @ObservationIgnored private var activityThumbnailFailure: (url: URL, at: Date)?
     /// 上次写缓存的时间（节流用）。
     @ObservationIgnored private var lastCacheWriteAt: Date?
     /// 上次写入包含的端点数量（新端点出现时立刻补写）。
@@ -890,36 +886,13 @@ final class AppEnvironment {
             batterySoc: batterySoc?.rounded(),
             rangeKm: batteryRangeKm?.rounded(),
             english: L10n.isEnglish,
-            vehicleImageKey: activityImageKey()
+            vehicleVariant: VehicleCatalog.activityAssetName(vehicleAppearance)
         )
-    }
-
-    /// 本机外观侧视图在共享目录中的文件名；还没导出时在后台导出，完成后立即推送一次。
-    private func activityImageKey() -> String? {
-        let url = VehicleCatalog.imageURL(vehicleAppearance, angle: .side)
-        if let thumbnail = activityThumbnail, thumbnail.url == url { return thumbnail.key }
-        // 没有 App Group（重签未保留）时不导出；车内 Wi-Fi 常无外网，失败后 60 s 内不再重试，避免每次轮询都发起下载
-        guard SharedVehicleImage.directory != nil, activityThumbnailExporting != url else { return nil }
-        if let failure = activityThumbnailFailure, failure.url == url, Date().timeIntervalSince(failure.at) < 60 { return nil }
-        activityThumbnailExporting = url
-        Task {
-            let key = await VehicleImageStore.shared.exportSharedThumbnail(for: url)
-            guard activityThumbnailExporting == url else { return }
-            activityThumbnailExporting = nil
-            guard let key else {
-                activityThumbnailFailure = (url, Date())
-                return
-            }
-            activityThumbnailFailure = nil
-            activityThumbnail = (url, key)
-            refreshLiveActivity()
-        }
-        return nil
     }
 
     /// 需要立即反映到锁屏的字段：挡位、车型、总线在线、功能开关、AP / NOA、语言。
     private static func keyFields(_ state: CanActivityAttributes.ContentState) -> [String] {
-        [state.gear, state.vehicleModel ?? "", state.vehicleArtwork ?? "", state.vehicleImageKey ?? "",
+        [state.gear, state.vehicleModel ?? "", state.vehicleArtwork ?? "", state.vehicleVariant ?? "",
          state.buses.map { "\($0.name)\($0.online)" }.joined(),
          "\(state.nagEnabled)\(state.blinkEnabled)\(state.tlsscEnabled)",
          "\(String(describing: state.apActive))\(String(describing: state.noaActive))\(String(describing: state.english))"]

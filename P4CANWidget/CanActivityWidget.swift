@@ -22,7 +22,7 @@ struct CanActivityWidget: Widget {
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 2) {
-                        VehicleArt(name: state.vehicleArtwork, imageKey: state.vehicleImageKey)
+                        VehicleArt(name: state.vehicleArtwork, variant: state.vehicleVariant)
                             .frame(width: 84, height: 32, alignment: .leading)
                         Text(vehicleTitle(state, fallback: context.attributes.deviceName))
                             .font(.caption2.weight(.semibold))
@@ -72,7 +72,7 @@ struct LockScreenView: View {
     var body: some View {
         VStack(spacing: 7) {
             HStack(alignment: .center, spacing: 10) {
-                VehicleArt(name: state.vehicleArtwork, imageKey: state.vehicleImageKey)
+                VehicleArt(name: state.vehicleArtwork, variant: state.vehicleVariant)
                     .frame(width: 92, height: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(vehicleTitle(state, fallback: deviceName))
@@ -144,15 +144,15 @@ struct GearBadge: View {
     }
 }
 
-/// 车图：优先 App 写入共享目录的本机「车辆外观」车图，其次内置车型侧视图。
+/// 车图：优先内置的本机「车辆外观」侧视图（车型 × 车漆 × 轮毂），其次车型侧视图。
+/// 车图打包在 Widget 资源里，不依赖 App Group，重签方式不影响显示。
 struct VehicleArt: View {
     let name: String?
-    let imageKey: String?
+    let variant: String?
 
     var body: some View {
-        if let imageKey, let file = SharedVehicleImage.file(imageKey),
-           let image = UIImage(contentsOfFile: file.path) {
-            Image(uiImage: image)
+        if let variant, UIImage(named: variant) != nil {
+            Image(variant)
                 .resizable()
                 .interpolation(.high)
                 .scaledToFit()

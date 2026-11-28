@@ -40,26 +40,11 @@ struct CanActivityAttributes {
         var rangeKm: Double?
         /// 界面语言跟随 App 设置
         var english: Bool?
-        /// 本机「车辆外观」车图在 App Group 共享目录中的文件名；读不到时用 `vehicleArtwork`
-        var vehicleImageKey: String?
+        /// 本机「车辆外观」对应的 Widget 内置侧视图资源名（车型 × 车漆 × 轮毂）；缺少时用 `vehicleArtwork`
+        var vehicleVariant: String?
     }
 
     var deviceName: String
-}
-
-/// App 与 Widget 共享的车图缩略图目录（App Group）。
-enum SharedVehicleImage {
-    static let appGroup = "group.com.p4can.companion"
-
-    /// 重签工具没有保留 App Group 时为 nil
-    static var directory: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
-            .appendingPathComponent("VehicleThumbs", isDirectory: true)
-    }
-
-    static func file(_ key: String) -> URL? {
-        directory?.appendingPathComponent(key + ".png")
-    }
 }
 
 #if canImport(ActivityKit) && !targetEnvironment(macCatalyst)

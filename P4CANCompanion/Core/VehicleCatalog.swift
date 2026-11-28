@@ -128,8 +128,6 @@ enum VehicleCatalog {
     private static let WTAS = wheel("WTAS", "19 英寸银色 Slipstream 轮毂", "19\" Silver Slipstream Wheels")
     private static let WTDS = wheel("WTDS", "19 英寸灰色 Slipstream 轮毂", "19\" Grey Slipstream Wheels")
     private static let WTTC = wheel("WTTC", "21 英寸 Sonic Carbon 双涡轮轮毂", "21\" Sonic Carbon Twin Turbine Wheels")
-    private static let WTAB = wheel("WTAB", "21 英寸黑色 Arachnid 轮毂", "21\" Black Arachnid Wheels")
-    private static let WT22 = wheel("WT22", "22 英寸银色 Turbine 轮毂", "22\" Silver Turbine Wheels")
     private static let WT20 = wheel("WT20", "20 英寸银色 Slipstream 轮毂", "20\" Silver Slipstream Wheels")
     private static let WTSC = wheel("WTSC", "20 英寸 Sonic Carbon 轮毂", "20\" Sonic Carbon Wheels")
     private static let WTUT = wheel("WTUT", "22 英寸 Onyx 黑色轮毂", "22\" Onyx Black Wheels")
@@ -270,11 +268,11 @@ enum VehicleCatalog {
                 trim("MTS05", "长续航（MTS05）", "Long Range (MTS05)", paints: legacySPaints, wheels: [WTAS, WTDS, WTTC]),
                 trim("MTS07", "长续航升级版", "Long Range Plus", paints: legacySPaints, wheels: [WTAS, WTDS, WTTC]),
                 trim("MTS04", "Performance 高性能版（MTS04）", "Performance (MTS04)", paints: legacySPaints,
-                     wheels: [WTAS, WTDS, WTTC, WTAB]),
+                     wheels: [WTAS, WTDS, WTTC]),
                 trim("MTS06", "Performance 高性能版（MTS06）", "Performance (MTS06)", paints: legacySPaints,
-                     wheels: [WTAS, WTDS, WTTC, WTAB]),
+                     wheels: [WTAS, WTDS, WTTC]),
                 trim("MTS08", "Performance 高性能版（MTS08）", "Performance (MTS08)", paints: legacySPaints,
-                     wheels: [WTAS, WTDS, WTTC, WTAB]),
+                     wheels: [WTAS, WTDS, WTTC]),
             ]
         ),
         VehicleGeneration(
@@ -285,11 +283,11 @@ enum VehicleCatalog {
                 trim("MTX05", "长续航升级版（MTX05）", "Long Range Plus (MTX05)", paints: legacyXPaints, wheels: [WT20, WTSC, WTUT, WTSD]),
                 trim("MTX07", "长续航升级版（MTX07）", "Long Range Plus (MTX07)", paints: legacyXPaints, wheels: [WT20, WTSC, WTUT, WTSD]),
                 trim("MTX04", "Performance 高性能版（MTX04）", "Performance (MTX04)", paints: legacyXPaints,
-                     wheels: [WT20, WTSC, WTUT, WT22, WTSD]),
+                     wheels: [WT20, WTSC, WTUT, WTSD]),
                 trim("MTX06", "Performance 高性能版（MTX06）", "Performance (MTX06)", paints: legacyXPaints,
-                     wheels: [WT20, WTSC, WTUT, WT22, WTSD]),
+                     wheels: [WT20, WTSC, WTUT, WTSD]),
                 trim("MTX08", "Performance 高性能版（MTX08）", "Performance (MTX08)", paints: legacyXPaints,
-                     wheels: [WT20, WTSC, WTUT, WT22, WTSD]),
+                     wheels: [WT20, WTSC, WTUT, WTSD]),
             ]
         ),
         VehicleGeneration(
@@ -371,5 +369,10 @@ enum VehicleCatalog {
             URLQueryItem(name: "overlay", value: "0"),
         ]
         return components.url!
+    }
+
+    /// Widget 内置的实时活动侧视图资源名（由 `build/tools/make_activity_vehicles.swift` 生成，覆盖全部车型 × 车漆 × 轮毂）。
+    static func activityAssetName(_ appearance: VehicleAppearance) -> String {
+        "ActivityVehicle-\(appearance.generation.id)-\(appearance.paint.code)-\(appearance.wheel.code)"
     }
 }

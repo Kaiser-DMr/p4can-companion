@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "ActivityVehicle-ms-refresh-PN01-WS10.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "compression-type" : "lossy"
+  }
+}

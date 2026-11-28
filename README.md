@@ -5,7 +5,7 @@
 P4-CAN Universal / T2CAN Universal 的原生 iOS / iPadOS / macOS 控制台<br>
 Native iOS / iPadOS / macOS companion for P4-CAN Universal and T2CAN Universal
 
-[![version](https://img.shields.io/badge/version-3.62%20(83)-34C759?style=flat-square)](https://github.com/Kaiser-DMr/p4can-companion/releases/latest) [![iOS](https://img.shields.io/badge/iOS-17%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![macOS](https://img.shields.io/badge/macOS-14%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![license](https://img.shields.io/badge/license-GPL--3.0-FF9500?style=flat-square)](LICENSE)
+[![version](https://img.shields.io/badge/version-3.63%20(84)-34C759?style=flat-square)](https://github.com/Kaiser-DMr/p4can-companion/releases/latest) [![iOS](https://img.shields.io/badge/iOS-17%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![macOS](https://img.shields.io/badge/macOS-14%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![license](https://img.shields.io/badge/license-GPL--3.0-FF9500?style=flat-square)](LICENSE)
 
 **[下载 / Download](https://github.com/Kaiser-DMr/p4can-companion/releases/latest)** · [简体中文](#简体中文) · [English](#english)
 
@@ -45,7 +45,7 @@ SwiftUI + UIKit，不是网页套壳；所有状态直接来自设备 HTTP API�
 
 - 从 [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) 下载 ad-hoc IPA，用 AltStore / Sideloadly 以自己的 Apple ID 重签安装
 - **系统要求：** 最低 iOS / iPadOS 17.0（Mac 需 macOS 14 及以上）。不支持 iOS 15 / 16：用巨魔（TrollStore）等方式强行安装后会启动即闪退
-- 锁屏 / 灵动岛实时活动要求主 App 与 Widget 用同一 Team 签名；显示「车辆外观」车图还需要重签时保留 App Group `group.com.p4can.companion`，否则显示内置车型图
+- 锁屏 / 灵动岛实时活动要求主 App 与 Widget 用同一 Team 签名（AltStore / Sideloadly / zsign 均可）
 - **更新提示：** App 回到前台时检查本仓库 Release（每 6 小时最多一次），有新版本时弹窗，可选择前往更新、下次再说或不再提示该版本
 - **App 内一键爆闪固件：** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 中文 + 前后爆闪（含免重启版），App 直接触发
 
@@ -133,7 +133,7 @@ open P4CANCompanion.xcodeproj
 
 - Scheme：`P4CANCompanion`
 - 无 SPM / CocoaPods 依赖
-- 真机安装需要在 Signing & Capabilities 选择自己的 Team，并为主 App 与 Widget 配置 App Group `group.com.p4can.companion`
+- 真机安装需要在 Signing & Capabilities 选择自己的 Team
 - Release 构建可导出 ad-hoc IPA，用 AltStore / Sideloadly 自签安装
 
 ### 构建固件
@@ -185,7 +185,7 @@ Built with SwiftUI + UIKit — not a web wrapper. Every value comes from the dev
 
 - Download the ad-hoc IPA from [Releases](https://github.com/Kaiser-DMr/p4can-companion/releases) and re-sign it with your own Apple ID using AltStore / Sideloadly
 - **Requirements:** iOS / iPadOS 17.0 or later (macOS 14 or later on Mac). iOS 15 and 16 are not supported; installing anyway (for example with TrollStore) crashes on launch
-- The Lock Screen / Dynamic Island Live Activity needs the app and the widget signed with the same Team. Showing the Vehicle Appearance image there also needs the App Group `group.com.p4can.companion` kept when re-signing; otherwise the built-in model image is shown
+- The Lock Screen / Dynamic Island Live Activity needs the app and the widget signed with the same Team (AltStore, Sideloadly and zsign all work)
 - **Update check:** when the app returns to the foreground it checks this repository's Releases (at most once every 6 hours) and offers Update, Later, or Don't Remind Me for that version
 - **One-tap strobe firmware:** [fw-3.35.3-strobe1](https://github.com/Kaiser-DMr/p4can-companion/releases/tag/fw-3.35.3-strobe1) · 3.35.3 Chinese + front/rear strobes (including the no-reboot build), triggered from the app
 
@@ -273,7 +273,7 @@ open P4CANCompanion.xcodeproj
 
 - Scheme: `P4CANCompanion`
 - No SPM / CocoaPods dependencies
-- For on-device builds, select your own Team and register the App Group `group.com.p4can.companion` for the app and the widget
+- Select your own Team for on-device builds
 - Export an ad-hoc IPA for AltStore / Sideloadly
 
 ### Build the firmware

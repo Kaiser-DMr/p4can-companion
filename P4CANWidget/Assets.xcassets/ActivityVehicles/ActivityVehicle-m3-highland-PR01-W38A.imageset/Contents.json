@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "ActivityVehicle-m3-highland-PR01-W38A.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "compression-type" : "lossy"
+  }
+}
