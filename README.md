@@ -5,7 +5,7 @@
 P4-CAN Universal / T2CAN Universal 的原生 iOS / iPadOS / macOS 控制台<br>
 Native iOS / iPadOS / macOS companion for P4-CAN Universal and T2CAN Universal
 
-[![version](https://img.shields.io/badge/version-3.63%20(84)-34C759?style=flat-square)](https://github.com/Kaiser-DMr/p4can-companion/releases/latest) [![iOS](https://img.shields.io/badge/iOS-17%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![macOS](https://img.shields.io/badge/macOS-14%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![license](https://img.shields.io/badge/license-GPL--3.0-FF9500?style=flat-square)](LICENSE)
+[![version](https://img.shields.io/badge/version-3.64%20(85)-34C759?style=flat-square)](https://github.com/Kaiser-DMr/p4can-companion/releases/latest) [![iOS](https://img.shields.io/badge/iOS-17%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![macOS](https://img.shields.io/badge/macOS-14%2B-007AFF?style=flat-square&logo=apple)](#下载与安装) [![license](https://img.shields.io/badge/license-GPL--3.0-FF9500?style=flat-square)](LICENSE)
 
 **[下载 / Download](https://github.com/Kaiser-DMr/p4can-companion/releases/latest)** · [简体中文](#简体中文) · [English](#english)
 
